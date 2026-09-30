@@ -8,8 +8,8 @@
 // printer's subset decision, which is a bug waiting for a different barcode.
 //
 // Usage (after `tsc -p tsconfig.preview.json`):
-//   node .preview-build/scripts/render-label.js [barcode]
-//   SCALE=4 node .preview-build/scripts/render-label.js        (px per dot)
+//   npm run preview -- [barcode]      (corre desde las fuentes, sin compilar)
+//   SCALE=4 npm run preview                   (px per dot)
 //
 // Output: preview/label-preview.png
 import { writeFileSync, mkdirSync } from "node:fs";

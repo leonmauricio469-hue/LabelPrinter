@@ -10,7 +10,7 @@ El proyecto es una oportunidad para aprender. Empieza por [[Ruta de aprendizaje 
 
 **P1:** resolver antes de confiar en impresiones operativas: puede perder datos, elegir otro producto o impedir el envío. **P2:** corregir consistencia, recuperación y comportamiento. **P3:** mejorar mantenimiento y experiencia. La prioridad expresa impacto; el orden de aprendizaje comienza con cambios más pequeños.
 
-Todas las correcciones de código descritas están pendientes. La eliminación de la copia antigua y artefactos ya se hizo; M06 plantea cómo evitar que vuelva a ocurrir.
+**Estado al 2026-09-29:** las correcciones de código están hechas y verificadas en software en la rama `fix/revision-2026-09-29`. El estado de cada ficha, su nota de corrección y lo que falta comprobar en papel están en [[Registro de correcciones]]; la lista para el puesto real, en [[Plan de prueba fisica]]. La columna de abajo describe cómo se comprobó el **problema** durante la revisión, no la corrección.
 
 | Ficha | Prioridad | Qué se comprobó |
 |---|---|---|

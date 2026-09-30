@@ -11,7 +11,7 @@
  *   - teclear poco no dice "no esta en el catalogo"
  *   - el umbral de 7 digitos sigue siendo el correcto para ESTE catalogo
  *
- * Ejecutar:  node .preview-build\scripts\check-busqueda.js [catalog.json]
+ * Ejecutar:  npm run check:catalog   (o: node --import ./test/resolve-ts.mjs scripts/check-busqueda.ts [catalog.json])
  */
 import fs from "node:fs";
 import {

@@ -30,3 +30,5 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E22 | corregido | [[Correccion E22 - Reintentos sin duplicados]] | timeout forzado con la cola en pausa |
 | M01 | corregido | [[Correccion M01 - Historial reconstruible]] | no necesita |
 | E26, E27 | parcial | [[Correccion E26 E27 - Plugins de Obsidian]] | **rotar la clave de Share Note**; reinstalar plugins desde Obsidian |
+| M02, M03, M04, M06 | corregido | [[Correccion M02 a M06 - Proceso y documentacion]] | no necesita |
+| M05 | plan listo, sin ejecutar | [[Correccion M02 a M06 - Proceso y documentacion]] | **todo el [[Plan de prueba fisica]]** |

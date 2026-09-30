@@ -3,7 +3,7 @@ id: M02
 tipo: ficha-aprendizaje
 area: pruebas
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: scripts existentes revisados
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender a evaluar qué demuestra una prueba. Una suite verde respalda sus casos
 - [[E03 - La etiqueta impresa no vuelve al mismo producto]]
 - [[E04 - Los escaneos pendientes se sobrescriben]]
 - [[E09 - Los lotes USB exceden el limite de argumentos]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion M02 a M06 - Proceso y documentacion]]. Resumen de todas las fichas en [[Registro de correcciones]].

@@ -3,7 +3,7 @@ id: M04
 tipo: ficha-aprendizaje
 area: documentacion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: contradicciones documentales confirmadas
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender documentación como parte del sistema: una afirmación técnica necesit
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[M05 - Verificar el resultado con hardware real]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion M02 a M06 - Proceso y documentacion]]. Resumen de todas las fichas en [[Registro de correcciones]].

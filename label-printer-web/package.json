@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --import ./test/resolve-ts.mjs --test \"src/**/*.test.ts\""
+    "test": "node --import ./test/resolve-ts.mjs --test \"src/**/*.test.ts\"",
+    "check:catalog": "node --import ./test/resolve-ts.mjs scripts/check-busqueda.ts && node --import ./test/resolve-ts.mjs scripts/check-barcode-plan.ts",
+    "check": "npm run typecheck && npm test && npm run check:catalog",
+    "preview": "node --import ./test/resolve-ts.mjs scripts/render-label.ts"
   },
   "dependencies": {
     "next": "16.3.6",

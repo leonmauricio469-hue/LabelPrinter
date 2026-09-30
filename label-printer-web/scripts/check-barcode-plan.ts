@@ -5,7 +5,7 @@
  * tomado, no que el papel salga bien. Lo unico que sabe el software es cuantos modulos
  * pide el codigo.
  *
- * Ejecutar:  node .preview-build\scripts\check-barcode-plan.js [catalog.json]
+ * Ejecutar:  npm run check:catalog   (o: node --import ./test/resolve-ts.mjs scripts/check-barcode-plan.ts [catalog.json])
  */
 import fs from "node:fs";
 import {

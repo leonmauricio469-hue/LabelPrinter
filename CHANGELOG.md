@@ -44,3 +44,5 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 ### Mejorado
 
 - **M01 — historial reconstruible.** Cada línea guarda el estado real del envío (enviado / fallido / incierto), el precio, el código emitido, los avisos, la medida de etiqueta y los tres identificadores (auditoría, solicitud, spooler). Las líneas anteriores se siguen leyendo. La pantalla de historial muestra estado, precio y código.
+- **M02, M03, M04, M06 — proceso.** `npm run check` corre typecheck, 101 tests y las verificaciones del catálogo desde las fuentes, y falla con código distinto de cero. Historial de Git por ficha en la rama `fix/revision-2026-09-29`. README, Inicio, Estado del Proyecto y el mapa de fichas reflejan el estado real; el informe de Anexos queda como histórico. `.preview-build/` ignorado.
+- **M05 — plan de prueba física.** 13 pruebas con 11 productos reales representativos para el puesto con Windows, la GK420t y el lector. Sin ejecutar: no hay hardware en este entorno.

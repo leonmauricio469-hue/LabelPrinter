@@ -3,7 +3,7 @@ id: M06
 tipo: ficha-aprendizaje
 area: mantenimiento
 prioridad: P3
-estado: pendiente
+estado: corregido
 verificacion: limpieza realizada - prevencion pendiente
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender diferencia entre fuente, dato y artefacto generado; la organización ev
 - [[Ruta de aprendizaje y correccion]]
 - [[M02 - Las pruebas no cubren el ciclo completo ni tienen comando unico]]
 - [[M03 - Preparar control de versiones para aprender]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion M02 a M06 - Proceso y documentacion]]. Resumen de todas las fichas en [[Registro de correcciones]].

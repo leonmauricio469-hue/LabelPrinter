@@ -1,5 +1,8 @@
 # Revisión de LabelPrinter
 
+> [!note] Documento histórico
+> Este es el informe de la revisión tal como se escribió, antes de corregir nada. No se actualiza: el estado actual de cada hallazgo está en [[Registro de correcciones]], y la numeración 1–20 de este informe corresponde a las fichas E01–E20.
+
 **Limpieza posterior:** la versión avanzada se trasladó a `LabelPrinter/label-printer-web/`. Se eliminaron la copia antigua, el manifiesto de descarga, análisis temporales, compilaciones, logs y el backup del catálogo de prueba. Las rutas anteriores citadas en este informe documentan la ubicación durante la revisión. El código y los datos actuales se verificaron por SHA-256 tras el traslado.
 
 Fecha: 2026-09-29. Descarga y revisión de las dos carpetas compartidas.

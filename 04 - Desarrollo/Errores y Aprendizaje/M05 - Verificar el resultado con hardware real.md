@@ -3,7 +3,7 @@ id: M05
 tipo: ficha-aprendizaje
 area: pruebas
 prioridad: P1
-estado: pendiente
+estado: plan-listo-pendiente-de-ejecutar
 verificacion: validacion fisica de hallazgos pendiente
 fecha: 2026-09-29
 tags:
@@ -60,3 +60,7 @@ Aprender límites de las pruebas y diseño de experimentos que separan software,
 - [[E08 - El ancho de Code 128 no coincide con el comando emitido]]
 - [[E18 - USB y TCP no usan la misma codificacion]]
 - [[E19 - Los nombres largos pueden superponerse]]
+
+## Corrección
+
+Estado: **plan-listo-pendiente-de-ejecutar**. Registro: [[Correccion M02 a M06 - Proceso y documentacion]]. Resumen de todas las fichas en [[Registro de correcciones]].

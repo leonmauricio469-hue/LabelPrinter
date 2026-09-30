@@ -1,6 +1,8 @@
 # Estado del Proyecto
 
 > [!important] Revisión actual — 2026-09-29
+> **Actualización:** las correcciones de la revisión están hechas y verificadas en software (rama `fix/revision-2026-09-29`). Estado por ficha: [[Registro de correcciones]]. Próximo paso: [[Plan de prueba fisica]] en el puesto real.
+>
 > Esta nota conserva el historial de implementación y pruebas anteriores. El catálogo actual contiene 3.080 productos y el trabajo pendiente se documenta en [[Mapa de errores y aprendizaje]]. Sigue [[Ruta de aprendizaje y correccion]] para estudiar y corregir los problemas. Las pruebas físicas antiguas no cubren automáticamente los nuevos hallazgos. Las referencias a un catálogo pequeño, a rechazo 422 de todo barcode inválido o a atomicidad física deben leerse como antecedentes: la implementación actual puede corregir barcodes o emitir advertencias, y un trabajo único de cola no garantiza impresión física indivisible. Consulta [[Evidencias y alcance de la revision]].
 
 ## Resumen

@@ -51,12 +51,14 @@ area: proyecto
 - [[Conceptos para entender los errores]]
 - [[Como registrar una correccion]]
 - [[Evidencias y alcance de la revision]]
+- [[Registro de correcciones]]
+- [[Plan de prueba fisica]]
 
 ---
 
 ## Estado actual — 2026-09-29
 
-La app ya existe en `label-printer-web/` y tiene 3.080 productos. La copia antigua se retiró. Las notas de desarrollo conservan pruebas físicas anteriores; la revisión actual documenta problemas adicionales y sus correcciones pendientes. XETUX continúa en suspenso.
+La app ya existe en `label-printer-web/` y tiene 3.080 productos. La copia antigua se retiró. La revisión del 2026-09-29 encontró 27 problemas y 6 mejoras; las correcciones de código están hechas y verificadas en software (ver [[Registro de correcciones]] y `CHANGELOG.md`). Falta la prueba en el puesto real: [[Plan de prueba fisica]]. XETUX continúa en suspenso.
 
 ## Próxima acción de aprendizaje
 
