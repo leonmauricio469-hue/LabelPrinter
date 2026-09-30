@@ -3,7 +3,7 @@ id: E13
 tipo: ficha-aprendizaje
 area: interfaz
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: confirmado por flujo de renderizado
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender a diseñar una máquina de estados de UI. Un booleano o null no siempre
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E12 - Leer settings acepta objetos incompletos]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E13 E14 - Pantalla de configuracion]]. Resumen de todas las fichas en [[Registro de correcciones]].

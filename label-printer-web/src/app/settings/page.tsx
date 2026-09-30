@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import type { AppSettings } from "@/lib/settings/settings.types";
+import { OTHER_QUEUE, queueChoices, settingsLoadResult } from "./settings.view";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none";
@@ -12,6 +13,12 @@ const labelClass = "text-sm font-medium text-neutral-700";
 /** Configuracion de impresora y etiqueta. Escribe `settings.json`. */
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  // Error de la carga inicial. Se muestra en lugar del formulario, con un boton de
+  // reintento: antes quedaba oculto detras de "Cargando configuracion...". Ver settings.view.ts.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [otherQueue, setOtherQueue] = useState(false);
   const [printers, setPrinters] = useState<string[]>([]);
   const [state, setState] = useState<PrintState>({ kind: "idle" });
   // El estado de la cola se relee despues de guardar (puede haber cambiado el nombre) y
@@ -27,16 +34,19 @@ export default function SettingsPage() {
     void (async () => {
       try {
         const res = await fetch("/api/settings");
-        if (!res.ok) {
-          setState({ kind: "error", message: `No se pudo leer la configuracion (${res.status})` });
+        const body: unknown = await res.json().catch(() => null);
+        const load = settingsLoadResult(res.status, body);
+        if (load.kind === "error") {
+          setLoadError(load.message);
           return;
         }
-        setSettings((await res.json()) as AppSettings);
+        setLoadError(null);
+        setSettings(load.settings);
       } catch (err) {
-        setState({ kind: "error", message: (err as Error).message });
+        setLoadError(`No se pudo contactar la app: ${(err as Error).message}`);
       }
     })();
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     void (async () => {
@@ -69,7 +79,8 @@ export default function SettingsPage() {
   }, []);
 
   const save = useCallback(async () => {
-    if (!settings) return;
+    if (!settings || saving) return;
+    setSaving(true);
     setState({ kind: "busy", message: "Guardando configuracion..." });
     try {
       const res = await fetch("/api/settings", {
@@ -83,12 +94,15 @@ export default function SettingsPage() {
         return;
       }
       setSettings((await res.json()) as AppSettings);
+      setOtherQueue(false);
       setState({ kind: "ok", message: "Configuracion guardada en settings.json" });
       setRefreshKey((k) => k + 1);
     } catch (err) {
       setState({ kind: "error", message: (err as Error).message });
+    } finally {
+      setSaving(false);
     }
-  }, [settings]);
+  }, [settings, saving]);
 
   const test = useCallback(async () => {
     setState({ kind: "busy", message: "Probando conexion..." });
@@ -112,14 +126,25 @@ export default function SettingsPage() {
   }, []);
 
   if (!settings) {
+    if (loadError) {
+      return (
+        <main className="flex flex-col items-center gap-4 py-10 text-center">
+          <p className="max-w-xl text-sm text-red-700">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setLoadAttempt((n) => n + 1)}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
+          >
+            Reintentar
+          </button>
+        </main>
+      );
+    }
     return <p className="py-10 text-center text-neutral-500">Cargando configuracion...</p>;
   }
 
   const isUsb = settings.printer.transport === "usb";
-  const queueOptions =
-    printers.includes(settings.printer.printerName)
-      ? printers
-      : [...printers, settings.printer.printerName];
+  const queue = queueChoices(printers, settings.printer.printerName, otherQueue);
 
   return (
     <main className="flex flex-col gap-6">
@@ -153,16 +178,20 @@ export default function SettingsPage() {
             <label htmlFor="printerName" className={labelClass}>
               Cola de impresora
             </label>
-            {queueOptions.length > 0 ? (
+            {!queue.manual ? (
               <select
                 id="printerName"
                 value={settings.printer.printerName}
-                onChange={(e) => patchPrinter({ printerName: e.target.value })}
+                onChange={(e) =>
+                  e.target.value === OTHER_QUEUE
+                    ? setOtherQueue(true)
+                    : patchPrinter({ printerName: e.target.value })
+                }
                 className={inputClass}
               >
-                {queueOptions.map((name) => (
+                {queue.options.map((name) => (
                   <option key={name} value={name}>
-                    {name}
+                    {name === OTHER_QUEUE ? "Otra cola (escribir el nombre)..." : name}
                   </option>
                 ))}
               </select>
@@ -222,9 +251,10 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={save}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+            disabled={saving}
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Guardar
+            {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
       </section>
@@ -276,9 +306,10 @@ export default function SettingsPage() {
         </div>
 
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <strong>Estos dos campos todavia no cambian lo que se imprime.</strong> El
-          generador de ZPL usa una plantilla fija de 50 x 25 mm y no lee el ancho ni el
-          alto de aqui. Es una deuda tecnica conocida, pendiente de corregir.
+          <strong>Ancho y alto cambian la etiqueta.</strong> La plantilla de 50 x 25 mm se
+          adapta a la medida guardada; el codigo de barras mantiene su tamano minimo de
+          norma y, si no cabe, la etiqueta sale sin el. Comprueba la medida en papel antes de
+          usarla en caja: la medida estandar todavia no esta fijada.
         </p>
       </section>
 

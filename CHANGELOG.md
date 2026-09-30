@@ -20,6 +20,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E07 — enviado ≠ impreso.** TCP ya no responde éxito al conectar: espera a que la impresora reciba todo y cierre; una conexión cortada a mitad es fallo. La UI dice "enviada a la impresora" en vez de "impresa".
 - **E10, E11, E21 — puente nativo del spooler.** `StartDocPrinter` declarado como la API real (3 parámetros, devuelve el ID del trabajo); la escritura se repite hasta enviar todos los bytes o cancela el trabajo; estado y envío usan el nombre exacto de la cola. El ID real del spooler llega a `/api/labels` y al historial (`spoolerJobId`).
 - **E12, E17 — configuración.** `settings.json` se combina con los valores por defecto por sección y se valida al leer; un archivo inválido devuelve un error con el campo exacto en vez de usar defaults en silencio. Guardar escribe un temporal y lo reemplaza con `rename`, conserva `settings.json.bak` y encola los guardados.
+- **E13, E14 — pantalla de configuración.** Un error al cargar se muestra con su motivo y un botón Reintentar en vez de "Cargando..." para siempre; la lista de colas termina siempre en "Otra cola..." y sin lista aparece el campo manual. Guardar se bloquea mientras guarda.
 
 ### Cambiado
 

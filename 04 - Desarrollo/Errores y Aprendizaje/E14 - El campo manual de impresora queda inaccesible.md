@@ -3,7 +3,7 @@ id: E14
 tipo: ficha-aprendizaje
 area: interfaz
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -57,3 +57,7 @@ Aprender que una lista derivada puede ocultar el estado original del que depend√
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E21 - Estado y envio pueden usar colas diferentes]]
+
+## Correcci√≥n
+
+Estado: **corregido**. Registro: [[Correccion E13 E14 - Pantalla de configuracion]]. Resumen de todas las fichas en [[Registro de correcciones]].
