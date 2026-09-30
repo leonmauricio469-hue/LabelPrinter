@@ -89,21 +89,33 @@ export function sentMessage(qty: number): string {
     : `${qty} etiquetas enviadas a la impresora`;
 }
 
-/** Una solicitud cuya respuesta no llego: pudo haberse enviado. */
-export interface LostRequest {
-  key: string;
-  requestId: string;
+/**
+ * Solicitudes cuya respuesta no llego, por `producto|cantidad|modo`: pudieron haberse enviado.
+ *
+ * Es un mapa y no un unico hueco a proposito: si se perdia la respuesta de A y despues se
+ * imprimia B con exito, un hueco unico olvidaba A, y reimprimir A generaba un id nuevo que
+ * el servidor no reconocia como repetido (hallazgo R3-001 de la revision del codigo).
+ */
+export type LostRequests = Map<string, string>;
+
+export function rememberLost(lost: LostRequests, key: string, requestId: string): void {
+  lost.set(key, requestId);
+}
+
+/** La solicitud de `key` ya tuvo respuesta: no hay nada que reutilizar para ella. */
+export function forgetLost(lost: LostRequests, key: string): void {
+  lost.delete(key);
 }
 
 /**
  * El id de una solicitud de impresion.
  *
- * Si la respuesta de la anterior se perdio (red, pestana, timeout del navegador) y se vuelve
- * a imprimir LO MISMO, se reutiliza su id: el servidor reconoce que ya la envio y no la
- * duplica (E22). Cualquier otra impresion es una solicitud nueva.
+ * Si la respuesta de una anterior IGUAL se perdio (red, pestana, timeout del navegador), se
+ * reutiliza su id: el servidor reconoce que ya la envio y no la duplica (E22). Cualquier
+ * otra impresion es una solicitud nueva.
  */
-export function printRequestId(lost: LostRequest | null, key: string, fresh: () => string): string {
-  return lost && lost.key === key ? lost.requestId : fresh();
+export function printRequestId(lost: LostRequests, key: string, fresh: () => string): string {
+  return lost.get(key) ?? fresh();
 }
 
 /**
@@ -114,7 +126,7 @@ export function printRequestId(lost: LostRequest | null, key: string, fresh: () 
  */
 export function usePrint() {
   const [state, setState] = useState<PrintState>({ kind: "idle" });
-  const lostRef = useRef<LostRequest | null>(null);
+  const lostRef = useRef<LostRequests>(new Map());
 
   const notify = useCallback((next: PrintState) => setState(next), []);
   const reset = useCallback(() => setState({ kind: "idle" }), []);
@@ -142,7 +154,7 @@ export function usePrint() {
       } catch (err) {
         // La respuesta no llego: el trabajo pudo haberse enviado. Se guarda el id para que
         // volver a imprimir lo mismo no lo duplique.
-        lostRef.current = { key, requestId };
+        rememberLost(lostRef.current, key, requestId);
         setState({
           kind: "error",
           message:
@@ -152,7 +164,7 @@ export function usePrint() {
         });
         return false;
       }
-      lostRef.current = null;
+      forgetLost(lostRef.current, key);
 
       if (!data.ok) {
         setState({

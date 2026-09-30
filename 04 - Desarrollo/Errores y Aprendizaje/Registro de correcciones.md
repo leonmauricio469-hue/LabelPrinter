@@ -32,3 +32,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E26, E27 | parcial | [[Correccion E26 E27 - Plugins de Obsidian]] | **rotar la clave de Share Note**; reinstalar plugins desde Obsidian |
 | M02, M03, M04, M06 | corregido | [[Correccion M02 a M06 - Proceso y documentacion]] | no necesita |
 | M05 | plan listo, sin ejecutar | [[Correccion M02 a M06 - Proceso y documentacion]] | **todo el [[Plan de prueba fisica]]** |
+| Revisión de código | corregido | [[Revision de codigo de las correcciones]] | ver plan (sin pruebas nuevas) |

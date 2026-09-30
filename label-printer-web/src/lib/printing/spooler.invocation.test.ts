@@ -63,3 +63,9 @@ test("a connection check sends no payload", () => {
   assert.equal(stdin, "");
   assert.ok(!args.includes("-Base64"));
 });
+
+test("a helper failure that may have left the job queued is uncertain", () => {
+  const out = '{"ok":false,"uncertain":true,"error":"AbortPrinter fallo"}';
+
+  assert.equal(spoolerResult(out, "", 12).uncertain, true);
+});

@@ -145,16 +145,24 @@ try {
         $okWrite = [Spool]::WritePrinter($handle, $chunk, $chunk.Length, [ref]$written)
         if (-not $okWrite -or $written -le 0) {
             $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-            [void][Spool]::AbortPrinter($handle)
-            Emit $false "WritePrinter fallo tras $offset de $($bytes.Length) bytes: $([Win32Message]::Get($e)) (Win32=$e). Trabajo $jobId cancelado." $null
+            # If the abort fails too (a degraded spooler often fails both), the job may stay
+            # queued and print later: report it as uncertain so the app never auto-retries it.
+            $aborted = [Spool]::AbortPrinter($handle)
+            $what = if ($aborted) { "Trabajo $jobId cancelado." } else { "No se pudo cancelar el trabajo ${jobId}: puede imprimirse igual." }
+            Emit $false "WritePrinter fallo tras $offset de $($bytes.Length) bytes: $([Win32Message]::Get($e)) (Win32=$e). $what" @{
+                uncertain = -not $aborted
+            }
             exit 1
         }
         $offset += $written
     }
 
     if (-not [Spool]::EndDocPrinter($handle)) {
+        # Every byte already reached the spooler: the label may still print. Uncertain.
         $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-        Emit $false "EndDocPrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
+        Emit $false "EndDocPrinter fallo con todo enviado: $([Win32Message]::Get($e)) (Win32=$e)" @{
+            uncertain = $true
+        }
         exit 1
     }
 

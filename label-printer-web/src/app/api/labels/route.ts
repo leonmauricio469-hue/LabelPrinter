@@ -4,14 +4,15 @@ import { buildLabelTemplate } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { createRequestLedger } from "@/lib/printing/request.ledger";
-
-/** Solicitudes ya procesadas, para no imprimir dos veces la misma (E22). */
-const requests = createRequestLedger();
+import { crossSiteRejection } from "@/lib/http/same-origin";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 import { appendPrintRecord, type PrintRecord } from "@/lib/audit/audit.store";
 import { printRequestSchema, type PrintRequestInput } from "@/lib/validation/schemas";
 import type { LabelData } from "@/lib/labels/label.types";
 import type { Product } from "@/lib/products/product.types";
+
+/** Solicitudes ya procesadas, para no imprimir dos veces la misma (E22). */
+const requests = createRequestLedger();
 
 /**
  * Ciclo de impresion completo, en el orden que fija [[Convenciones de Codigo]]:
@@ -23,6 +24,9 @@ import type { Product } from "@/lib/products/product.types";
  * cliente, para que no se pueda imprimir una etiqueta con un precio inventado.
  */
 export async function POST(req: Request) {
+  const rejected = crossSiteRejection(req);
+  if (rejected) return NextResponse.json({ error: rejected.error }, { status: rejected.status });
+
   let body: unknown;
   try {
     body = await req.json();
@@ -120,7 +124,7 @@ export async function POST(req: Request) {
   const transport = createPrinterTransport(settings.printer);
   // Con `requestId`, una solicitud repetida no vuelve a imprimir (E22, request.ledger.ts).
   const result = input.requestId
-    ? await requests.run(input.requestId, () => transport.send(zpl))
+    ? await requests.run(input.requestId, () => transport.send(zpl), `${product.code}|${input.qty}|${input.mode}`)
     : await transport.send(zpl);
 
   if (result.duplicate) {

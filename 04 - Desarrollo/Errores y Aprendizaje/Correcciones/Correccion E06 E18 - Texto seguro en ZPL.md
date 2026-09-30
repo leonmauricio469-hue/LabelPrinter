@@ -22,7 +22,7 @@ Tests en `zpl.builder.test.ts` y `spooler.invocation.test.ts`: `CAFE^FS^XZ` prod
 
 ## Cambio
 
-- `fieldData()` en `zpl.builder.ts`: todos los campos usan `^FH\`, y `^`, `~` y `\` viajan como `\5E`, `\7E`, `\5C`. Saltos de línea → espacio.
+- `fieldCommand()` en `zpl.builder.ts`: todos los campos usan `^FH\`, y `^`, `~` y `\` viajan como `\5E`, `\7E`, `\5C`. Saltos de línea → espacio.
 - `^CI28` al inicio de cada etiqueta; `zplPayload()` codifica UTF-8 para USB y TCP escribe con `"utf8"` explícito.
 - `scripts/render-label.ts` entiende `^FH\^FD` y decodifica los escapes.
 

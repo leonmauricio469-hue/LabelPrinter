@@ -115,7 +115,10 @@ function segment(data: string): Segment[] {
 
     const atStart = i === 0;
     const atEnd = i + n === data.length;
-    const threshold = atStart && atEnd ? 2 : atStart || atEnd ? 4 : 6;
+    let threshold: number;
+    if (atStart && atEnd) threshold = 2; // the whole datum is digits
+    else if (atStart || atEnd) threshold = 4; // a run at one edge: one switch symbol
+    else threshold = 6; // a run in the middle: switch in and switch back out
     if (n === 0 || n < threshold) {
       push("B", data.slice(i, i + Math.max(n, 1)));
       i += Math.max(n, 1);

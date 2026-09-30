@@ -95,3 +95,23 @@ test("every real product name fits the name zone without being cut on 50 x 25", 
   const cut = catalog.filter((p) => fitText(p.name, 30, 2).endsWith("...")).map((p) => p.code);
   assert.deepEqual(cut, []);
 });
+
+test("name, barcode and reference never overlap for any size the settings accept", () => {
+  // Interpretation line under an EAN-13 at 3-dot modules: about 14 dots (see label.template.ts).
+  const INTERPRETATION_DOTS = 14;
+  for (let widthMm = 30; widthMm <= 104; widthMm += 2) {
+    for (let heightMm = 20; heightMm <= 100; heightMm += 2) {
+      const t = buildLabelTemplate({ widthMm, heightMm });
+      const name = t.zones.find((z) => z.kind === "text" && z.source === "productName");
+      const barcode = t.zones.find((z) => z.kind === "barcode");
+      const ref = t.zones.find((z) => z.kind === "text" && z.source === "reference");
+      assert.ok(name?.kind === "text" && barcode?.kind === "barcode" && ref?.kind === "text");
+      const lineHeight = Number(/^\^A0N,(\d+)/.exec(name.format)?.[1]);
+      const nameBottom = name.y + lineHeight * (name.maxLines ?? 1);
+      const barcodeBottom = barcode.y + barcode.heightDots + INTERPRETATION_DOTS;
+      const at = `${widthMm}x${heightMm}`;
+      assert.ok(nameBottom <= barcode.y, `${at}: name ends at ${nameBottom}, barcode starts at ${barcode.y}`);
+      assert.ok(barcodeBottom <= ref.y, `${at}: barcode ends at ${barcodeBottom}, reference starts at ${ref.y}`);
+    }
+  }
+});

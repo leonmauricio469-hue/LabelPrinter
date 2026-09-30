@@ -30,11 +30,18 @@ export function createSettingsFile(file: string) {
     const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(settings, null, 2), "utf8");
     try {
-      await fs.copyFile(file, `${file}.bak`);
+      try {
+        await fs.copyFile(file, `${file}.bak`);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+      await fs.rename(tmp, file);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      // A failed save (a file locked by an antivirus on Windows, a full disk) must not leave
+      // orphan temp files behind (review finding R4-003). settings.json is left untouched.
+      await fs.rm(tmp, { force: true });
+      throw err;
     }
-    await fs.rename(tmp, file);
   }
 
   return {

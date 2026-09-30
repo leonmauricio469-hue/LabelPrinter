@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { matchesMessage, printRequestId, sentMessage } from "./use-print.ts";
+import { forgetLost, matchesMessage, printRequestId, rememberLost, sentMessage } from "./use-print.ts";
 
 test("success says the labels were sent, not printed", () => {
   assert.equal(sentMessage(1), "1 etiqueta enviada a la impresora");
@@ -26,14 +26,30 @@ test("an ambiguous identifier says so", () => {
 });
 
 test("after a lost response, printing the same thing again reuses the request id", () => {
-  const lost = { key: "232|3|normal", requestId: "req-1" };
+  const lost = new Map([["232|3|normal", "req-1"]]);
 
   assert.equal(printRequestId(lost, "232|3|normal", () => "req-2"), "req-1");
 });
 
 test("a different product or quantity is a new request", () => {
-  const lost = { key: "232|3|normal", requestId: "req-1" };
+  const lost = new Map([["232|3|normal", "req-1"]]);
 
   assert.equal(printRequestId(lost, "232|4|normal", () => "req-2"), "req-2");
-  assert.equal(printRequestId(null, "232|3|normal", () => "req-3"), "req-3");
+  assert.equal(printRequestId(new Map(), "232|3|normal", () => "req-3"), "req-3");
+});
+
+test("printing another product does not forget a lost request", () => {
+  const lost = new Map<string, string>();
+  rememberLost(lost, "A|1|normal", "req-A");
+  forgetLost(lost, "B|1|normal"); // B succeeded meanwhile
+
+  assert.equal(printRequestId(lost, "A|1|normal", () => "fresh"), "req-A");
+});
+
+test("a request that got its answer is no longer reused", () => {
+  const lost = new Map<string, string>();
+  rememberLost(lost, "A|1|normal", "req-A");
+  forgetLost(lost, "A|1|normal");
+
+  assert.equal(printRequestId(lost, "A|1|normal", () => "fresh"), "fresh");
 });

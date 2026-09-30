@@ -30,3 +30,12 @@ test("status and send use the exact queue name, never a fuzzy match", () => {
 test("the spooler job id is reported to the app", () => {
   assert.match(script, /jobId = \$jobId/);
 });
+
+test("a failed abort is reported as uncertain, never as a clean failure", () => {
+  assert.match(script, /\$aborted = \[Spool\]::AbortPrinter\(\$handle\)/);
+  assert.match(script, /uncertain = -not \$aborted/);
+});
+
+test("EndDocPrinter failing after every byte was written is uncertain", () => {
+  assert.match(script, /EndDocPrinter fallo[^\n]*\n[^\n]*uncertain = \$true/);
+});

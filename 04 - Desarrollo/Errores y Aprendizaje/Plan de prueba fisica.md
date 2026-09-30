@@ -46,6 +46,9 @@ Anotar: modelo y firmware de la impresora (etiqueta de configuración: mantener 
 | 11 | Con dos pestañas abiertas, mirar el Administrador de tareas | Un solo `powershell.exe` por consulta de estado | E16 | |
 | 12 | `netstat -an \| findstr 3000` con la app corriendo | `127.0.0.1:3000`, no `0.0.0.0:3000` | E20 | |
 | 13 | Elegir la medida estándar e imprimir una etiqueta en ella | Nada se sale del papel; el barcode se lee | E05 | |
+| 14 | Abrir `/settings` con `settings.json` renombrado a uno inválido (por ejemplo `"transport": "fax"`), luego restaurarlo | La pantalla muestra el campo inválido y el botón Reintentar, no "Cargando..." para siempre; el desplegable de colas termina en "Otra cola..." | E12, E13, E14 | |
+
+La prueba 14 no necesita impresora: es la comprobación visual del render que no se pudo hacer en el entorno de las correcciones (la lógica está cubierta por tests, el build compila y la página responde 200).
 
 ## Registro
 

@@ -95,7 +95,7 @@ function textFor(zone: TextZone, data: LabelData): string {
  * `^FH\` hace que la impresora decodifique `\hh` como un byte, asi que se escapan esos dos
  * y la propia barra. Los saltos de linea no significan nada en `^FD` y se vuelven espacios.
  */
-function fieldData(value: string): string {
+function fieldCommand(value: string): string {
   const escaped = value
     .replace(/[\r\n\t]+/g, " ")
     .replace(/[\\^~]/g, (c) => `\\${c.charCodeAt(0).toString(16).toUpperCase()}`);
@@ -162,7 +162,7 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
       commands.push(
         barcodeFormat(plan, zone.heightDots, zone.interpretationLine),
         `^FO${barcodeX(template, zone, plan)},${zone.y}`,
-        fieldData(plan.fieldData),
+        fieldCommand(plan.fieldData),
       );
       continue;
     }
@@ -181,7 +181,7 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
       commands.push(`^FB${zone.maxWidthDots},${zone.maxLines ?? 2},0,${justify},0`);
     }
 
-    commands.push(`^FO${zone.x},${zone.y}`, fieldData(text));
+    commands.push(`^FO${zone.x},${zone.y}`, fieldCommand(text));
   }
 
   commands.push("^XZ");

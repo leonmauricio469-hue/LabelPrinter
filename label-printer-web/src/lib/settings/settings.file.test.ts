@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -68,4 +68,14 @@ test("concurrent saves are applied one after another, last one wins", async () =
   await Promise.all(versions.map((v) => store.write(v)));
 
   assert.equal(JSON.parse(readFileSync(file, "utf8")).label.widthMm, 49);
+});
+
+test("a save that fails leaves no temp file behind", async () => {
+  const { dir, file, store } = tempStore();
+  await store.write(DEFAULT_SETTINGS);
+  // A directory where the backup should go makes the copy fail (like a locked file on Windows).
+  mkdirSync(`${file}.bak`);
+
+  await assert.rejects(store.write(custom));
+  assert.deepEqual(readdirSync(dir).sort(), ["settings.json", "settings.json.bak"]);
 });

@@ -68,3 +68,14 @@ test("different requests are independent", async () => {
 
   assert.equal(job.calls, 2);
 });
+
+test("an id reused for a different print is not swallowed as a duplicate", async () => {
+  const ledger = createRequestLedger();
+  const job = counter({ ok: true });
+
+  await ledger.run("req-1", job.send, "232|1|normal");
+  const other = await ledger.run("req-1", job.send, "808|1|normal");
+
+  assert.equal(job.calls, 2);
+  assert.notEqual(other.duplicate, true);
+});

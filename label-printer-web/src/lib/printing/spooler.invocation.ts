@@ -16,6 +16,8 @@ interface SpoolResponse {
   error: string | null;
   bytes?: number;
   jobId?: number;
+  /** The helper failed after the job may have been queued (see send-raw.ps1). */
+  uncertain?: boolean;
 }
 
 /**
@@ -36,7 +38,13 @@ export function spoolerResult(stdout: string, stderr: string, expectedBytes: num
   } catch {
     return { ok: false, error: `respuesta ilegible: ${line.slice(0, 200)}` };
   }
-  if (!res.ok) return { ok: false, error: res.error ?? "error desconocido del spooler" };
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: res.error ?? "error desconocido del spooler",
+      ...(res.uncertain ? { uncertain: true } : {}),
+    };
+  }
   if (res.bytes !== undefined && res.bytes !== expectedBytes) {
     return {
       ok: false,

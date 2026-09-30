@@ -27,18 +27,27 @@ export function createRequestLedger(now: () => number = Date.now) {
   }
 
   return {
-    async run(requestId: string, send: () => Promise<PrintResult>): Promise<PrintResult> {
+    /**
+     * `fingerprint` (product|qty|mode) ties the id to what it prints: an id reused for a
+     * DIFFERENT print is a new request, not a duplicate to swallow (review finding R1-001).
+     */
+    async run(
+      requestId: string,
+      send: () => Promise<PrintResult>,
+      fingerprint = "",
+    ): Promise<PrintResult> {
       forgetOld();
-      const known = entries.get(requestId);
+      const id = `${requestId}\u0000${fingerprint}`;
+      const known = entries.get(id);
       if (known) return { ...(await known.result), duplicate: true };
 
       const result = send();
-      entries.set(requestId, { at: now(), result });
+      entries.set(id, { at: now(), result });
       const settled = await result.catch((err: unknown) => {
-        entries.delete(requestId);
+        entries.delete(id);
         throw err;
       });
-      if (!settled.ok && !settled.uncertain) entries.delete(requestId);
+      if (!settled.ok && !settled.uncertain) entries.delete(id);
       return settled;
     },
   };
