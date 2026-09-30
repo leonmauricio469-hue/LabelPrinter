@@ -18,3 +18,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E06, E18 | corregido | [[Correccion E06 E18 - Texto seguro en ZPL]] | etiqueta con Ñ, É y Ç |
 | E08 | corregido | [[Correccion E08 - Code 128 explicito]] | escanear 246, 239 y un alfanumérico |
 | E09 | corregido | [[Correccion E09 - Lotes USB por stdin]] | tirada USB de 20+ etiquetas |
+| E07 | corregido | [[Correccion E07 - Enviado no es impreso]] | enviar con la cola en pausa |

@@ -17,6 +17,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E08 — Code 128 medido ≠ impreso.** Los subconjuntos viajan explícitos en `^FD`; `^BC` declara modo `N`.
 - **E09 — lotes USB grandes fallaban.** El lote va por stdin a `send-raw.ps1`; la línea de comandos tiene tamaño fijo.
 - **E18 — codificación USB/TCP distinta.** `^CI28` en cada etiqueta y UTF-8 en ambos transportes.
+- **E07 — enviado ≠ impreso.** TCP ya no responde éxito al conectar: espera a que la impresora reciba todo y cierre; una conexión cortada a mitad es fallo. La UI dice "enviada a la impresora" en vez de "impresa".
 
 ### Cambiado
 

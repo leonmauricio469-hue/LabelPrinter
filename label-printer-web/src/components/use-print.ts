@@ -54,6 +54,17 @@ export async function lookupProducts(q: string): Promise<LookupResult> {
 }
 
 /**
+ * Lo que se sabe de verdad cuando `/api/labels` responde ok: que la impresora o la cola de
+ * Windows recibio el trabajo. Que el papel haya salido no: puede faltar papel o cinta, o la
+ * cola estar en pausa. Antes decia "impresa" y un fallo fisico parecia imposible.
+ */
+export function sentMessage(qty: number): string {
+  return qty === 1
+    ? "1 etiqueta enviada a la impresora"
+    : `${qty} etiquetas enviadas a la impresora`;
+}
+
+/**
  * Estado de impresion compartido por las dos pantallas.
  *
  * El estado vive en el cliente, no en el servidor: la app no tiene base de datos y el
@@ -90,7 +101,7 @@ export function usePrint() {
 
         setState({
           kind: "ok",
-          message: `${data.qty ?? qty} etiqueta${(data.qty ?? qty) === 1 ? "" : "s"} impresa${(data.qty ?? qty) === 1 ? "" : "s"}`,
+          message: sentMessage(data.qty ?? qty),
           avisos: data.avisos ?? [],
         });
         return true;

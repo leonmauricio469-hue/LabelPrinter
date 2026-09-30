@@ -3,7 +3,7 @@ id: E07
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -60,3 +60,7 @@ Aprender a describir con precisión el estado de una operación asíncrona. Un m
 - [[Ruta de aprendizaje y correccion]]
 - [[E10 - La firma nativa de StartDocPrinter es incorrecta]]
 - [[E22 - Un timeout puede causar etiquetas duplicadas]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E07 - Enviado no es impreso]]. Resumen de todas las fichas en [[Registro de correcciones]].
