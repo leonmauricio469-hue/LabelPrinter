@@ -32,6 +32,9 @@ export const printRequestSchema = z.object({
     .max(999, "la cantidad maxima es 999")
     .default(1),
   mode: z.enum(["normal", "fast"]).default("normal"),
+  // Identificador de la solicitud, reutilizado por el cliente cuando perdio la respuesta:
+  // el servidor no vuelve a enviar un trabajo ya enviado con ese id (E22).
+  requestId: z.string().min(8).max(100).optional(),
 });
 
 export type PrintRequestInput = z.infer<typeof printRequestSchema>;

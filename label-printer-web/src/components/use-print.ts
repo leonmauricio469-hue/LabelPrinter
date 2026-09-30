@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Product } from "@/lib/products/product.types";
 import type { MatchKind } from "@/lib/products/product.lookup";
 import type { PrintState } from "./print-status";
@@ -19,6 +19,10 @@ interface PrintResponse {
   /** Cosas que salieron bien pero que el operador tiene que saber. Ver `print-status.tsx`. */
   avisos?: string[];
   barcode?: { symbology: "ean13" | "code128"; data: string; modules: number } | null;
+  /** El envio pudo haber llegado a la impresora aunque fallo (E22). */
+  uncertain?: boolean;
+  /** Solicitud repetida: el servidor no volvio a enviar nada. */
+  duplicate?: boolean;
 }
 
 export interface LookupResult {
@@ -85,6 +89,23 @@ export function sentMessage(qty: number): string {
     : `${qty} etiquetas enviadas a la impresora`;
 }
 
+/** Una solicitud cuya respuesta no llego: pudo haberse enviado. */
+export interface LostRequest {
+  key: string;
+  requestId: string;
+}
+
+/**
+ * El id de una solicitud de impresion.
+ *
+ * Si la respuesta de la anterior se perdio (red, pestana, timeout del navegador) y se vuelve
+ * a imprimir LO MISMO, se reutiliza su id: el servidor reconoce que ya la envio y no la
+ * duplica (E22). Cualquier otra impresion es una solicitud nueva.
+ */
+export function printRequestId(lost: LostRequest | null, key: string, fresh: () => string): string {
+  return lost && lost.key === key ? lost.requestId : fresh();
+}
+
 /**
  * Estado de impresion compartido por las dos pantallas.
  *
@@ -93,6 +114,7 @@ export function sentMessage(qty: number): string {
  */
 export function usePrint() {
   const [state, setState] = useState<PrintState>({ kind: "idle" });
+  const lostRef = useRef<LostRequest | null>(null);
 
   const notify = useCallback((next: PrintState) => setState(next), []);
   const reset = useCallback(() => setState({ kind: "idle" }), []);
@@ -104,35 +126,53 @@ export function usePrint() {
         message: `Enviando ${qty} etiqueta${qty === 1 ? "" : "s"} a la impresora...`,
       });
 
+      const key = `${productCode}|${qty}|${mode}`;
+      const requestId = printRequestId(lostRef.current, key, () => crypto.randomUUID());
+
+      let data: PrintResponse;
+      let status: number;
       try {
         const res = await fetch("/api/labels", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productCode, qty, mode }),
+          body: JSON.stringify({ productCode, qty, mode, requestId }),
         });
-        const data = (await res.json()) as PrintResponse;
-
-        if (!res.ok || !data.ok) {
-          setState({
-            kind: "error",
-            message: data.error ?? `La impresion fallo (HTTP ${res.status})`,
-          });
-          return false;
-        }
-
-        setState({
-          kind: "ok",
-          message: sentMessage(data.qty ?? qty),
-          avisos: data.avisos ?? [],
-        });
-        return true;
+        status = res.status;
+        data = (await res.json()) as PrintResponse;
       } catch (err) {
+        // La respuesta no llego: el trabajo pudo haberse enviado. Se guarda el id para que
+        // volver a imprimir lo mismo no lo duplique.
+        lostRef.current = { key, requestId };
         setState({
           kind: "error",
-          message: `No se pudo contactar la app: ${(err as Error).message}`,
+          message:
+            `No llego la respuesta de la app (${(err as Error).message}): puede que la ` +
+            `etiqueta ya se haya enviado. Mira la impresora; si vuelves a imprimir el mismo ` +
+            `producto y cantidad, la app no lo repite.`,
         });
         return false;
       }
+      lostRef.current = null;
+
+      if (!data.ok) {
+        setState({
+          kind: "error",
+          message: data.uncertain
+            ? `${data.error ?? "Envio incierto"}. Puede que se haya impreso: revisa la ` +
+              `impresora antes de volver a imprimir.`
+            : (data.error ?? `La impresion fallo (HTTP ${status})`),
+        });
+        return false;
+      }
+
+      setState({
+        kind: "ok",
+        message: data.duplicate
+          ? `Esa impresion ya se habia enviado: no se repitio.`
+          : sentMessage(data.qty ?? qty),
+        avisos: data.avisos ?? [],
+      });
+      return true;
     },
     [],
   );

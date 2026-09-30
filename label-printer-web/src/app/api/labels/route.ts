@@ -3,6 +3,10 @@ import { readSettings } from "@/lib/settings/settings.store";
 import { buildLabelTemplate } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
+import { createRequestLedger } from "@/lib/printing/request.ledger";
+
+/** Solicitudes ya procesadas, para no imprimir dos veces la misma (E22). */
+const requests = createRequestLedger();
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 import { appendPrintRecord, type PrintRecord } from "@/lib/audit/audit.store";
 import { printRequestSchema, type PrintRequestInput } from "@/lib/validation/schemas";
@@ -114,7 +118,20 @@ export async function POST(req: Request) {
 
   const zpl = buildZplBatch(template, data, input.qty);
   const transport = createPrinterTransport(settings.printer);
-  const result = await transport.send(zpl);
+  // Con `requestId`, una solicitud repetida no vuelve a imprimir (E22, request.ledger.ts).
+  const result = input.requestId
+    ? await requests.run(input.requestId, () => transport.send(zpl))
+    : await transport.send(zpl);
+
+  if (result.duplicate) {
+    // Nada se envio ahora: no se registra otra impresion en el historial.
+    return NextResponse.json(
+      result.ok
+        ? { ok: true, duplicate: true, qty: input.qty, product, avisos }
+        : { ok: false, duplicate: true, uncertain: result.uncertain, error: result.error },
+      { status: result.ok ? 200 : 502 },
+    );
+  }
 
   const auditBase = {
     code: product.code,
@@ -127,7 +144,7 @@ export async function POST(req: Request) {
     // Un fallo de impresion tambien se registra: sin esto, el historial solo diria
     // "imprimio bien" y noaria falta de las veces que la impresora no respondio.
     await safeAudit({ ...auditBase, ok: false, error: result.error });
-    return NextResponse.json({ error: result.error }, { status: 502 });
+    return NextResponse.json({ error: result.error, uncertain: result.uncertain }, { status: 502 });
   }
 
   // El papel ya salio. Si el registro del historial falla (disco lleno, permisos) la

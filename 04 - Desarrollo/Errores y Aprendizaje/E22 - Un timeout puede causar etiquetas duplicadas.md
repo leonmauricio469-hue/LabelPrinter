@@ -3,7 +3,7 @@ id: E22
 tipo: ficha-aprendizaje
 area: concurrencia
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: riesgo identificado en flujo de envio
 fecha: 2026-09-29
 tags:
@@ -61,3 +61,7 @@ Aprender idempotencia y resultados inciertos. Un reintento no es inocuo cuando l
 - [[E07 - Enviado no significa impreso]]
 - [[E10 - La firma nativa de StartDocPrinter es incorrecta]]
 - [[M01 - El historial no permite reconstruir la etiqueta]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E22 - Reintentos sin duplicados]]. Resumen de todas las fichas en [[Registro de correcciones]].

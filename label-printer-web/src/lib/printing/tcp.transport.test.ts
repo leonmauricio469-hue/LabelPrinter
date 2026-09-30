@@ -46,6 +46,20 @@ test("a connection dropped mid-batch is a failure, not a success", async () => {
       const result = await sendZpl("127.0.0.1", port, zpl);
 
       assert.equal(result.ok, false);
+      // Part of the batch reached the printer: some labels may come out.
+      assert.equal(result.uncertain, true);
     },
   );
+});
+
+test("a printer that cannot be reached surely printed nothing", async () => {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as net.AddressInfo).port;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+
+  const result = await sendZpl("127.0.0.1", port, "^XA^XZ");
+
+  assert.equal(result.ok, false);
+  assert.notEqual(result.uncertain, true);
 });

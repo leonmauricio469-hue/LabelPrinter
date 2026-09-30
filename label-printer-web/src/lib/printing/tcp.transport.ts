@@ -17,6 +17,8 @@ const DEFAULT_TIMEOUT_MS = 5000;
 export async function sendZpl(host: string, port: number, zpl: string): Promise<PrintResult> {
   return new Promise((resolve) => {
     const socket = net.createConnection({ host, port, timeout: DEFAULT_TIMEOUT_MS });
+    // Despues de conectar ya pudieron llegar bytes: un fallo desde ahi es incierto.
+    let connected = false;
     let finished = false;
     let settled = false;
     const settle = (result: PrintResult) => {
@@ -26,6 +28,7 @@ export async function sendZpl(host: string, port: number, zpl: string): Promise<
     };
 
     socket.on("connect", () => {
+      connected = true;
       // UTF-8 explicito: es lo que declara el `^CI28` de cada etiqueta, igual que por USB.
       socket.end(zpl, "utf8", () => {
         finished = true;
@@ -37,19 +40,25 @@ export async function sendZpl(host: string, port: number, zpl: string): Promise<
       settle(
         finished
           ? { ok: true }
-          : { ok: false, error: "timeout enviando a la impresora: el lote no se entrego completo" },
+          : connected
+            ? { ok: false, uncertain: true, error: "timeout enviando a la impresora: el lote pudo llegar a medias" }
+            : { ok: false, error: "timeout conectando a la impresora" },
       );
     });
 
     socket.on("error", (err) => {
-      settle({ ok: false, error: err.message });
+      settle(connected ? { ok: false, uncertain: true, error: err.message } : { ok: false, error: err.message });
     });
 
     socket.on("close", (hadError) => {
       settle(
         !hadError && finished
           ? { ok: true }
-          : { ok: false, error: "la impresora cerro la conexion antes de recibir el lote completo" },
+          : {
+              ok: false,
+              uncertain: true,
+              error: "la impresora cerro la conexion antes de recibir el lote completo",
+            },
       );
     });
   });

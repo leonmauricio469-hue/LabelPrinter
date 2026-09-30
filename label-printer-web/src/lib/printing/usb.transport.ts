@@ -35,7 +35,13 @@ function runSpooler(
       if (settled) return;
       settled = true;
       child.kill();
-      resolve({ ok: false, error: `timeout enviando a la impresora (${timeoutMs}ms)` });
+      // Matar PowerShell no retira un trabajo que el spooler ya haya aceptado: en envio,
+      // un timeout es incierto (E22).
+      resolve({
+        ok: false,
+        ...(mode === "Send" ? { uncertain: true } : {}),
+        error: `timeout enviando a la impresora (${timeoutMs}ms): revisa la cola antes de reintentar`,
+      });
     }, timeoutMs);
 
     child.stdout.on("data", (d: Buffer) => {
