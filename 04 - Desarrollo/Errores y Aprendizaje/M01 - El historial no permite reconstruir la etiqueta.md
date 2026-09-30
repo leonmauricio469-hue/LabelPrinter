@@ -3,7 +3,7 @@ id: M01
 tipo: ficha-aprendizaje
 area: trazabilidad
 prioridad: P3
-estado: pendiente
+estado: corregido
 verificacion: mejora identificada en codigo
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender snapshots, versionado de datos y observabilidad. Un log útil responde 
 - [[Ruta de aprendizaje y correccion]]
 - [[E07 - Enviado no significa impreso]]
 - [[E10 - La firma nativa de StartDocPrinter es incorrecta]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion M01 - Historial reconstruible]]. Resumen de todas las fichas en [[Registro de correcciones]].

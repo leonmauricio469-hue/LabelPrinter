@@ -133,24 +133,35 @@ export async function POST(req: Request) {
     );
   }
 
+  // Foto de lo que se mando (M01): si mañana cambia el catalogo, el historial sigue diciendo
+  // que precio y que codigo llevaba esta etiqueta.
   const auditBase = {
     code: product.code,
     name: product.name,
     qty: input.qty,
     mode: input.mode,
-  } as const;
+    requestId: input.requestId,
+    price: product.price,
+    barcode: plan?.printable ? { symbology: plan.symbology, data: plan.data } : null,
+    avisos,
+    label: { widthMm: settings.label.widthMm, heightMm: settings.label.heightMm },
+  };
 
   if (!result.ok) {
-    // Un fallo de impresion tambien se registra: sin esto, el historial solo diria
-    // "imprimio bien" y noaria falta de las veces que la impresora no respondio.
-    await safeAudit({ ...auditBase, ok: false, error: result.error });
+    // Un fallo tambien se registra, y separando el seguro del incierto (E22): un incierto
+    // pudo haber salido en papel.
+    await safeAudit({
+      ...auditBase,
+      status: result.uncertain ? "incierto" : "fallido",
+      error: result.error,
+    });
     return NextResponse.json({ error: result.error, uncertain: result.uncertain }, { status: 502 });
   }
 
-  // El papel ya salio. Si el registro del historial falla (disco lleno, permisos) la
-  // impresion sigue siendo un exito: se avisa por consola, pero no se le devuelve un
-  // error al operador que ya tiene la etiqueta en la mano.
-  const record = await safeAudit({ ...auditBase, ok: true, spoolerJobId: result.spoolerJobId });
+  // El trabajo ya se entrego. Si el registro del historial falla (disco lleno, permisos) el
+  // envio sigue siendo un exito: se avisa por consola, pero no se le devuelve un error al
+  // operador que ya puede tener la etiqueta en la mano.
+  const record = await safeAudit({ ...auditBase, status: "enviado", spoolerJobId: result.spoolerJobId });
 
   return NextResponse.json({
     ok: true,

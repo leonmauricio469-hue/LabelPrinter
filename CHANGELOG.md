@@ -38,3 +38,8 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - `npm test` con `node:test`, sin dependencias nuevas.
 - Fixtures del ZPL original de 50 × 25 en `label-printer-web/test/fixtures/`.
 - Registro de correcciones en el vault.
+
+
+### Mejorado
+
+- **M01 — historial reconstruible.** Cada línea guarda el estado real del envío (enviado / fallido / incierto), el precio, el código emitido, los avisos, la medida de etiqueta y los tres identificadores (auditoría, solicitud, spooler). Las líneas anteriores se siguen leyendo. La pantalla de historial muestra estado, precio y código.

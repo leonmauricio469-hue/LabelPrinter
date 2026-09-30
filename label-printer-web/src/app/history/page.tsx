@@ -3,16 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 
-interface Record_ {
-  ts: string;
-  jobId: string;
-  code: string;
-  name: string;
-  qty: number;
-  ok: boolean;
-  mode: string;
-  error?: string;
-}
+// Solo el tipo: `import type` se borra al compilar y no trae `node:fs` al cliente.
+import type { PrintRecord as Record_, PrintStatus as SendStatus } from "@/lib/audit/audit.file";
+
+/** "Enviado" y no "OK": la app sabe que la impresora lo recibio, no que salio el papel (E07). */
+const STATUS_VIEW: Record<SendStatus, { label: string; className: string; row: string }> = {
+  enviado: { label: "Enviado", className: "text-green-700", row: "" },
+  fallido: { label: "Fallido", className: "text-red-700", row: "bg-red-50" },
+  incierto: { label: "Incierto: revisar la impresora", className: "text-amber-700", row: "bg-amber-50" },
+};
 
 function formatTs(iso: string): string {
   const d = new Date(iso);
@@ -83,13 +82,15 @@ export default function HistoryPage() {
                 <th className="px-3 py-2 font-medium">Codigo</th>
                 <th className="px-3 py-2 font-medium">Producto</th>
                 <th className="px-3 py-2 text-right font-medium">Cant.</th>
+                <th className="px-3 py-2 text-right font-medium">Precio</th>
+                <th className="px-3 py-2 font-medium">Codigo emitido</th>
                 <th className="px-3 py-2 font-medium">Modo</th>
                 <th className="px-3 py-2 font-medium">Resultado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {records.map((r) => (
-                <tr key={r.jobId} className={r.ok ? "" : "bg-red-50"}>
+                <tr key={r.jobId} className={STATUS_VIEW[r.status].row}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-neutral-600">
                     {formatTs(r.ts)}
                   </td>
@@ -98,13 +99,16 @@ export default function HistoryPage() {
                   <td className="px-3 py-2 text-right tabular-nums text-neutral-900">
                     {r.qty}
                   </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-neutral-900">
+                    {r.price !== undefined ? `$${r.price.toFixed(2)}` : "—"}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-neutral-700">
+                    {r.barcode === undefined ? "—" : r.barcode === null ? "sin codigo" : r.barcode.data}
+                  </td>
                   <td className="px-3 py-2 text-neutral-600">{r.mode}</td>
-                  <td
-                    className={`px-3 py-2 text-xs ${
-                      r.ok ? "text-green-700" : "text-red-700"
-                    }`}
-                  >
-                    {r.ok ? "OK" : (r.error ?? "fallo")}
+                  <td className={`px-3 py-2 text-xs ${STATUS_VIEW[r.status].className}`}>
+                    {STATUS_VIEW[r.status].label}
+                    {r.error ? `: ${r.error}` : ""}
                   </td>
                 </tr>
               ))}
