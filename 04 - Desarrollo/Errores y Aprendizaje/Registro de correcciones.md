@@ -26,3 +26,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E25 | corregido | [[Correccion E25 - Aviso de digito de control]] | no necesita |
 | E24 | corregido | [[Correccion E24 - Busqueda truncada]] | no necesita |
 | E19, E23 | corregido | [[Correccion E19 E23 - Nombre del producto y de la empresa]] | nombres largos en 50×25; etiqueta chica con nombre de empresa |
+| E20 | corregido | [[Correccion E20 - Escucha local]] | netstat muestra 127.0.0.1:3000 |

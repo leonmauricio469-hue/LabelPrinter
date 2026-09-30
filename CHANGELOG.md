@@ -25,6 +25,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E25 — aviso de dígito de control.** El aviso del catálogo sale del mismo cálculo que imprime: cubre también los UPC-A de 12 dígitos y dice "guarda X, se imprime Y" en vez de "ninguna etiqueta será legible". Los 6 productos afectados: 735, 1067, 1322, 1378, 1694, 1843.
 - **E24 — búsqueda truncada.** La búsqueda devuelve `total` además de los 60 primeros, y la pantalla dice "Se muestran 60 de N… Escribe más para acotar" en vez de "60 productos coinciden".
 - **E19, E23 — nombres en la etiqueta.** El nombre del producto tiene 2 líneas de fuente 12 (antes 1 de 14) y lo que no entra se corta con "..." en vez de superponerse; ningún nombre del catálogo real se corta. El nombre de empresa de `/settings` se imprime como texto cuando la etiqueta es demasiado chica para el logo. Los fixtures de 50 × 25 cambian en esas dos líneas, a propósito.
+- **E20 — escucha local.** `npm run dev` y `npm run start` escuchan solo en `127.0.0.1` (`-H 127.0.0.1`); antes escuchaban en `0.0.0.0` y las rutas no tienen autenticación.
 
 ### Cambiado
 

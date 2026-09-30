@@ -3,7 +3,7 @@ id: E20
 tipo: ficha-aprendizaje
 area: ejecucion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: configuracion y contrato verificados
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender configuración efectiva frente a configuración aparente, interfaces de
 ## Fuentes
 
 [Next.js: hostname de dev y start](https://nextjs.org/docs/app/api-reference/cli/next).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E20 - Escucha local]]. Resumen de todas las fichas en [[Registro de correcciones]].
