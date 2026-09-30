@@ -2,6 +2,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { interpretQueueStatus } from "./queue.status.flags";
+import { createStatusCache } from "./queue.status.cache";
 import type { QueueState, QueueStatus } from "./queue.status.types";
 
 export type { QueueState, QueueStatus };
@@ -95,28 +96,9 @@ function runStatus(printerName: string): Promise<{ raw: RawStatus | null; error:
   });
 }
 
-let cache: { key: string; at: number; status: QueueStatus } | null = null;
-
-/**
- * Estado de la cola de Windows, cacheado unos segundos.
- *
- * `force` salta la cache: lo usa el boton "Actualizar" de `/settings` y la primera peticion
- * tras imprimir.
- */
-export async function readQueueStatus(
-  printerName: string,
-  options: { force?: boolean } = {},
-): Promise<QueueStatus> {
+/** Reads and interprets the status of one queue. Cached and shared by `statusCache`. */
+async function fetchQueueStatus(printerName: string): Promise<QueueStatus> {
   const now = Date.now();
-  if (
-    !options.force &&
-    cache &&
-    cache.key === printerName &&
-    now - cache.at < CACHE_TTL_MS
-  ) {
-    return cache.status;
-  }
-
   const base: QueueStatus = {
     state: "unknown",
     message: "",
@@ -135,15 +117,8 @@ export async function readQueueStatus(
 
   const { raw, error } = await runStatus(printerName);
 
-  // La edad se sella **despues** de leer, no antes. Si se sellara antes, el valor pasaria
-  // gran parte de los 3 s de vida caducado solo por el spawn de 2,3 s, y dos pestanas
-  // abiertas nunca compartirian nada.
-  const at = Date.now();
-
   if (!raw) {
-    const status: QueueStatus = { ...base, state: "unknown", message: "No se pudo leer el estado de la impresora", error };
-    cache = { key: printerName, at, status };
-    return status;
+    return { ...base, state: "unknown", message: "No se pudo leer el estado de la impresora", error };
   }
 
   const rawView: QueueStatus["raw"] = {
@@ -156,19 +131,31 @@ export async function readQueueStatus(
   };
 
   if (!raw.found) {
-    const status: QueueStatus = {
+    return {
       ...base,
       state: "missing",
       message: `No existe ninguna cola de impresora llamada "${raw.queue}"`,
       raw: rawView,
     };
-    cache = { key: printerName, at, status };
-    return status;
   }
 
   const flags = raw.statusFlags ?? 0;
   const interpreted = interpretQueueStatus(flags, raw.jobCount);
-  const status: QueueStatus = { ...base, ...interpreted, jobCount: raw.jobCount, raw: rawView };
-  cache = { key: printerName, at, status };
-  return status;
+  return { ...base, ...interpreted, jobCount: raw.jobCount, raw: rawView };
+}
+
+const statusCache = createStatusCache(fetchQueueStatus, CACHE_TTL_MS);
+
+/**
+ * Estado de la cola de Windows, cacheado unos segundos y compartido mientras se lee.
+ *
+ * `force` salta un resultado ya terminado: lo usa el boton "Actualizar" de `/settings` y la
+ * primera peticion tras imprimir. Una lectura en curso se comparte siempre. Ver
+ * queue.status.cache.ts.
+ */
+export function readQueueStatus(
+  printerName: string,
+  options: { force?: boolean } = {},
+): Promise<QueueStatus> {
+  return statusCache.get(printerName, options);
 }

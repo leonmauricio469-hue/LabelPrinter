@@ -3,7 +3,7 @@ id: E15
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -60,3 +60,7 @@ Aprender contratos de estrategias: elegir una implementación debe cambiar coher
 - [[Ruta de aprendizaje y correccion]]
 - [[E07 - Enviado no significa impreso]]
 - [[E21 - Estado y envio pueden usar colas diferentes]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E15 E16 - Estado de la impresora]]. Resumen de todas las fichas en [[Registro de correcciones]].

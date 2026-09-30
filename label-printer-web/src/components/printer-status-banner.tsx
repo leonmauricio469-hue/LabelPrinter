@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPollGate } from "@/lib/printing/poll.gate";
 import type { QueueState, QueueStatus } from "@/lib/printing/queue.status.types";
 
 /**
@@ -72,39 +73,37 @@ function usePrinterStatus(refreshKey: number) {
   const [status, setStatus] = useState<QueueStatus>(EMPTY);
   const [loading, setLoading] = useState(true);
 
-  // Guarda la peticion en curso para no solapar dos sondeos: cada uno dura ~2,3 s y el
-  // sondeo es mas corto que eso cuando la pestana vuelve del segundo plano.
-  const inFlight = useRef(false);
-
-  const poll = useCallback(async (force: boolean) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
-      const res = await fetch(
-        force ? "/api/printer/status?force=1" : "/api/printer/status",
-        { cache: "no-store" },
-      );
-      const parsed = asQueueStatus(await res.json().catch(() => null));
-      setStatus(
-        parsed ?? {
+  // Una consulta a la vez (cada una dura ~2,3 s), pero sin perder el refresco que se pide
+  // tras imprimir mientras otro sondeo esta en curso. Ver poll.gate.ts.
+  const [gate] = useState(() =>
+    createPollGate(async (force: boolean) => {
+      try {
+        const res = await fetch(
+          force ? "/api/printer/status?force=1" : "/api/printer/status",
+          { cache: "no-store" },
+        );
+        const parsed = asQueueStatus(await res.json().catch(() => null));
+        setStatus(
+          parsed ?? {
+            ...EMPTY,
+            state: "unknown",
+            message: "La API no devolvio un estado reconocible",
+            error: `HTTP ${res.status}`,
+          },
+        );
+      } catch {
+        setStatus({
           ...EMPTY,
           state: "unknown",
-          message: "La API no devolvio un estado reconocible",
-          error: `HTTP ${res.status}`,
-        },
-      );
-    } catch {
-      setStatus({
-        ...EMPTY,
-        state: "unknown",
-        message: "No se pudo consultar el estado de la impresora",
-        error: "fallo de red",
-      });
-    } finally {
-      inFlight.current = false;
-      setLoading(false);
-    }
-  }, []);
+          message: "No se pudo consultar el estado de la impresora",
+          error: "fallo de red",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }),
+  );
+  const poll = useCallback((force: boolean) => gate.request(force), [gate]);
 
   useEffect(() => {
     void poll(true);

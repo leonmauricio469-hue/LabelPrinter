@@ -1,5 +1,5 @@
 import { updateSettingsSchema } from "../../lib/validation/schemas";
-import type { AppSettings } from "../../lib/settings/settings.types";
+import type { AppSettings, PrinterSettings } from "../../lib/settings/settings.types";
 
 /** Value of the "Otra cola..." option in the queue select. */
 export const OTHER_QUEUE = "__other__";
@@ -43,4 +43,22 @@ export function queueChoices(printers: string[], saved: string, otherChosen: boo
   if (printers.length === 0 || otherChosen) return { manual: true, options: [] as string[] };
   const listed = printers.includes(saved) || !saved ? printers : [...printers, saved];
   return { manual: false, options: [...listed, OTHER_QUEUE] };
+}
+
+/**
+ * What a successful "Probar conexion" proves, for the selected transport.
+ *
+ * It used to always talk about a Windows queue, also with TCP selected.
+ */
+export function connectionOkMessage(printer: PrinterSettings): string {
+  if (printer.transport === "tcp") {
+    return (
+      `La impresora de red ${printer.host}:${printer.port} acepta conexiones. ` +
+      `Eso NO dice si hay papel: por TCP no hay estado fisico que consultar.`
+    );
+  }
+  return (
+    `La cola existe y acepta trabajos. Eso NO dice si hay papel: ` +
+    `mira el estado de arriba, que es el que si lo dice.`
+  );
 }

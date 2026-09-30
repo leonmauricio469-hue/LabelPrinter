@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
 import { readQueueStatus } from "@/lib/printing/queue.status";
+import { statusForTransport } from "@/lib/printing/printer.status";
 
 /**
  * `GET /api/printer/status`
@@ -21,10 +22,9 @@ import { readQueueStatus } from "@/lib/printing/queue.status";
 export async function GET(req: Request) {
   const force = new URL(req.url).searchParams.get("force") === "1";
 
-  let printerName: string;
+  let settings;
   try {
-    const settings = await readSettings();
-    printerName = settings.printer.printerName;
+    settings = await readSettings();
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message },
@@ -32,6 +32,10 @@ export async function GET(req: Request) {
     );
   }
 
-  const status = await readQueueStatus(printerName, { force });
+  // El estado de la impresora que recibe las etiquetas: con TCP no se consulta ninguna
+  // cola de Windows. Ver printer.status.ts.
+  const status = await statusForTransport(settings.printer, (name) =>
+    readQueueStatus(name, { force }),
+  );
   return NextResponse.json(status);
 }

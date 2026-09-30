@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { OTHER_QUEUE, queueChoices, settingsLoadResult } from "./settings.view.ts";
+import { connectionOkMessage, OTHER_QUEUE, queueChoices, settingsLoadResult } from "./settings.view.ts";
 import { DEFAULT_SETTINGS } from "../../lib/settings/settings.types.ts";
 
 test("a failed settings load becomes an error the page can show, with the server reason", () => {
@@ -35,4 +35,15 @@ test("the list always offers another queue, so a wrong saved name can be fixed",
 
 test("choosing another queue switches to manual entry", () => {
   assert.equal(queueChoices(["Zebra A"], "Zebra A", true).manual, true);
+});
+
+test("a network connection test talks about the network printer, not a queue", () => {
+  const msg = connectionOkMessage({ ...DEFAULT_SETTINGS.printer, transport: "tcp", host: "192.168.2.80", port: 9100 });
+
+  assert.match(msg, /192\.168\.2\.80:9100/);
+  assert.doesNotMatch(msg, /cola/);
+});
+
+test("a USB connection test talks about the Windows queue", () => {
+  assert.match(connectionOkMessage({ ...DEFAULT_SETTINGS.printer, transport: "usb" }), /cola/);
 });

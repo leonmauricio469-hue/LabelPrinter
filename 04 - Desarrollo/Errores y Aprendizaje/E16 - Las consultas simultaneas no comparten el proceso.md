@@ -3,7 +3,7 @@ id: E16
 tipo: ficha-aprendizaje
 area: rendimiento
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: reproducido con proceso simulado
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender deduplicación de trabajo en curso: caché de valores y coordinación d
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E04 - Los escaneos pendientes se sobrescriben]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E15 E16 - Estado de la impresora]]. Resumen de todas las fichas en [[Registro de correcciones]].

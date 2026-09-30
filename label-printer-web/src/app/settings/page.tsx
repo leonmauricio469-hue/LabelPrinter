@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import type { AppSettings } from "@/lib/settings/settings.types";
-import { OTHER_QUEUE, queueChoices, settingsLoadResult } from "./settings.view";
+import { connectionOkMessage, OTHER_QUEUE, queueChoices, settingsLoadResult } from "./settings.view";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none";
@@ -105,6 +105,7 @@ export default function SettingsPage() {
   }, [settings, saving]);
 
   const test = useCallback(async () => {
+    if (!settings) return;
     setState({ kind: "busy", message: "Probando conexion..." });
     setRefreshKey((k) => k + 1);
     try {
@@ -114,16 +115,11 @@ export default function SettingsPage() {
         setState({ kind: "error", message: data.error ?? `Error ${res.status}` });
         return;
       }
-      setState({
-        kind: "ok",
-        message:
-          `La cola existe y acepta trabajos. Eso NO dice si hay papel: ` +
-          `mira el estado de abajo, que es el que si lo dice.`,
-      });
+      setState({ kind: "ok", message: connectionOkMessage(settings.printer) });
     } catch (err) {
       setState({ kind: "error", message: (err as Error).message });
     }
-  }, []);
+  }, [settings]);
 
   if (!settings) {
     if (loadError) {
