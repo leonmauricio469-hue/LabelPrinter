@@ -4,7 +4,12 @@ import { testConnection } from "@/lib/printing/tcp.transport";
 import { testUsbConnection } from "@/lib/printing/usb.transport";
 
 export async function POST() {
-  const settings = await readSettings();
+  let settings;
+  try {
+    settings = await readSettings();
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
+  }
   const result =
     settings.printer.transport === "usb"
       ? await testUsbConnection(settings.printer.printerName)

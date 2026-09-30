@@ -3,7 +3,7 @@ id: E12
 tipo: ficha-aprendizaje
 area: configuracion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: reproducido en copia temporal
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender la diferencia entre tipos de TypeScript y validación de datos externos
 - [[Ruta de aprendizaje y correccion]]
 - [[E13 - La pantalla oculta el error de carga]]
 - [[E17 - Guardar settings puede dejar el archivo incompleto]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E12 E17 - Configuracion segura]]. Resumen de todas las fichas en [[Registro de correcciones]].

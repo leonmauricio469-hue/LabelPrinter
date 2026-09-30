@@ -57,7 +57,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const settings = await readSettings();
+  let settings;
+  try {
+    settings = await readSettings();
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
   const data: LabelData = {
     productName: product.name,
     barcode: product.barcode,

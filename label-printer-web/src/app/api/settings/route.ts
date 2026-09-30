@@ -3,8 +3,13 @@ import { readSettings, writeSettings } from "@/lib/settings/settings.store";
 import { updateSettingsSchema } from "@/lib/validation/schemas";
 
 export async function GET() {
-  const settings = await readSettings();
-  return NextResponse.json(settings);
+  try {
+    return NextResponse.json(await readSettings());
+  } catch (err) {
+    // Un settings.json invalido se explica, no se tapa con los valores por defecto: ver
+    // settings.file.ts. La pantalla muestra este mensaje con un boton de reintento.
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
 }
 
 export async function PUT(req: Request) {

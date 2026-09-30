@@ -3,7 +3,7 @@ id: E17
 tipo: ficha-aprendizaje
 area: configuracion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: riesgo identificado en codigo
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender publicación atómica, concurrencia y recuperación sin necesitar una b
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E12 - Leer settings acepta objetos incompletos]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E12 E17 - Configuracion segura]]. Resumen de todas las fichas en [[Registro de correcciones]].
