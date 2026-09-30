@@ -23,3 +23,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E12, E17 | corregido | [[Correccion E12 E17 - Configuracion segura]] | no necesita |
 | E13, E14 | corregido | [[Correccion E13 E14 - Pantalla de configuracion]] | no necesita |
 | E15, E16 | corregido | [[Correccion E15 E16 - Estado de la impresora]] | dos pestañas: un solo PowerShell por consulta |
+| E25 | corregido | [[Correccion E25 - Aviso de digito de control]] | no necesita |

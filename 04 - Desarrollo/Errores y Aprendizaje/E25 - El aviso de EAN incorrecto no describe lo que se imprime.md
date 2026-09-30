@@ -3,7 +3,7 @@ id: E25
 tipo: ficha-aprendizaje
 area: diagnostico
 prioridad: P3
-estado: pendiente
+estado: corregido
 verificacion: confirmado por codigo y revision del catalogo
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender que los mensajes también son parte del contrato del programa: una adve
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E03 - La etiqueta impresa no vuelve al mismo producto]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E25 - Aviso de digito de control]]. Resumen de todas las fichas en [[Registro de correcciones]].

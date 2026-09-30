@@ -22,6 +22,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E12, E17 — configuración.** `settings.json` se combina con los valores por defecto por sección y se valida al leer; un archivo inválido devuelve un error con el campo exacto en vez de usar defaults en silencio. Guardar escribe un temporal y lo reemplaza con `rename`, conserva `settings.json.bak` y encola los guardados.
 - **E13, E14 — pantalla de configuración.** Un error al cargar se muestra con su motivo y un botón Reintentar en vez de "Cargando..." para siempre; la lista de colas termina siempre en "Otra cola..." y sin lista aparece el campo manual. Guardar se bloquea mientras guarda.
 - **E15, E16 — estado de la impresora.** Con TCP ya no se muestra el estado de una cola USB: se informa que el estado físico no se puede consultar y se nombra `host:puerto`. Las consultas simultáneas comparten una sola lectura de PowerShell (también las forzadas) y el refresco posterior a imprimir ya no se pierde si llega durante otro sondeo.
+- **E25 — aviso de dígito de control.** El aviso del catálogo sale del mismo cálculo que imprime: cubre también los UPC-A de 12 dígitos y dice "guarda X, se imprime Y" en vez de "ninguna etiqueta será legible". Los 6 productos afectados: 735, 1067, 1322, 1378, 1694, 1843.
 
 ### Cambiado
 

@@ -127,6 +127,16 @@ function comoEan13(compacto: string): { data: string; corregido: boolean } | nul
 }
 
 /**
+ * Si este codigo se imprime con el digito de control corregido, el codigo impreso; si no,
+ * `null`. Es la misma decision que toma `planBarcode`, para que los avisos digan lo que de
+ * verdad sale en la etiqueta.
+ */
+export function digitoCorregido(raw: string): string | null {
+  const ean = comoEan13(raw.replace(/[\s-]/g, ""));
+  return ean?.corregido ? ean.data : null;
+}
+
+/**
  * Lo que un escaner leera de la etiqueta de este codigo, sin mirar si cabe.
  *
  * Existe porque el catalogo y la etiqueta no siempre dicen lo mismo: un UPC-A se imprime con

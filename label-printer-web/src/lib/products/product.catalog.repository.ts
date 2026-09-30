@@ -2,11 +2,11 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { productSchema } from "@/lib/validation/schemas";
-import { ean13Problem, isEan13Shape } from "@/lib/labels/ean13";
 import { describeJsonError, stripBom } from "@/lib/data/json-file";
 import type { Product } from "./product.types";
 import type { ProductRepository } from "./product.repository";
 import { createInMemoryRepository } from "./product.memory.repository";
+import { checkDigitWarning } from "./catalog.warnings";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const CATALOG_FILE = path.join(DATA_DIR, "catalog.json");
@@ -69,23 +69,10 @@ async function load(): Promise<Product[]> {
     throw new Error(`catalog.json tiene ${problems.length} fila(s) invalidas: ${shown}${rest}`);
   }
 
-  // El digito de control de un EAN-13 NO es un dato que se pueda ignorar: con el digito
-  // mal la etiqueta se imprime nitida y ningun lector la decodifica, que es el peor
-  // fallo posible porque no se ve. Por aqui solo se avisa: la fila es valida y puede que
-  // el codigo no sea EAN-13 (Code 128 admite cualquier cosa). `POST /api/labels` si
-  // rechaza el caso de uso real, que es imprimir ese barcode como EAN-13.
-  const unreadable = products.filter((p) => isEan13Shape(p.barcode) && ean13Problem(p.barcode));
-  if (unreadable.length > 0) {
-    const shown = unreadable
-      .slice(0, 5)
-      .map((p) => `${p.code} "${p.barcode}" (${ean13Problem(p.barcode)})`)
-      .join(" | ");
-    const rest = unreadable.length > 5 ? ` (+${unreadable.length - 5} mas)` : "";
-    console.warn(
-      `catalog.json: ${unreadable.length} barcode(s) EAN-13 con digito de control ` +
-        `incorrecto, ninguna etiqueta de estos productos sera legible: ${shown}${rest}`,
-    );
-  }
+  // Avisa de los productos cuya etiqueta sale con el digito de control corregido: la fila es
+  // valida, pero el sistema de origen guarda otro codigo. Ver catalog.warnings.ts.
+  const warning = checkDigitWarning(products);
+  if (warning) console.warn(warning.message);
 
   cache = { mtimeMs, products };
   return products;
