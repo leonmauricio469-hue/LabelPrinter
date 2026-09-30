@@ -128,12 +128,13 @@ export async function POST(req: Request) {
   // El papel ya salio. Si el registro del historial falla (disco lleno, permisos) la
   // impresion sigue siendo un exito: se avisa por consola, pero no se le devuelve un
   // error al operador que ya tiene la etiqueta en la mano.
-  const record = await safeAudit({ ...auditBase, ok: true });
+  const record = await safeAudit({ ...auditBase, ok: true, spoolerJobId: result.spoolerJobId });
 
   return NextResponse.json({
     ok: true,
     printedAt: record?.ts ?? new Date().toISOString(),
     jobId: record?.jobId,
+    spoolerJobId: result.spoolerJobId,
     qty: input.qty,
     product,
     barcode: plan?.printable

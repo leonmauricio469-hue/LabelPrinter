@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { PrintResult } from "./printer.types";
 
 const SCRIPT = path.resolve(process.cwd(), "scripts", "send-raw.ps1");
 
@@ -8,6 +9,41 @@ export interface SpoolerInvocation {
   args: string[];
   /** Written to the child's stdin and then closed. */
   stdin: string;
+}
+
+interface SpoolResponse {
+  ok: boolean;
+  error: string | null;
+  bytes?: number;
+  jobId?: number;
+}
+
+/**
+ * Turns send-raw.ps1 output into a print result.
+ *
+ * The helper prints one JSON line. A job counts as delivered only if the spooler accepted
+ * every byte that was sent: the helper already loops over partial writes, and this check
+ * makes sure a helper that reports fewer bytes is never shown as a success.
+ */
+export function spoolerResult(stdout: string, stderr: string, expectedBytes: number): PrintResult {
+  const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+  if (!line) {
+    return { ok: false, error: stderr.trim() || "el helper de impresora no devolvio respuesta" };
+  }
+  let res: SpoolResponse;
+  try {
+    res = JSON.parse(line) as SpoolResponse;
+  } catch {
+    return { ok: false, error: `respuesta ilegible: ${line.slice(0, 200)}` };
+  }
+  if (!res.ok) return { ok: false, error: res.error ?? "error desconocido del spooler" };
+  if (res.bytes !== undefined && res.bytes !== expectedBytes) {
+    return {
+      ok: false,
+      error: `el spooler recibio ${res.bytes} de ${expectedBytes} bytes: la etiqueta no se envio completa`,
+    };
+  }
+  return res.jobId ? { ok: true, spoolerJobId: res.jobId } : { ok: true };
 }
 
 /** Base64 of the ZPL bytes sent to the spooler: UTF-8, as the label's `^CI28` declares. */

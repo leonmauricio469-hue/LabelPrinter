@@ -20,10 +20,9 @@ function Emit($ok, $error, $extra) {    $o = [ordered]@{ ok = $ok; error = $erro
 # P/Invoke block costs a few hundred ms on every call. Measured on this PC: a powershell.exe
 # spawn costs ~2 s end to end, so anything avoidable here is worth avoiding.
 if ($Mode -eq 'Status') {
+    # Exact name only, the same one OpenPrinter uses to send. A substring fallback could
+    # report the status of a different queue than the one that receives the labels.
     $q = Get-Printer -Name $Printer -ErrorAction SilentlyContinue
-    if (-not $q) {
-        $q = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$Printer*" }) | Select-Object -First 1
-    }
     if (-not $q) {
         Emit $true $null @{ queue = $Printer; found = $false }
         exit 0
@@ -63,11 +62,16 @@ public static class Spool
     public static extern bool ClosePrinter(IntPtr handle);
 
     // CharSet.Unicode resolves this to StartDocPrinterW, so it MUST take DOCINFOW.
+    // Native contract: 3 parameters, returns the spooler job id (0 = failure). It used to be
+    // declared as bool with a 4th `out jobId` that nothing native ever filled.
     [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern bool StartDocPrinter(IntPtr handle, int level, ref DOCINFOW docInfo, out IntPtr jobId);
+    public static extern int StartDocPrinter(IntPtr handle, int level, ref DOCINFOW docInfo);
 
     [DllImport("winspool.drv", SetLastError = true)]
     public static extern bool EndDocPrinter(IntPtr handle);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool AbortPrinter(IntPtr handle);
 
     [DllImport("winspool.drv", SetLastError = true)]
     public static extern bool WritePrinter(IntPtr handle, byte[] buffer, int count, out int written);
@@ -93,14 +97,11 @@ public static class Win32Message
 }
 "@
 
-# --- resolve the queue by exact name (fallback: substring match) ---
+# --- resolve the queue by exact name, the same one OpenPrinter opens ---
 $queue = Get-Printer -Name $Printer -ErrorAction SilentlyContinue
-if (-not $queue) {
-    $queue = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$Printer*" }) | Select-Object -First 1
-}
 
 $handle = [IntPtr]::Zero
-$jobId = [IntPtr]::Zero
+$jobId = 0
 
 try {
     $di = New-Object Spool+DOCINFOW
@@ -127,17 +128,28 @@ try {
     $bytes = [Convert]::FromBase64String($Base64)
     if ($bytes.Length -eq 0) { Emit $false "payload vacio" $null; exit 1 }
 
-    if (-not [Spool]::StartDocPrinter($handle, 1, [ref]$di, [ref]$jobId)) {
+    $jobId = [Spool]::StartDocPrinter($handle, 1, [ref]$di)
+    if ($jobId -eq 0) {
         $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
         Emit $false "StartDocPrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
         exit 1
     }
 
-    $written = 0
-    if (-not [Spool]::WritePrinter($handle, $bytes, $bytes.Length, [ref]$written)) {
-        $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-        Emit $false "WritePrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
-        exit 1
+    # WritePrinter may accept fewer bytes than asked: a successful call is not a full job.
+    # Keep writing the rest; if it stops making progress, cancel the job instead of
+    # reporting a partial label as sent.
+    $offset = 0
+    while ($offset -lt $bytes.Length) {
+        $chunk = if ($offset -eq 0) { $bytes } else { $bytes[$offset..($bytes.Length - 1)] }
+        $written = 0
+        $okWrite = [Spool]::WritePrinter($handle, $chunk, $chunk.Length, [ref]$written)
+        if (-not $okWrite -or $written -le 0) {
+            $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            [void][Spool]::AbortPrinter($handle)
+            Emit $false "WritePrinter fallo tras $offset de $($bytes.Length) bytes: $([Win32Message]::Get($e)) (Win32=$e). Trabajo $jobId cancelado." $null
+            exit 1
+        }
+        $offset += $written
     }
 
     if (-not [Spool]::EndDocPrinter($handle)) {
@@ -146,7 +158,7 @@ try {
         exit 1
     }
 
-    Emit $true $null @{ bytes = $written; queue = $Printer }
+    Emit $true $null @{ bytes = $offset; queue = $Printer; jobId = $jobId }
     exit 0
 }
 catch {

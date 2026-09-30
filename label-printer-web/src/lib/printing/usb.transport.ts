@@ -1,24 +1,25 @@
 import "server-only";
 import { spawn } from "node:child_process";
 import type { PrintResult } from "./printer.types";
-import { buildSpoolerInvocation, zplPayload, type SpoolerMode } from "./spooler.invocation";
+import {
+  buildSpoolerInvocation,
+  spoolerResult,
+  zplPayload,
+  type SpoolerMode,
+} from "./spooler.invocation";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
-interface SpoolResponse {
-  ok: boolean;
-  error: string | null;
-  bytes?: number;
-  queue?: string;
-  port?: string;
-}
-
+/**
+ * Runs send-raw.ps1 and returns what it printed. Timeouts and spawn errors come back as a
+ * failed `PrintResult`; the helper's own answer is interpreted by `spoolerResult`.
+ */
 function runSpooler(
   printerName: string,
   mode: SpoolerMode,
   base64: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
-): Promise<SpoolResponse> {
+): Promise<{ stdout: string; stderr: string } | PrintResult> {
   return new Promise((resolve) => {
     const { args, stdin } = buildSpoolerInvocation(printerName, mode, base64);
     const child = spawn("powershell.exe", args, { windowsHide: true });
@@ -55,20 +56,7 @@ function runSpooler(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-
-      const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop();
-      if (!line) {
-        resolve({
-          ok: false,
-          error: stderr.trim() || "el helper de impresora no devolvio respuesta",
-        });
-        return;
-      }
-      try {
-        resolve(JSON.parse(line) as SpoolResponse);
-      } catch {
-        resolve({ ok: false, error: `respuesta ilegible: ${line.slice(0, 200)}` });
-      }
+      resolve({ stdout, stderr });
     });
   });
 }
@@ -78,18 +66,19 @@ export async function sendZplUsb(
   printerName: string,
   zpl: string,
 ): Promise<PrintResult> {
-  const res = await runSpooler(printerName, "Send", zplPayload(zpl));
-  if (!res.ok) {
-    return { ok: false, error: res.error ?? "error desconocido del spooler" };
-  }
-  return { ok: true };
+  const payload = zplPayload(zpl);
+  const out = await runSpooler(printerName, "Send", payload);
+  if ("ok" in out) return out;
+  return spoolerResult(out.stdout, out.stderr, Buffer.from(payload, "base64").length);
 }
 
 /** Checks that the queue exists and can be opened. */
 export async function testUsbConnection(
   printerName: string,
 ): Promise<PrintResult> {
-  const res = await runSpooler(printerName, "Check", "", 8000);
+  const out = await runSpooler(printerName, "Check", "", 8000);
+  if ("ok" in out) return out;
+  const res = spoolerResult(out.stdout, out.stderr, 0);
   if (!res.ok) {
     return { ok: false, error: res.error ?? "no se pudo abrir la cola" };
   }

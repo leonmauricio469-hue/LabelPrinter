@@ -3,7 +3,7 @@ id: E10
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: contrato oficial contrastado con codigo
 fecha: 2026-09-29
 tags:
@@ -64,3 +64,7 @@ Aprender interoperabilidad: `bool`, `uint` e `IntPtr` representan cosas distinta
 ## Fuentes
 
 [Microsoft: StartDocPrinter](https://learn.microsoft.com/en-us/windows/win32/printdocs/startdocprinter).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E10 E11 - Puente nativo del spooler]]. Resumen de todas las fichas en [[Registro de correcciones]].

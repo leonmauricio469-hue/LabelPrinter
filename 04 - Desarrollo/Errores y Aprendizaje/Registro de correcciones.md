@@ -19,3 +19,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E08 | corregido | [[Correccion E08 - Code 128 explicito]] | escanear 246, 239 y un alfanumérico |
 | E09 | corregido | [[Correccion E09 - Lotes USB por stdin]] | tirada USB de 20+ etiquetas |
 | E07 | corregido | [[Correccion E07 - Enviado no es impreso]] | enviar con la cola en pausa |
+| E10, E11, E21 | corregido | [[Correccion E10 E11 - Puente nativo del spooler]] | imprimir USB y comparar el ID con la cola de Windows |

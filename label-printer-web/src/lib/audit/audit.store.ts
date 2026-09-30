@@ -19,6 +19,8 @@ export interface PrintRecord {
   mode: PrintMode;
   /** motivo del fallo cuando ok = false */
   error?: string;
+  /** ID del trabajo en la cola de Windows (solo USB); `jobId` es el de esta auditoria */
+  spoolerJobId?: number;
 }
 
 /**
@@ -40,6 +42,7 @@ export async function appendPrintRecord(
     ok: entry.ok,
     mode: entry.mode,
     ...(entry.error ? { error: entry.error } : {}),
+    ...(entry.spoolerJobId ? { spoolerJobId: entry.spoolerJobId } : {}),
   };
 
   await fs.mkdir(DATA_DIR, { recursive: true });

@@ -3,7 +3,7 @@ id: E21
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -59,3 +59,7 @@ Aprender a mantener identidad consistente entre diagnóstico y acción. Un estad
 - [[Ruta de aprendizaje y correccion]]
 - [[E14 - El campo manual de impresora queda inaccesible]]
 - [[E15 - El estado no sigue el transporte seleccionado]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E10 E11 - Puente nativo del spooler]]. Resumen de todas las fichas en [[Registro de correcciones]].

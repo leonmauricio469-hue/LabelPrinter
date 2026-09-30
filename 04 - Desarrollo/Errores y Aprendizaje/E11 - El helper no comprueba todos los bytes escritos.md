@@ -3,7 +3,7 @@ id: E11
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: riesgo identificado en codigo
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender a distinguir éxito de una llamada y cumplimiento de toda la operación
 ## Fuentes
 
 [Microsoft: WritePrinter y pcWritten](https://learn.microsoft.com/en-us/windows/win32/printdocs/writeprinter).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E10 E11 - Puente nativo del spooler]]. Resumen de todas las fichas en [[Registro de correcciones]].

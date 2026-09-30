@@ -18,6 +18,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E09 — lotes USB grandes fallaban.** El lote va por stdin a `send-raw.ps1`; la línea de comandos tiene tamaño fijo.
 - **E18 — codificación USB/TCP distinta.** `^CI28` en cada etiqueta y UTF-8 en ambos transportes.
 - **E07 — enviado ≠ impreso.** TCP ya no responde éxito al conectar: espera a que la impresora reciba todo y cierre; una conexión cortada a mitad es fallo. La UI dice "enviada a la impresora" en vez de "impresa".
+- **E10, E11, E21 — puente nativo del spooler.** `StartDocPrinter` declarado como la API real (3 parámetros, devuelve el ID del trabajo); la escritura se repite hasta enviar todos los bytes o cancela el trabajo; estado y envío usan el nombre exacto de la cola. El ID real del spooler llega a `/api/labels` y al historial (`spoolerJobId`).
 
 ### Cambiado
 
