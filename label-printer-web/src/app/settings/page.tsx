@@ -299,6 +299,11 @@ export default function SettingsPage() {
             onChange={(e) => patchLabel({ businessName: e.target.value })}
             className={inputClass}
           />
+          <p className="mt-1 text-xs text-neutral-500">
+            Se imprime como texto arriba solo cuando la etiqueta es demasiado chica para el
+            logo PA PICAR (menos de 25 mm de alto o de ancho). En 50 x 25 mm va el logo y
+            este nombre no se imprime.
+          </p>
         </div>
 
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

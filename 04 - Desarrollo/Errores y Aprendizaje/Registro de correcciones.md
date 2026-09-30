@@ -25,3 +25,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E15, E16 | corregido | [[Correccion E15 E16 - Estado de la impresora]] | dos pestañas: un solo PowerShell por consulta |
 | E25 | corregido | [[Correccion E25 - Aviso de digito de control]] | no necesita |
 | E24 | corregido | [[Correccion E24 - Busqueda truncada]] | no necesita |
+| E19, E23 | corregido | [[Correccion E19 E23 - Nombre del producto y de la empresa]] | nombres largos en 50×25; etiqueta chica con nombre de empresa |

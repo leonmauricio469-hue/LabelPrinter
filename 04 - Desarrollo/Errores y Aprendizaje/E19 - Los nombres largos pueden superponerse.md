@@ -3,7 +3,7 @@ id: E19
 tipo: ficha-aprendizaje
 area: etiquetas
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: contrato y catalogo verificados - papel pendiente
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender restricciones de diseño y diferencias entre una vista previa y el moto
 ## Fuentes
 
 [Zebra: ^FB y exceso de líneas](https://docs.zebra.com/us/en/printers/software/zpl-pg/c-zpl-zpl-commands/r-zpl-fb.html).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E19 E23 - Nombre del producto y de la empresa]]. Resumen de todas las fichas en [[Registro de correcciones]].

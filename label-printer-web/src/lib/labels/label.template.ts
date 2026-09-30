@@ -137,10 +137,24 @@ export function buildLabelTemplate(size: { widthMm: number; heightMm: number }):
 
   // El logo no se puede escalar: si la etiqueta es mas baja o mas estrecha que la de 50 x 25,
   // pisaria el nombre. Sin logo la etiqueta sigue sirviendo; con el nombre tapado no.
+  //
+  // Sin logo, arriba va el nombre de empresa de /settings como texto: es donde ese ajuste se
+  // ve. Con logo no se repite, el logo ya es la marca (ver E23 en el vault).
   const logo: LabelZone[] =
     widthDots >= LOGO_DOTS_W && heightDots >= BASE_H
       ? [{ kind: "graphic", x: Math.round((widthDots - LOGO_DOTS_W) / 2), y: 1, gf: LOGO_GF }]
-      : [];
+      : [
+          {
+            kind: "text",
+            x: X(8),
+            y: Y(12),
+            format: font(28, 18),
+            source: "header",
+            maxWidthDots: X(384),
+            maxLines: 1,
+            justify: "C",
+          },
+        ];
 
   return {
     widthDots,
@@ -148,15 +162,17 @@ export function buildLabelTemplate(size: { widthMm: number; heightMm: number }):
     zones: [
       // 1. Logo, centred: 200 x 67 dots, x = (400 - 200) / 2 = 100, y 1..68
       ...logo,
-      // 2. Description, 8 dots/char, one line inside 240 dots, y 70..84
+      // 2. Description, 8 dots/char, TWO lines of 12 inside 240 dots, y 70..94 (barcode
+      //    starts at 96). It was one line of 14: 1049 names have more than 30 characters and
+      //    ^FB overprints what does not fit on the last line. `fitText` cuts the rest.
       {
         kind: "text",
         x: X(6),
         y: Y(70),
-        format: font(14, 8),
+        format: font(12, 8),
         source: "productName",
         maxWidthDots: X(240),
-        maxLines: 1,
+        maxLines: 2,
         justify: "L",
       },
       // 3. Price: "$7.80" = 5 x 15 = 75 dots, x 250..325, y 68..92

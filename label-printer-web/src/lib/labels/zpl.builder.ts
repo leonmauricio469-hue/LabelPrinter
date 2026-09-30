@@ -102,6 +102,41 @@ function fieldData(value: string): string {
   return `^FH\\^FD${escaped}^FS`;
 }
 
+/**
+ * Ajusta un texto a `maxLines` lineas de `perLine` caracteres, cortando por palabras.
+ *
+ * `^FB` ajusta el texto en la impresora, pero lo que no entra en las lineas previstas lo
+ * SUPERPONE en la ultima (documentado por Zebra): un nombre largo salia ilegible, encimado.
+ * Aqui se hace el mismo ajuste antes, con el ancho nominal de la fuente, y si no entra se
+ * corta con "..." explicito. El ancho nominal es el de las letras anchas, asi que es
+ * conservador: si entra aqui, entra en el papel.
+ */
+export function fitText(text: string, perLine: number, maxLines: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+    .flatMap((w) => w.match(new RegExp(`.{1,${perLine}}`, "g")) ?? []);
+  const lines: string[] = [];
+  for (const word of words) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && last.length + 1 + word.length <= perLine) {
+      lines[lines.length - 1] = `${last} ${word}`;
+    } else {
+      lines.push(word);
+    }
+  }
+  if (lines.length <= maxLines) return lines.join(" ");
+
+  const kept = lines.slice(0, maxLines);
+  const lastLine = kept[maxLines - 1];
+  kept[maxLines - 1] = `${lastLine.slice(0, Math.max(0, perLine - 3)).trimEnd()}...`;
+  return kept.join(" ");
+}
+
+/** Ancho nominal de caracter de un `^A0N,alto,ancho`. */
+function charWidth(format: string): number | null {
+  const m = /^\^A0N,\d+,(\d+)/.exec(format);
+  return m ? Number(m[1]) : null;
+}
+
 function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan: BarcodePlan): string {
   const commands: string[] = [
     "^XA",
@@ -132,7 +167,11 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
       continue;
     }
 
-    const text = textFor(zone, data);
+    const w = charWidth(zone.format);
+    const text =
+      zone.maxWidthDots !== undefined && w
+        ? fitText(textFor(zone, data), Math.floor(zone.maxWidthDots / w), zone.maxLines ?? 2)
+        : textFor(zone, data);
     commands.push(zone.format);
 
     // ^FB must come AFTER the font command and BEFORE ^FD, otherwise ZPL

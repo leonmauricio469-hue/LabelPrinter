@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_TEMPLATE } from "./label.template.ts";
-import { buildZpl } from "./zpl.builder.ts";
+import { buildZpl, fitText } from "./zpl.builder.ts";
 import type { LabelData } from "./label.types.ts";
 
 function label(overrides: Partial<LabelData>): string {
@@ -50,4 +50,26 @@ test("the label declares UTF-8 so accented names print as written", () => {
 
   assert.ok(zpl.startsWith("^XA\n^CI28\n"), zpl.slice(0, 40));
   assert.ok(zpl.includes("AÑO ÉXITO"));
+});
+
+test("text is wrapped by words into the lines the zone allows", () => {
+  assert.equal(fitText("CAFE AMANECER DE 500GR", 30, 2), "CAFE AMANECER DE 500GR");
+});
+
+test("text that does not fit is cut explicitly instead of overprinting the last line", () => {
+  const long = "SUAVIZANTE CONCENTRADO PARA ROPA AROMA LAVANDA Y FLORES SILVESTRES 2 LITROS";
+  const fitted = fitText(long, 30, 2);
+
+  assert.ok(fitted.endsWith("..."), fitted);
+  assert.ok(fitted.length <= 60, `${fitted.length} chars`);
+});
+
+test("a single word longer than a line is split, not dropped", () => {
+  assert.equal(fitText("A".repeat(40), 30, 2), "A".repeat(30) + " " + "A".repeat(10));
+});
+
+test("the product name gets two lines above the barcode on 50 x 25", () => {
+  const zpl = label({ productName: "SUAVIZANTE CONCENTRADO PARA ROPA AROMA LAVANDA" });
+
+  assert.ok(zpl.includes("^A0N,12,8\n^FB240,2,0,L,0"), zpl);
 });

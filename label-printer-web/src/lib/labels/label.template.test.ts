@@ -66,3 +66,32 @@ test("every zone stays inside the label for the sizes the settings accept", () =
     assertInside(t.zonesWithoutBarcode ?? [], t.widthDots, t.heightDots, `${widthMm}x${heightMm} sin barcode`);
   }
 });
+
+test("a label too small for the logo prints the business name instead", () => {
+  const zpl = buildZpl(buildLabelTemplate({ widthMm: 40, heightMm: 20 }), {
+    ...data("7591234567801"),
+    businessName: "TIENDA DE PRUEBA",
+  });
+
+  assert.ok(!zpl.includes("^GFA"), "no logo on a 20 mm tall label");
+  assert.ok(zpl.includes("TIENDA DE PRUEBA"), zpl);
+});
+
+test("with the logo, the business name is not printed twice", () => {
+  const zpl = buildZpl(buildLabelTemplate({ widthMm: 50, heightMm: 25 }), {
+    ...data("7591234567801"),
+    businessName: "TIENDA DE PRUEBA",
+  });
+
+  assert.ok(!zpl.includes("TIENDA DE PRUEBA"));
+});
+
+test("every real product name fits the name zone without being cut on 50 x 25", async () => {
+  const { fitText } = await import("./zpl.builder.ts");
+  const catalog = JSON.parse(
+    readFileSync(new URL("../../../data/catalog.json", import.meta.url), "utf8").replace(/^\uFEFF/, ""),
+  ) as Array<{ code: string; name: string }>;
+
+  const cut = catalog.filter((p) => fitText(p.name, 30, 2).endsWith("...")).map((p) => p.code);
+  assert.deepEqual(cut, []);
+});

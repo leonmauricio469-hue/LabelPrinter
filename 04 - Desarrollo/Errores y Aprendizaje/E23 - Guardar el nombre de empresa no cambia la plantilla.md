@@ -3,7 +3,7 @@ id: E23
 tipo: ficha-aprendizaje
 area: interfaz
 prioridad: P3
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender a rastrear una opción desde formulario hasta el resultado final, y a d
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E05 - Las dimensiones guardadas no cambian la etiqueta]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E19 E23 - Nombre del producto y de la empresa]]. Resumen de todas las fichas en [[Registro de correcciones]].
