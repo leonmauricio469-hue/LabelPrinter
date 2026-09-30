@@ -29,3 +29,4 @@ Estado de cada ficha de [[Mapa de errores y aprendizaje]]. Cada corrección se h
 | E20 | corregido | [[Correccion E20 - Escucha local]] | netstat muestra 127.0.0.1:3000 |
 | E22 | corregido | [[Correccion E22 - Reintentos sin duplicados]] | timeout forzado con la cola en pausa |
 | M01 | corregido | [[Correccion M01 - Historial reconstruible]] | no necesita |
+| E26, E27 | parcial | [[Correccion E26 E27 - Plugins de Obsidian]] | **rotar la clave de Share Note**; reinstalar plugins desde Obsidian |

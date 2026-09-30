@@ -4,7 +4,7 @@ fecha: 2026-09-29
 ---
 # Mapa de errores y aprendizaje
 
-La revisión de la copia actual reúne **26 fichas de problemas y riesgos y 6 fichas de mejoras**. Cada una explica el comportamiento, su causa, dónde leer el código, cómo corregirlo y cómo comprobarlo. Los riesgos de hardware no se presentan como fallos físicamente reproducidos. Algunos efectos se relacionan: no sumar los productos afectados de distintas fichas como si fueran casos independientes.
+La revisión de la copia actual reúne **27 fichas de problemas y riesgos y 6 fichas de mejoras** (E27 se agregó al preparar Git). Cada una explica el comportamiento, su causa, dónde leer el código, cómo corregirlo y cómo comprobarlo. Los riesgos de hardware no se presentan como fallos físicamente reproducidos. Algunos efectos se relacionan: no sumar los productos afectados de distintas fichas como si fueran casos independientes.
 
 El proyecto es una oportunidad para aprender. Empieza por [[Ruta de aprendizaje y correccion]], consulta [[Conceptos para entender los errores]] y registra cada cambio con [[Como registrar una correccion]]. Los detalles de las mediciones están en [[Evidencias y alcance de la revision]].
 
@@ -40,6 +40,7 @@ Todas las correcciones de código descritas están pendientes. La eliminación d
 | [[E24 - La busqueda oculta que faltan resultados]] | P3 | confirmado por lectura del codigo |
 | [[E25 - El aviso de EAN incorrecto no describe lo que se imprime]] | P3 | confirmado por codigo y revision del catalogo |
 | [[E26 - Los plugins de Obsidian contienen HTML en lugar de codigo]] | P2 | contenido de archivos confirmado |
+| [[E27 - Una clave de Share Note esta publicada en el repositorio]] | P1 | confirmado en el repositorio publico |
 | [[M01 - El historial no permite reconstruir la etiqueta]] | P3 | mejora identificada en codigo |
 | [[M02 - Las pruebas no cubren el ciclo completo ni tienen comando unico]] | P2 | scripts existentes revisados |
 | [[M03 - Preparar control de versiones para aprender]] | P2 | no se encontro repositorio Git utilizable |

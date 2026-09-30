@@ -3,7 +3,7 @@ id: E26
 tipo: ficha-aprendizaje
 area: documentacion
 prioridad: P2
-estado: pendiente
+estado: parcial
 verificacion: contenido de archivos confirmado
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender a validar el contenido de una descarga, además de su nombre, extensió
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[M04 - Mantener la documentacion sincronizada]]
+
+## Corrección
+
+Estado: **parcial**. Registro: [[Correccion E26 E27 - Plugins de Obsidian]]. Resumen de todas las fichas en [[Registro de correcciones]].

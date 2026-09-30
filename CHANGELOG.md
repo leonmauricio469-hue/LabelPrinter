@@ -27,6 +27,7 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 - **E19, E23 — nombres en la etiqueta.** El nombre del producto tiene 2 líneas de fuente 12 (antes 1 de 14) y lo que no entra se corta con "..." en vez de superponerse; ningún nombre del catálogo real se corta. El nombre de empresa de `/settings` se imprime como texto cuando la etiqueta es demasiado chica para el logo. Los fixtures de 50 × 25 cambian en esas dos líneas, a propósito.
 - **E20 — escucha local.** `npm run dev` y `npm run start` escuchan solo en `127.0.0.1` (`-H 127.0.0.1`); antes escuchaban en `0.0.0.0` y las rutas no tienen autenticación.
 - **E22 — reintentos sin duplicados.** Un envío que pudo llegar (timeout o corte a mitad) se informa como incierto y pide revisar la impresora. Cada impresión lleva un `requestId`; el servidor no reenvía una solicitud ya enviada o incierta, y el cliente reutiliza el ID solo si se perdió la respuesta.
+- **E26, E27 — plugins de Obsidian (parcial).** Los plugins cuyo `main.js` era una página HTML de Drive quedan desactivados. **Hallazgo nuevo E27:** `share-note/data.json` con un `apiKey` estaba en el repositorio público; deja de seguirse y se ignora. Falta rotar la clave en Share Note: ya estuvo publicada.
 
 ### Cambiado
 

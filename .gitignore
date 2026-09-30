@@ -1,0 +1,9 @@
+# Obsidian: per-plugin settings can hold credentials (share-note stores an apiKey and uid).
+# Never commit them. See E27 in 04 - Desarrollo/Errores y Aprendizaje.
+.obsidian/plugins/*/data.json
+
+# Local agent tooling
+.claude/
+.mcp.json
+label-printer-web/.claude/
+label-printer-web/.mcp.json
