@@ -26,6 +26,8 @@
     "scripts/importar-catalogo.ts",
     "scripts/check-barcode-plan.ts",
     "scripts/check-busqueda.ts",
+    "scripts/check-zonas.ts",
+    "scripts/check-ascii.ts",
     "scripts/generar-prueba-symbology.ts",
     "src/lib/validation/schemas.ts",
     "src/lib/products/product.lookup.ts",

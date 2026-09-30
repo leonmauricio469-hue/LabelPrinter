@@ -6,6 +6,7 @@ import { ean13Problem, isEan13Shape } from "@/lib/labels/ean13";
 import { describeJsonError, stripBom } from "@/lib/data/json-file";
 import type { Product } from "./product.types";
 import type { ProductRepository } from "./product.repository";
+import { foldAscii } from "../labels/ascii.fold";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const CATALOG_FILE = path.join(DATA_DIR, "catalog.json");
@@ -16,12 +17,27 @@ const CATALOG_FILE = path.join(DATA_DIR, "catalog.json");
  * Se quita espacios y guiones y se pasa a minusculas porque el operador puede teclear
  * "7591234567890" o "759-12345-67890".
  *
+ * Tambien se pliega a ASCII, y esto NO es cosmetico. Sin esta linea, buscar "BADIA
+ * JALAPENO" no encuentra "BADIA JALAPEÑO MOLIDO 2 OZ": el `includes` compara
+ * "jalapeno" contra "jalapeño" y falla, y el operador ve "no esta en el catalogo" de un
+ * producto que esta. Hay 105 nombres con tilde, y el que esta en el mostrador los teclea
+ * sin tilde por costumbre, asi que el fallo se repite cada vez que busca.
+ *
+ * El mismo problema con el apostrofo: el catalogo tiene 13 nombres con U+00B4 pegado al
+ * nombre en vez de comilla (HERSHEY´S, JACK´S, WELCH´S, PA´PICAR), que es un error de
+ * tecleo heredado de maquinas de escribir. El operador escribe una comilla de verdad y no
+ * encuentra nada.
+ *
+ * Se reutiliza `foldAscii()`, que es el MISMO plegado que se aplica al imprimir, en vez de
+ * reimplementarlo aqui. Si las dos cosas dejaran de coincidir, el operador encontraria un
+ * producto y veria otro nombre en la etiqueta, que es peor que no encontrar nada.
+ *
  * Importante: los codigos se comparan **como texto**, nunca como numero. Un EAN-13
  * empieza por ceros a la izquierda y `parseInt("009300002509")` los perderia, dejando
  * el barcode de ese producto imposible de encontrar.
  */
 function normalize(value: string): string {
-  return value.replace(/[\s-]/g, "").toLowerCase();
+  return foldAscii(value).replace(/[\s-]/g, "").toLowerCase();
 }
 
 /**

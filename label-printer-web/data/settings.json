@@ -8,6 +8,7 @@
   "label": {
     "widthMm": 50,
     "heightMm": 25,
-    "businessName": "PA PICAR"
+    "businessName": "PA PICAR",
+    "templateId": "papicar-50x25"
   }
 }

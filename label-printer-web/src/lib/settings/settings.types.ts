@@ -15,6 +15,18 @@ export interface LabelSettings {
   widthMm: number;
   heightMm: number;
   businessName: string;
+  /**
+   * Que plantilla imprime. Es el id de `TEMPLATES`, no el objeto: la plantilla vive en el
+   * codigo y `settings.json` solo guarda cual se quiere.
+   *
+   * Antes de existir esto, `api/labels/route.ts` usaba `DEFAULT_TEMPLATE` fijo y `widthMm` y
+   * `heightMm` no los leia nadie. Cambiarlos en /settings no hacia nada. Aqui el id va de
+   * verdad: cambiar de plantilla cambia los dots que salen, que es lo que se queria.
+   *
+   * `widthMm` y `heightMm` se conservan por compatibilidad, pero ya NO son la fuente de la
+   * medida: la medida sale de la plantilla. /settings avisa de eso.
+   */
+  templateId: string;
 }
 
 export interface AppSettings {
@@ -33,5 +45,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
     widthMm: 50,
     heightMm: 25,
     businessName: "PA PICAR",
+    templateId: "papicar-50x25",
   },
 };

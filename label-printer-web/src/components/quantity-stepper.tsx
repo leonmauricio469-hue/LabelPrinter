@@ -1,10 +1,25 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import { MAX_QTY_POR_TRABAJO } from "@/lib/validation/schemas";
 
-/** Minimo y maximo por [[Cantidad de Etiquetas]]: 1 a 999. */
+/**
+ * Minimo y maximo por [[Cantidad de Etiquetas]].
+ *
+ * El maximo no es 999, es 6, y el motivo es `usb.transport.ts`: manda el ZPL entero como un
+ * argumento de linea de comandos en base64, y Windows corta `CreateProcessW` en 32767
+ * caracteres. Con el nombre mas largo del catalogo real, una etiqueta son 3629 bytes de ZPL
+ * (4840 en base64) y a partir de la septima ya no entra. Con el tope en 999, pedir 7
+ * devolvia un 500 sin imprimir y sin dejar registro en el historial.
+ *
+ * El mismo numero esta en `MAX_QTY_POR_TRABAJO` y lo comparte el esquema del servidor, de
+ * modo que el boton y el 400 cuentan la misma historia.
+ *
+ * Subirlo es cambiar COMO se pasa el ZPL a `send-raw.ps1` (archivo temporal o stdin), no este
+ * numero.
+ */
 const MIN_QTY = 1;
-const MAX_QTY = 999;
+const MAX_QTY = MAX_QTY_POR_TRABAJO;
 
 /**
  * Campo numerico con flechas +/-. Permite escribir el numero directamente.

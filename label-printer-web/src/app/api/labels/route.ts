@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
-import { DEFAULT_TEMPLATE } from "@/lib/labels/label.template";
+import { templateById } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
@@ -56,6 +56,13 @@ export async function POST(req: Request) {
   }
 
   const settings = await readSettings();
+
+  // La plantilla sale de `settings.label.templateId`. Antes era `DEFAULT_TEMPLATE` fijo, y
+  // `widthMm`/`heightMm` no los leia nadie: cambiar el tamano de etiqueta en /settings no
+  // hacia nada. `templateById()` cae en la de 50 mm si el id no existe, para que un
+  // `settings.json` editado a mano siga imprimiendo en vez de tumbar la ruta entera.
+  const template = templateById(settings.label.templateId);
+
   const data: LabelData = {
     productName: product.name,
     barcode: product.barcode,
@@ -68,8 +75,8 @@ export async function POST(req: Request) {
   // Antes esto era un 422, y con el catalogo real eso habria sido un error en el 62% de los
   // productos. No lo es: un UPC-A, un codigo alfanumerico o un codigo que no cabe son datos
   // del sistema de origen, no un fallo de quien pulsa. Se imprime igual y se avisa.
-  const barcodeZone = barcodeZoneOf(DEFAULT_TEMPLATE);
-  const plan = barcodeZone ? planForZone(DEFAULT_TEMPLATE, barcodeZone, product.barcode) : null;
+  const barcodeZone = barcodeZoneOf(template);
+  const plan = barcodeZone ? planForZone(template, barcodeZone, product.barcode) : null;
 
   const avisos: string[] = [];
   if (plan?.printable && plan.correctedFrom) {
@@ -87,7 +94,7 @@ export async function POST(req: Request) {
   // ancho de modulo de la plantilla. Si salta, es un fallo interno y se responde 500 con el
   // motivo: un 422 diria al operador que su codigo esta mal, y no es verdad.
   if (barcodeZone && plan?.printable) {
-    const quiet = quietZoneDots(DEFAULT_TEMPLATE, barcodeZone, plan);
+    const quiet = quietZoneDots(template, barcodeZone, plan);
     const minQuiet = 10 * barcodeZone.moduleWidth;
     if (quiet < minQuiet) {
       return NextResponse.json(
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const zpl = buildZplBatch(DEFAULT_TEMPLATE, data, input.qty);
+  const zpl = buildZplBatch(template, data, input.qty);
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(zpl);
 

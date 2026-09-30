@@ -20,7 +20,25 @@ export async function readSettings(): Promise<AppSettings> {
 
   // Sin `stripBom`, un `settings.json` guardado por PowerShell con `-Encoding UTF8` deja toda
   // la app sin configuracion y sin explicacion. Ver `json-file.ts`.
-  return { ...DEFAULT_SETTINGS, ...(JSON.parse(stripBom(raw)) as AppSettings) };
+  const guardado = JSON.parse(stripBom(raw)) as Partial<AppSettings>;
+
+  // El merge es de DOS niveles, no plano, y esto no es cosmetico.
+  //
+  // Con `{ ...DEFAULT_SETTINGS, ...guardado }` el objeto `label` del archivo SUSTITUYE entero
+  // al del default. Un `settings.json` guardado antes de que existiera `label.templateId`
+  // vuelve con `label: { widthMm, heightMm, businessName }` y sin `templateId`, que queda
+  // `undefined`. La pagina de configuracion entonces muestra el selector de plantilla sin
+  // nada elegido, y `templateById(undefined)` cae en la de 50 mm sin decir nada.
+  //
+  // Un merge plano hace que cada campo nuevo que se añada a `LabelSettings` desaparezca en
+  // silencio en cuanto exista un `settings.json` viejo. Que es exactamente lo que pasó al
+  // añadir `templateId`.
+  return {
+    ...DEFAULT_SETTINGS,
+    ...guardado,
+    printer: { ...DEFAULT_SETTINGS.printer, ...guardado.printer },
+    label: { ...DEFAULT_SETTINGS.label, ...guardado.label },
+  };
 }
 
 export async function writeSettings(settings: AppSettings): Promise<void> {

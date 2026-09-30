@@ -190,12 +190,32 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
  * digito de control UCC, que se pone a `N` porque el dato ya viene con su digito puesto: si
  * la impresora lo anade otra vez, salen dos y el codigo no lee.
  */
-export function barcodeFormat(plan: BarcodeImprimible, heightDots: number, interpretation = true): string {
+/**
+ * Comando `^BY` + comando de simbolo.
+ *
+ * `^BY` reinicia TODO lo que no se le pase. El `h` (alto de la linea de interpretacion) cae en
+ * el valor por defecto, que segun el manual de ZPL II es la altura de fuente VIGENTE en ese
+ * momento, no 10 veces el ancho de modulo. Y la fuente vigente es la ultima que se emitio antes.
+ *
+ * En la plantilla de 50 mm esa fuente es `^A0N,24` del precio: las barras van de y 96 a 168, la
+ * linea de interpretacion de 168 a 192, y la zona de referencia de 186 a 198. Se pisan 6 dots.
+ * Es poco y solo se nota si la referencia cae justo debajo del numero, pero se pisan.
+ *
+ * `hriHeight` lo fija y quita el solape. Si no se pasa, se emite `^BY` a secas y el ZPL es
+ * exactamente el de la version 1.1, que es lo que se ha impreso en fisico hasta ahora.
+ */
+export function barcodeFormat(
+  plan: BarcodeImprimible,
+  heightDots: number,
+  interpretation = true,
+  hriHeight?: number,
+): string {
   const linea = interpretation ? "Y" : "N";
+  const by = hriHeight === undefined ? `^BY${plan.moduleWidth}` : `^BY${plan.moduleWidth},,${hriHeight}`;
   if (plan.symbology === "ean13") {
-    return `^BY${plan.moduleWidth}\n^BEN,${heightDots},${linea},N`;
+    return `${by}\n^BEN,${heightDots},${linea},N`;
   }
-  return `^BY${plan.moduleWidth}\n^BCN,${heightDots},${linea},N,N`;
+  return `${by}\n^BCN,${heightDots},${linea},N,N`;
 }
 
 /**

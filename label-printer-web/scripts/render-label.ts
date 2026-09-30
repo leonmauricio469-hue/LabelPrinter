@@ -10,29 +10,34 @@
 // Usage (after `tsc -p tsconfig.preview.json`):
 //   node .preview-build/scripts/render-label.js [barcode]
 //   SCALE=4 node .preview-build/scripts/render-label.js        (px per dot)
+//   TEMPLATE=papicar-59x35 node .preview-build/scripts/render-label.js
 //
-// Output: preview/label-preview.png
+// Output: preview/label-<id>.png
 import { writeFileSync, mkdirSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { buildZpl, symbolDots, quietZoneDots, barcodeZoneOf, planForZone } from "../src/lib/labels/zpl.builder";
-import { DEFAULT_TEMPLATE, type BarcodeZone } from "../src/lib/labels/label.template";
+import { templateById, type BarcodeZone } from "../src/lib/labels/label.template";
+import { LOGO_DOTS_W, LOGO_DOTS_H } from "../src/lib/labels/pa-picar-logo";
 import type { LabelData } from "../src/lib/labels/label.types";
 import { encodeCode128, encodeCode128Auto } from "../src/lib/labels/code128";
 import { EAN13_MODULES } from "../src/lib/labels/ean13";
 
 const SCALE = Number.parseInt(process.env.SCALE ?? "3", 10);
 const barcode = process.argv[2] ?? "7591234567801";
+// Antes iba fija la de 50 mm. Con TEMPLATE se puede mirar la de 59 mm sin tocar el codigo.
+const template = templateById(process.env.TEMPLATE);
+const productName = process.env.NOMBRE ?? "CAFE AMANECER DE 500GR";
 
 const data: LabelData = {
-  productName: "CAFE AMANECER DE 500GR",
+  productName,
   barcode,
   price: 7.8,
   reference: "0001",
   businessName: "PA PICAR",
 };
 
-const widthDots = DEFAULT_TEMPLATE.widthDots;
-const heightDots = DEFAULT_TEMPLATE.heightDots;
+const widthDots = template.widthDots;
+const heightDots = template.heightDots;
 const W = widthDots * SCALE;
 const H = heightDots * SCALE;
 
@@ -203,19 +208,27 @@ function drawEan13(text: string, xDot: number, yDot: number, hDot: number, modul
 
 
 // --------------------------------------------------------------------------- main
-console.log(`Etiqueta ${widthDots} x ${heightDots} dots = ${widthDots / 8} x ${heightDots / 8} mm @ 203 dpi`);
-console.log(`Barcode "${barcode}"\n`);
+console.log(
+  `Plantilla ${template.id}  ${template.widthMm} x ${template.heightMm} mm  =  ${widthDots} x ${heightDots} dots @ 203 dpi`,
+);
+console.log(`Barcode "${barcode}"   Nombre "${productName}"\n`);
 
 for (let d = 0; d <= widthDots; d += 8) vLine(d, 0, H, GRID);
 for (let d = 0; d <= heightDots; d += 8) hLine(0, W, d, GRID);
 vLine(widthDots - 1, 0, H, EDGE);
 hLine(0, W, heightDots - 1, EDGE);
 
-const zpl = buildZpl(DEFAULT_TEMPLATE, data);
+const zpl = buildZpl(template, data);
 
 // El ^GFA lleva saltos de linea internos: se saca del ZPL completo antes de trocear.
+// La posicion sale de la zona de la plantilla, no de un centering a ojo, porque en la de
+// 59 mm el logo va en y 20 y no en y 2.
+const gfZone = template.zones.find((z) => z.kind === "graphic");
 const gfMatch = zpl.match(/\^GFA,[\s\S]*?\n\^FS/);
-if (gfMatch) drawGraphic(gfMatch[0], Math.round((widthDots - 200) / 2), 2);
+if (gfMatch && gfZone && gfZone.kind === "graphic") {
+  drawGraphic(gfMatch[0], gfZone.x, gfZone.y);
+  console.log(`  logo ${LOGO_DOTS_W} x ${LOGO_DOTS_H} dots en ${gfZone.x},${gfZone.y}`);
+}
 
 let curX = 0;
 let curY = 0;
@@ -293,7 +306,7 @@ for (const z of zones) console.log(z);
 
 // ---------------------------------------------------------------------- analisis
 // Que combinaciones caben en 400 dots con zona quieta minima de 10X a cada lado.
-console.log("\nCandidatos (400 dots = 50 mm de ancho, zona quieta minima 10X):");
+console.log(`\nCandidatos (${widthDots} dots = ${widthDots / 8} mm de ancho, zona quieta minima 10X):`);
 console.log("  simbologia       ^BY   X(mm)   ancho simbolo          quieta izq/der   verdict");
 type Row = { label: string; modules: number; by: number };
 const auto = encodeCode128Auto(barcode).encoded.modules;
@@ -324,15 +337,15 @@ for (const h of [48, 64, 72, 80, 88]) {
 }
 
 // El builder es quien centra, asi que se comprueba con el, no a ojo.
-const zone = barcodeZoneOf(DEFAULT_TEMPLATE) as BarcodeZone;
-const plan = planForZone(DEFAULT_TEMPLATE, zone, barcode);
+const zone = barcodeZoneOf(template) as BarcodeZone;
+const plan = planForZone(template, zone, barcode);
 console.log("\nComprobacion con el builder:");
 if (plan.printable) {
   console.log(`  symbologia   ${plan.symbology}  (la decide planBarcode(), no la plantilla)`);
   console.log(`  datos        ${plan.data}${plan.correctedFrom ? `  (corregido desde ${plan.correctedFrom})` : ""}`);
   console.log(`  simbolo      ${plan.modules} modulos`);
   console.log(`  ancho        ${symbolDots(zone, plan)} dots (${(symbolDots(zone, plan) / 8).toFixed(1)} mm)`);
-  console.log(`  zona quieta  ${quietZoneDots(DEFAULT_TEMPLATE, zone, plan)} dots (min ${10 * zone.moduleWidth})`);
+  console.log(`  zona quieta  ${quietZoneDots(template, zone, plan)} dots (min ${10 * zone.moduleWidth})`);
 } else {
   console.log(`  SIN CODIGO   ${plan.reason}: ${plan.detail}`);
   console.log(`  La etiqueta sale con zonesWithoutBarcode.`);
@@ -386,5 +399,6 @@ function writePng(path: string) {
 }
 
 mkdirSync("preview", { recursive: true });
-writePng("preview/label-preview.png");
-console.log("\n  -> preview/label-preview.png");
+const salida = `preview/label-${template.id}.png`;
+writePng(salida);
+console.log(`\n  -> ${salida}`);
