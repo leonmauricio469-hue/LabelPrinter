@@ -1,0 +1,208 @@
+Necesito implementar una nueva plantilla de impresión para las etiquetas de mi aplicación LabelPrinter.
+
+IMPORTANTE:
+No dependas de una imagen de fondo ni intentes cargar la imagen de referencia.
+La etiqueta debe ser construida completamente mediante código/vector/elementos de impresión para que pueda imprimirse correctamente en una Zebra GK420t.
+
+TAMAÑO FÍSICO EXACTO:
+- Ancho: 59.00 mm
+- Alto: 35.00 mm
+- Orientación: horizontal
+- La plantilla debe respetar estas dimensiones físicas reales al momento de imprimir.
+- No escalar proporcionalmente de manera automática.
+- Tener en cuenta la resolución/DPI configurada actualmente para la Zebra GK420t.
+
+DISEÑO DE LA ETIQUETA:
+
+1. BORDE
+- Rectángulo con esquinas ligeramente redondeadas.
+- Borde negro fino.
+- Sin relleno de color; fondo blanco.
+- El borde debe estar aproximadamente a 1 mm de los extremos de la etiqueta.
+- Radio de las esquinas: aproximadamente 2 mm.
+
+2. LOGO
+En la parte superior izquierda/central debe aparecer el logo "papicar".
+
+Como OpenCode no debe depender de la imagen de referencia, crear el logo como elemento vectorial/textual dentro de la plantilla.
+Debe intentar reproducir visualmente:
+- Texto: "papicar"
+- Letras minúsculas.
+- Tipografía gruesa y redondeada.
+- Estilo moderno.
+- Color negro.
+- El logo ocupa aproximadamente desde X=13 mm hasta X=48 mm.
+- Posición vertical aproximada: Y=2.5 mm hasta Y=10.5 mm.
+
+Si el proyecto ya dispone de un recurso SVG/vectorial del logo, utilizarlo.
+Si no existe, dejar el logo implementado como SVG/vector o texto estilizado, NO como imagen rasterizada.
+
+3. NOMBRE DEL PRODUCTO
+Debajo del logo debe aparecer el nombre/descripción del producto.
+
+Ejemplo:
+"TODO USO CHOCOLATE BITTER ST MORITZ 100 GR"
+
+Características:
+- Texto en MAYÚSCULAS.
+- Negro.
+- Negrita.
+- Tipografía condensada para aprovechar el ancho.
+- Centrado horizontalmente.
+- Aproximadamente:
+  X = 8 mm
+  Y = 11.5 mm
+  ancho máximo = 43 mm
+  alto aproximado = 4.5 mm.
+
+IMPORTANTE:
+El nombre del producto es DINÁMICO.
+Debe utilizar el nombre/descripción obtenido de los datos del producto.
+
+Si el nombre es demasiado largo:
+- reducir automáticamente el tamaño de fuente hasta un límite razonable;
+- o utilizar una fuente condensada;
+- evitar que el texto salga de la etiqueta;
+- preferiblemente mantenerlo en una sola línea.
+
+4. CÓDIGO DE BARRAS
+Debajo del nombre del producto colocar un código de barras generado dinámicamente.
+
+En el ejemplo:
+- El código corresponde al producto.
+- Debe generarse a partir del código/barcode almacenado en la base de datos.
+- NO utilizar una imagen del código de barras.
+- Generarlo mediante el motor de código de barras disponible en el proyecto o mediante SVG/vector/ZPL/EPL según corresponda.
+
+Posición aproximada:
+- X = 8.5 mm
+- Y = 17.5 mm
+- Ancho = 20.5 mm
+- Alto = 9 mm aproximadamente.
+
+Debajo del código de barras debe aparecer el número del código en texto pequeño.
+
+Ejemplo:
+759172003377
+
+El número debe ser dinámico y corresponder exactamente al código utilizado para generar el código de barras.
+
+5. PRECIO / REFERENCIA
+En la parte inferior derecha debe aparecer:
+
+REF: 3.00
+
+Pero debe estar compuesto por dos elementos dinámicos:
+
+"REF:"
+y
+"3.00"
+
+El formato visual debe ser:
+
+REF: 3.00
+
+Características:
+- "REF:" en negro, negrita.
+- Precio/valor mucho más grande y en negrita.
+- El precio debe ser dinámico.
+- El valor debe utilizar el precio almacenado en el producto.
+
+Posición aproximada:
+- REF: X = 30 mm
+- Y = 25.5 mm
+- Precio X = 37 mm
+- Y = 23.5 mm
+- Precio grande, aproximadamente 7-8 mm de alto.
+
+Ejemplo:
+REF: 3.00
+
+6. DISTRIBUCIÓN GENERAL
+
+La etiqueta debe quedar visualmente organizada así:
+
+┌───────────────────────────────────────────────┐
+│                                               │
+│                 papicar                       │
+│                                               │
+│     TODO USO CHOCOLATE BITTER ST MORITZ      │
+│                    100 GR                     │
+│                                               │
+│   ████████████████                            │
+│   ████████████████       REF: 3.00            │
+│   759172003377                                │
+│                                               │
+└───────────────────────────────────────────────┘
+
+La representación anterior es solamente conceptual.
+La implementación real debe utilizar las medidas físicas en milímetros.
+
+DATOS DINÁMICOS:
+
+La plantilla debe recibir como mínimo:
+
+product.name
+product.barcode
+product.price
+product.reference
+
+Ejemplo:
+
+name:
+TODO USO CHOCOLATE BITTER ST MORITZ 100 GR
+
+barcode:
+759172003377
+
+price:
+3.00
+
+reference:
+3.00
+
+La plantilla debe estar separada de la lógica de negocio.
+
+REQUISITOS IMPORTANTES:
+
+1. Crear una plantilla reutilizable.
+2. No utilizar la imagen de referencia como fondo.
+3. Todos los elementos deben ser generados por código.
+4. El código de barras debe ser generado dinámicamente.
+5. El nombre del producto debe ser dinámico.
+6. El precio debe ser dinámico.
+7. El código de barras numérico debe ser dinámico.
+8. Mantener exactamente 59 × 35 mm.
+9. La impresión debe estar preparada para Zebra GK420t.
+10. No modificar innecesariamente otras partes del proyecto.
+11. Antes de implementar, revisar cómo funciona actualmente el sistema de impresión de LabelPrinter y adaptar la plantilla al motor existente.
+12. Mantener la compatibilidad con las demás funciones existentes.
+13. No eliminar ni reemplazar la plantilla actual hasta comprobar que la nueva funciona.
+14. Crear la nueva plantilla como una opción independiente, por ejemplo:
+   "Papicar 59x35mm".
+
+ANTES DE ESCRIBIR CÓDIGO:
+
+Primero inspecciona el proyecto completo y determina:
+- lenguaje utilizado;
+- framework;
+- motor de impresión;
+- formato utilizado para enviar trabajos a la GK420t;
+- resolución/DPI configurada;
+- cómo se obtienen actualmente nombre, código y precio;
+- dónde están implementadas las plantillas actuales.
+
+Después explica brevemente qué archivos vas a modificar y por qué.
+
+Luego implementa la plantilla.
+
+59 mm
+┌──────────────────────────────────────────┐
+│              LOGO                        │
+│                                          │
+│     NOMBRE DEL PRODUCTO                  │
+│                                          │
+│  [ CÓDIGO DE BARRAS ]   REF: 3.00        │
+│  759172003377                            │
+└──────────────────────────────────────────┘
+                 35 mm
