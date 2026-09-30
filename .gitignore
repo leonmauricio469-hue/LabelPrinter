@@ -1,0 +1,25 @@
+# Compilacion de los scripts de verificacion (se regenera con tsc -p tsconfig.preview.json)
+label-printer-web/.preview-build/
+
+# Salidas de Next.js
+label-printer-web/.next/
+label-printer-web/out/
+label-printer-web/build/
+label-printer-web/node_modules/
+
+# Datos locales de trabajo, no son fuente
+label-printer-web/.tmp-catalogo.csv
+label-printer-web/*.tsbuildinfo
+label-printer-web/next-env.d.ts
+label-printer-web/.env
+label-printer-web/.env*.local
+
+# Estado del editor Obsidian: es de esta maquina, no del proyecto
+.obsidian/workspace.json
+.obsidian/app.json
+.obsidian/graph.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
