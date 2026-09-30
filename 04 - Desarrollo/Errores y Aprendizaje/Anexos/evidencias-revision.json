@@ -1,0 +1,72 @@
+{
+  "invalidSettingsAccepted": {
+    "printerNameMissing": true,
+    "businessNameMissing": true
+  },
+  "parallelStatusRequests": 6,
+  "powershellProcessesStarted": 6,
+  "batchSizes": [
+    {
+      "qty": 1,
+      "zplBytes": 3607,
+      "base64Characters": 4812
+    },
+    {
+      "qty": 2,
+      "zplBytes": 7214,
+      "base64Characters": 9620
+    },
+    {
+      "qty": 3,
+      "zplBytes": 10821,
+      "base64Characters": 14428
+    },
+    {
+      "qty": 5,
+      "zplBytes": 18035,
+      "base64Characters": 24048
+    },
+    {
+      "qty": 10,
+      "zplBytes": 36070,
+      "base64Characters": 48096
+    },
+    {
+      "qty": 50,
+      "zplBytes": 180350,
+      "base64Characters": 240468
+    },
+    {
+      "qty": 999,
+      "zplBytes": 3603393,
+      "base64Characters": 4804524
+    }
+  ],
+  "code128Plans": 561,
+  "modeMismatch": 561,
+  "exceedsLabelIfDefaultB": 76,
+  "example": [
+    {
+      "code": "239",
+      "data": "0000180",
+      "planned": 90,
+      "defaultB": 112,
+      "command": "^BY3\n^BCN,72,Y,N,N"
+    },
+    {
+      "code": "246",
+      "data": "47960195602341",
+      "planned": 112,
+      "defaultB": 189,
+      "command": "^BY3\n^BCN,72,Y,N,N"
+    },
+    {
+      "code": "250",
+      "data": "10810014610648",
+      "planned": 112,
+      "defaultB": 189,
+      "command": "^BY3\n^BCN,72,Y,N,N"
+    }
+  ],
+  "namesOver30": 1049
+}

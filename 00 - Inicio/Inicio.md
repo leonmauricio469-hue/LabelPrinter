@@ -44,24 +44,20 @@ area: proyecto
 - [[XETUX POSADMIN Info]] *(en suspenso)*
 - [[Zebra GK420t Specs]]
 
-### Templates
-- [[template-reunion]]
+### Aprendizaje y revisión
+
+- [[Mapa de errores y aprendizaje]]
+- [[Ruta de aprendizaje y correccion]]
+- [[Conceptos para entender los errores]]
+- [[Como registrar una correccion]]
+- [[Evidencias y alcance de la revision]]
 
 ---
 
-## Estado Actual del Proyecto
+## Estado actual — 2026-09-29
 
-| Fase | Estado |
-|---|---|
-| Requisitos | Completado |
-| Stack (Next.js monolitico) | Redefinido |
-| Rueda - imprimir primera etiqueta | No iniciada |
-| Patineta - escanear e imprimir | No iniciada |
-| Carro - producto completo | No iniciada |
-| XETUX | En suspenso (temporal) |
+La app ya existe en `label-printer-web/` y tiene 3.080 productos. La copia antigua se retiró. Las notas de desarrollo conservan pruebas físicas anteriores; la revisión actual documenta problemas adicionales y sus correcciones pendientes. XETUX continúa en suspenso.
 
-## Proxima Accion Inmediata
+## Próxima acción de aprendizaje
 
-1. Crear la app Next.js (base + Tailwind)
-2. Implementar `tcp.transport.ts` y `zpl.builder.ts`
-3. Imprimir la primera etiqueta de prueba a la Zebra
+Sigue [[Ruta de aprendizaje y correccion]] y elige una ficha. Reproduce el problema, realiza un cambio pequeño y registra la comprobación con [[Como registrar una correccion]]. Para decidir qué debe corregirse antes del uso operativo, consulta las prioridades del [[Mapa de errores y aprendizaje]].

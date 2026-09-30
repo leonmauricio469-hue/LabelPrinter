@@ -1,5 +1,8 @@
 # Proximos Pasos
 
+> [!important] Revisión actual — 2026-09-29
+> Esta nota conserva el historial de implementación y pruebas anteriores. El catálogo actual contiene 3.080 productos y el trabajo pendiente se documenta en [[Mapa de errores y aprendizaje]]. Sigue [[Ruta de aprendizaje y correccion]] para estudiar y corregir los problemas. Las pruebas físicas antiguas no cubren automáticamente los nuevos hallazgos. Las referencias a un catálogo pequeño, a rechazo 422 de todo barcode inválido o a atomicidad física deben leerse como antecedentes: la implementación actual puede corregir barcodes o emitir advertencias, y un trabajo único de cola no garantiza impresión física indivisible. Consulta [[Evidencias y alcance de la revision]].
+
 Roadmap incremental: **de lo micro a lo macro**. Cada fase termina con algo funcional y verificable (rueda -> patineta -> carro). XETUX esta temporalmente fuera de alcance: los datos salen del **catalogo local** (`data/catalog.json`).
 
 ## Fase RUEDA - Imprimir la primera etiqueta
