@@ -3,7 +3,7 @@ id: E08
 tipo: ficha-aprendizaje
 area: etiquetas
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: contrato oficial y calculo en software
 fecha: 2026-09-29
 tags:
@@ -64,3 +64,7 @@ Aprender a mantener la misma representación en validación y ejecución. Una si
 ## Fuentes
 
 [Zebra: ^BC y sus modos](https://docs.zebra.com/us/en/printers/software/zpl-pg/c-zpl-zpl-commands/r-zpl-bc.html).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E08 - Code 128 explicito]]. Resumen de todas las fichas en [[Registro de correcciones]].

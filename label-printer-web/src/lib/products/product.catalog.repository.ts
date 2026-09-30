@@ -6,23 +6,10 @@ import { ean13Problem, isEan13Shape } from "@/lib/labels/ean13";
 import { describeJsonError, stripBom } from "@/lib/data/json-file";
 import type { Product } from "./product.types";
 import type { ProductRepository } from "./product.repository";
+import { createInMemoryRepository } from "./product.memory.repository";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const CATALOG_FILE = path.join(DATA_DIR, "catalog.json");
-
-/**
- * Normaliza un codigo para comparar.
- *
- * Se quita espacios y guiones y se pasa a minusculas porque el operador puede teclear
- * "7591234567890" o "759-12345-67890".
- *
- * Importante: los codigos se comparan **como texto**, nunca como numero. Un EAN-13
- * empieza por ceros a la izquierda y `parseInt("009300002509")` los perderia, dejando
- * el barcode de ese producto imposible de encontrar.
- */
-function normalize(value: string): string {
-  return value.replace(/[\s-]/g, "").toLowerCase();
-}
 
 /**
  * Cache por fecha de modificacion. `catalog.json` se edita a mano (y en la fase Carro
@@ -105,51 +92,7 @@ async function load(): Promise<Product[]> {
 }
 
 function createCatalogRepository(): ProductRepository {
-  return {
-    async findByCode(code) {
-      const wanted = normalize(code);
-      if (!wanted) return null;
-      return (await load()).find((p) => normalize(p.code) === wanted) ?? null;
-    },
-
-    async findByBarcode(barcode) {
-      const wanted = normalize(barcode);
-      if (!wanted) return null;
-      return (await load()).find((p) => normalize(p.barcode) === wanted) ?? null;
-    },
-
-    async search(term) {
-      const wanted = normalize(term);
-      if (!wanted) return [];
-      const products = await load();
-      // El barcode NO entra aqui a proposito. Es un identificador unico: si no coincide
-      // entero, la respuesta correcta es "no esta en el catalogo", no "aqui hay cuatro
-      // productos cuyo barcode contiene esos digitos". Buscar por subcadena en el barcode
-      // convierte un codigo ilegible en una sugerencia plausible y equivocada.
-      // Medido sobre el catalogo de prueba: buscar "0001" devolvia 4 productos porque el
-      // barcode 77506700*0001*09 de otro producto contenia esa cadena.
-      return products.filter(
-        (p) => normalize(p.code).includes(wanted) || normalize(p.name).includes(wanted),
-      );
-    },
-
-    async list() {
-      return load();
-    },
-
-    async esPrefijoDeBarcode(term) {
-      const wanted = normalize(term);
-      if (!wanted) return false;
-      const products = await load();
-      // `b.length > wanted.length` es lo que hace el prefijo ESTRICTO. Sin el, el barcode
-      // "4388" seria prefijo de si mismo y el producto COCINA ELECTRICA PARA CARBON no se
-      // podria escanear nunca.
-      return products.some((p) => {
-        const b = normalize(p.barcode);
-        return b.length > wanted.length && b.startsWith(wanted);
-      });
-    },
-  };
+  return createInMemoryRepository(load);
 }
 
 let repository: ProductRepository | null = null;

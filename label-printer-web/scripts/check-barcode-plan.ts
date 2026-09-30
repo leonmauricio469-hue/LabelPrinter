@@ -86,7 +86,7 @@ console.log("\n### Regla 4: alfanumerico -> Code 128");
   const p = planBarcode("XPROD20220002", ETIQUETA);
   ok(!p.printable && p.reason === "no-cabe",
     "13 CARACTERES con letras no es un EAN-13 aunque tenga 13 de largo", JSON.stringify(p));
-  ok(!p.printable && p.reason === "no-cabe" && p.modulesNeeded === 178,
+  ok(!p.printable && p.reason === "no-cabe" && p.modulesNeeded === 145, // B "XPROD" + C "20220002"
     "y se dice cuantos modulos haria falta", JSON.stringify(p));
 }
 {
@@ -99,7 +99,7 @@ console.log("\n### Regla 4: alfanumerico -> Code 128");
 {
   const p = planBarcode("XPROD20220002", ETIQUETA);
   ok(!p.printable && p.reason === "no-cabe", "un XPROD de 13 caracteres NO cabe a 3 de modulo", JSON.stringify(p));
-  ok(!p.printable && p.reason === "no-cabe" && p.modulesNeeded === 178,
+  ok(!p.printable && p.reason === "no-cabe" && p.modulesNeeded === 145, // B "XPROD" + C "20220002"
     "y se dice cuantos modulos haria falta", JSON.stringify(p));
 }
 {

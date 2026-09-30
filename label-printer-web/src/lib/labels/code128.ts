@@ -82,52 +82,115 @@ export function encodeCode128(data: string, subset: Code128Subset): Encoded {
   return { widths, modules: widths.reduce((a, b) => a + b, 0) };
 }
 
+/** Cambio de subconjunto dentro del simbolo (no confundir con los Start, 104/105). */
+const CODE_C = 99;
+const CODE_B = 100;
+
+interface Segment {
+  subset: Code128Subset;
+  text: string;
+}
+
 /**
- * Reproduce la eleccion de subconjunto automatica de ZPL (`^BC` sin parametro `m`).
+ * Parte el dato en tramos B y C, cambiando a C solo cuando ahorra modulos.
  *
- * El dato del catalogo son 13 digitos: cantidad impar, que no entra en Code C de
- * corrido. Lo mas corto es Start C + 6 pares + Start B + 1 digito, y ese Start B de
- * en medio cuenta como un simbolo mas de 11 modulos. Por eso `^BY2 ^BC` con 13
- * digitos ocupa 123 modulos y no los 112 de una estimacion ingenua.
- *
- * Con 12 digitos (cantidad par) entra en Code C completo: 101 modulos. Que el ancho
- * cambie con el dato es exactamente la razon por la que el catalogo se imprime como
- * EAN-13, que siempre son 95 modulos.
+ * Un par de digitos en C es un simbolo en vez de dos, pero entrar y salir de C cuesta un
+ * simbolo cada vez. Salen las reglas de ISO/IEC 15417, anexo E: C compensa con 4 digitos o
+ * mas al principio o al final del dato, con 6 o mas en medio, y siempre si el dato entero
+ * son digitos en cantidad par. Un tramo impar deja un digito en B: al final del tramo si
+ * el dato empieza por el, al principio en otro caso.
  */
-export function encodeCode128Auto(data: string): { encoded: Encoded; note: string } {
-  if (/^\d+$/.test(data)) {
-    if (data.length % 2 === 1) {
-      const pairs = data.slice(0, data.length - 1);
-      const last = data.slice(-1);
-      const values: number[] = [START_C];
-      for (let i = 0; i < pairs.length; i += 2) {
-        values.push(Number.parseInt(pairs.slice(i, i + 2), 10));
-      }
-      values.push(START_B);
-      values.push(last.charCodeAt(0) - 32);
+function segment(data: string): Segment[] {
+  const segments: Segment[] = [];
+  const push = (subset: Code128Subset, text: string) => {
+    const last = segments[segments.length - 1];
+    if (last?.subset === subset) last.text += text;
+    else if (text) segments.push({ subset, text });
+  };
 
-      let checksum = values[0];
-      for (let i = 1; i < values.length; i++) checksum += i * values[i];
-      checksum %= 103;
+  let i = 0;
+  while (i < data.length) {
+    let n = 0;
+    while (i + n < data.length && /\d/.test(data[i + n])) n++;
 
-      const widths: number[] = [];
-      const emit = (v: number) => {
-        for (const w of PATTERNS[v]) widths.push(Number(w));
-      };
-      emit(values[0]);
-      for (const v of values.slice(1)) emit(v);
-      emit(checksum);
-      emit(STOP);
-      return {
-        encoded: { widths, modules: widths.reduce((a, b) => a + b, 0) },
-        note: `Start C x${pairs.length / 2} + Start B x1 (${data.length} digitos impares)`,
-      };
+    const atStart = i === 0;
+    const atEnd = i + n === data.length;
+    const threshold = atStart && atEnd ? 2 : atStart || atEnd ? 4 : 6;
+    if (n === 0 || n < threshold) {
+      push("B", data.slice(i, i + Math.max(n, 1)));
+      i += Math.max(n, 1);
+      continue;
     }
-    return {
-      encoded: encodeCode128(data, "C"),
-      note: `Code C completo (${data.length} digitos)`,
-    };
+
+    const run = data.slice(i, i + n);
+    if (n % 2 === 0) push("C", run);
+    else if (atStart) {
+      push("C", run.slice(0, -1));
+      push("B", run.slice(-1));
+    } else {
+      push("B", run[0]);
+      push("C", run.slice(1));
+    }
+    i += n;
+  }
+  return segments;
+}
+
+/**
+ * El simbolo Code 128 de un dato, y el `^FD` que hace que la Zebra dibuje ESE simbolo.
+ *
+ * Antes esto intentaba adivinar la eleccion automatica de ZPL, y el `^FD` se enviaba sin
+ * codigo de inicio. La Zebra, en modo N y sin inicio, usa Code B para todo: el ancho medido
+ * era el de un simbolo con C y el impreso el de uno en B. En 76 productos B no cabe en el
+ * papel (el 246, `47960195602341`: 112 modulos medidos, 189 impresos).
+ *
+ * Ahora el reparto B/C se decide aqui y viaja explicito en `fieldData` con los codigos de
+ * invocacion de `^BC` (`>;` inicio C, `>:` inicio B, `>5` cambio a C, `>6` cambio a B, `><`
+ * un `>` literal). El ancho medido y el impreso salen del mismo reparto.
+ */
+export function encodeCode128Auto(data: string): {
+  encoded: Encoded;
+  note: string;
+  fieldData: string;
+} {
+  const segments = segment(data);
+  const values: number[] = [];
+  let fieldData = "";
+
+  segments.forEach((s, index) => {
+    if (index === 0) {
+      values.push(s.subset === "C" ? START_C : START_B);
+      fieldData += s.subset === "C" ? ">;" : ">:";
+    } else {
+      values.push(s.subset === "C" ? CODE_C : CODE_B);
+      fieldData += s.subset === "C" ? ">5" : ">6";
+    }
+
+    if (s.subset === "C") {
+      for (let i = 0; i < s.text.length; i += 2) values.push(Number.parseInt(s.text.slice(i, i + 2), 10));
+      fieldData += s.text;
+      return;
+    }
+    for (const ch of s.text) {
+      const v = ch.charCodeAt(0) - 32;
+      if (v < 0 || v > 94) throw new Error(`Code B no puede codificar "${ch}"`);
+      values.push(v);
+    }
+    fieldData += s.text.replace(/>/g, "><");
+  });
+
+  let checksum = values[0];
+  for (let i = 1; i < values.length; i++) checksum += i * values[i];
+  checksum %= 103;
+
+  const widths: number[] = [];
+  for (const v of [...values, checksum, STOP]) {
+    for (const w of PATTERNS[v]) widths.push(Number(w));
   }
 
-  return { encoded: encodeCode128(data, "B"), note: "Code B (alfanumerico)" };
+  return {
+    encoded: { widths, modules: widths.reduce((a, b) => a + b, 0) },
+    note: segments.map((s) => `${s.subset}:${s.text}`).join(" + "),
+    fieldData,
+  };
 }

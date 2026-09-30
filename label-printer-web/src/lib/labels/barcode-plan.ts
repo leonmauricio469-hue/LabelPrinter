@@ -74,6 +74,11 @@ export type BarcodeImprimible = {
   symbology: "ean13" | "code128";
   /** Lo que va en `^FD`. Para un UPC-A son 13 digitos, no los 12 que hay en el catalogo. */
   data: string;
+  /**
+   * Lo que va en `^FD`, que en Code 128 no es `data`: lleva los cambios de subconjunto con
+   * los que se midio `modules` (ver `encodeCode128Auto`). En EAN-13 coincide con `data`.
+   */
+  fieldData: string;
   modules: number;
   moduleWidth: number;
   /** Solo si hubo que corregir el digito de control: el codigo tal como vino. */
@@ -99,6 +104,38 @@ export function maxModules(options: BarcodePlanOptions): number {
   const x = options.moduleWidthDots ?? MODULE_DOTS;
   const q = options.quietFactor ?? QUIET_FACTOR;
   return Math.floor(options.labelWidthDots / x) - 2 * q;
+}
+
+/**
+ * Los 13 digitos que se imprimen para un EAN-13 o un UPC-A, o `null` si no es ninguno.
+ *
+ * El guardia tiene que ser de digitos y no de longitud. `XPROD20220002` tiene 13
+ * caracteres: si se preguntara solo por la longitud, entraria aqui, `isValidEan13`
+ * devolveria false, y la rama de "corregir el digito" fabricaria `XPROD2022000NaN`.
+ * Asi se ha impreso basura en 181 productos: lo encontro la prueba de este mismo
+ * fichero, no una etiqueta.
+ */
+function comoEan13(compacto: string): { data: string; corregido: boolean } | null {
+  const ean = /^\d{13}$/.test(compacto)
+    ? compacto
+    : /^\d{12}$/.test(compacto)
+      ? "0" + compacto
+      : null;
+  if (ean === null) return null;
+  if (isValidEan13(ean)) return { data: ean, corregido: false };
+  return { data: ean.slice(0, 12) + String(ean13CheckDigit(ean.slice(0, 12))), corregido: true };
+}
+
+/**
+ * Lo que un escaner leera de la etiqueta de este codigo, sin mirar si cabe.
+ *
+ * Existe porque el catalogo y la etiqueta no siempre dicen lo mismo: un UPC-A se imprime con
+ * un 0 delante y un EAN-13 con el digito de control mal se imprime corregido. La busqueda
+ * tiene que reconocer lo que el operador escanea, que es esto, no lo que hay guardado.
+ */
+export function barcodeImpreso(raw: string): string {
+  const compacto = raw.replace(/[\s-]/g, "");
+  return comoEan13(compacto)?.data ?? compacto;
 }
 
 /**
@@ -131,30 +168,29 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
     };
   }
 
-  // 1 y 2: EAN-13 de 13 DIGITOS, o UPC-A de 12 que se ensancha con un 0.
-  //
-  // El guardia tiene que ser de digitos y no de longitud. `XPROD20220002` tiene 13
-  // caracteres: si se preguntara solo por la longitud, entraria aqui, `isValidEan13`
-  // devolveria false, y la rama de "corregir el digito" fabricaria `XPROD2022000NaN`.
-  // Asi se ha impreso basura en 181 productos: lo encontro la prueba de este mismo
-  // fichero, no una etiqueta.
-  const ean = /^\d{13}$/.test(compacto)
-    ? compacto
-    : /^\d{12}$/.test(compacto)
-      ? "0" + compacto
-      : null;
+  // 1, 2 y 3: EAN-13, UPC-A ensanchado, o cualquiera de los dos con el digito corregido.
+  const ean = comoEan13(compacto);
+  // Con la etiqueta de 50 mm el EAN-13 siempre cabia y no se comprobaba. Con la medida
+  // configurable no: en 40 mm caben 86 modulos, y un simbolo recortado no lo lee nadie.
+  if (ean !== null && EAN13_MODULES > tope) {
+    return {
+      printable: false,
+      reason: "no-cabe",
+      detail:
+        `el EAN-13 "${raw}" necesita ${EAN13_MODULES} modulos y en una etiqueta de ` +
+        `${options.labelWidthDots} dots caben ${tope} con la zona quieta que manda la norma.`,
+      modulesNeeded: EAN13_MODULES,
+    };
+  }
   if (ean !== null) {
-    if (isValidEan13(ean)) {
-      return { printable: true, symbology: "ean13", data: ean, modules: EAN13_MODULES, moduleWidth: x };
-    }
-    const bueno = ean.slice(0, 12) + String(ean13CheckDigit(ean.slice(0, 12)));
     return {
       printable: true,
       symbology: "ean13",
-      data: bueno,
+      data: ean.data,
+      fieldData: ean.data,
       modules: EAN13_MODULES,
       moduleWidth: x,
-      correctedFrom: compacto,
+      ...(ean.corregido ? { correctedFrom: compacto } : {}),
     };
   }
 
@@ -167,7 +203,7 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
     };
   }
 
-  const { encoded } = encodeCode128Auto(compacto);
+  const { encoded, fieldData } = encodeCode128Auto(compacto);
   if (encoded.modules > tope) {
     return {
       printable: false,
@@ -180,7 +216,14 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
     };
   }
 
-  return { printable: true, symbology: "code128", data: compacto, modules: encoded.modules, moduleWidth: x };
+  return {
+    printable: true,
+    symbology: "code128",
+    data: compacto,
+    fieldData,
+    modules: encoded.modules,
+    moduleWidth: x,
+  };
 }
 
 /**
@@ -188,14 +231,16 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
  *
  * El 4o parametro de `^BE` y de `^BC` es la linea de interpretacion; el 5o de `^BC` es el
  * digito de control UCC, que se pone a `N` porque el dato ya viene con su digito puesto: si
- * la impresora lo anade otra vez, salen dos y el codigo no lee.
+ * la impresora lo anade otra vez, salen dos y el codigo no lee. El 6o de `^BC` es el modo:
+ * `N` explicito, porque el reparto de subconjuntos va en `fieldData` y la impresora no debe
+ * decidir nada por su cuenta.
  */
 export function barcodeFormat(plan: BarcodeImprimible, heightDots: number, interpretation = true): string {
   const linea = interpretation ? "Y" : "N";
   if (plan.symbology === "ean13") {
     return `^BY${plan.moduleWidth}\n^BEN,${heightDots},${linea},N`;
   }
-  return `^BY${plan.moduleWidth}\n^BCN,${heightDots},${linea},N,N`;
+  return `^BY${plan.moduleWidth}\n^BCN,${heightDots},${linea},N,N,N`;
 }
 
 /**

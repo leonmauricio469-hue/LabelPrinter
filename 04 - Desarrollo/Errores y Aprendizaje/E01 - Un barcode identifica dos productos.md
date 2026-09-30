@@ -3,7 +3,7 @@ id: E01
 tipo: ficha-aprendizaje
 area: productos
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: reproducido en software
 fecha: 2026-09-29
 tags:
@@ -60,3 +60,7 @@ Un identificador necesita un contrato de unicidad. Aprender a separar coincidenc
 - [[Ruta de aprendizaje y correccion]]
 - [[E02 - La proteccion de prefijos bloquea identificadores validos]]
 - [[E03 - La etiqueta impresa no vuelve al mismo producto]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E01 E02 E03 - Resolucion de productos]]. Resumen de todas las fichas en [[Registro de correcciones]].

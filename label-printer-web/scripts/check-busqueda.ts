@@ -21,6 +21,10 @@ import {
 } from "../src/lib/products/product.lookup";
 import type { Product } from "../src/lib/products/product.types";
 import type { ProductRepository } from "../src/lib/products/product.repository";
+import {
+  createInMemoryRepository,
+  normalize,
+} from "../src/lib/products/product.memory.repository";
 
 const CATALOGO = process.argv[2] ?? "data/catalog.json";
 
@@ -43,38 +47,10 @@ function cargar(): Fila[] {
 const filas = cargar();
 
 /** La misma normalizacion que usa `product.catalog.repository.ts`. */
-const norm = (v: string) => v.replace(/[\s-]/g, "").toLowerCase();
+const norm = normalize;
 
-function repoEnMemoria(datos: Fila[]): ProductRepository {
-  return {
-    async findByCode(code) {
-      const t = norm(code);
-      return datos.find((p) => norm(p.code) === t) ?? null;
-    },
-    async findByBarcode(barcode) {
-      const t = norm(barcode);
-      return datos.find((p) => norm(p.barcode) === t) ?? null;
-    },
-    async search(term) {
-      const t = norm(term);
-      if (!t) return [];
-      return datos.filter((p) => norm(p.code).includes(t) || norm(p.name).includes(t));
-    },
-    async list() {
-      return datos;
-    },
-    async esPrefijoDeBarcode(term) {
-      const t = norm(term);
-      if (!t) return false;
-      return datos.some((p) => {
-        const b = norm(p.barcode);
-        return b.length > t.length && b.startsWith(t);
-      });
-    },
-  };
-}
-
-const repo = repoEnMemoria(filas);
+// El mismo repositorio que usa la app, no una copia: una copia es la que deja de coincidir.
+const repo: ProductRepository = createInMemoryRepository(async () => filas);
 
 let pruebas = 0;
 let fallos = 0;
@@ -220,7 +196,7 @@ async function main(): Promise<void> {
   console.log("\n### Teclear poco: no es lo mismo que no existir");
   // -------------------------------------------------------------------------------------
   {
-    for (const corto of ["1", "ab", "LE", "x"]) {
+    for (const corto of ["ab", "LE", "x"]) {
       const r = await consultar(corto);
       ok(
         r.match === "too-short" || r.match === "none",
@@ -231,6 +207,15 @@ async function main(): Promise<void> {
         ok(r.match === "too-short", `"${corto}" se identifica como "demasiado corto", no como "no existe"`, r.match);
       }
     }
+    // "1" es el code ENTERO del producto 1, y tambien el principio de muchos barcodes. No se
+    // descarta (antes si, y el producto 1 no se podia buscar por codigo) ni se imprime a
+    // ciegas: se ofrece primero y el operador elige.
+    const uno = await consultar("1");
+    ok(
+      uno.match === "ambiguous" && uno.products[0]?.code === "1",
+      `"1" ofrece el producto 1 primero, sin imprimir a ciegas`,
+      `${uno.match} -> ${uno.products[0]?.code}`,
+    );
   }
 
   // -------------------------------------------------------------------------------------

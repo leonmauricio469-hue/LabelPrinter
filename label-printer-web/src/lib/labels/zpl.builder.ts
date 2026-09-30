@@ -87,9 +87,27 @@ function textFor(zone: TextZone, data: LabelData): string {
   return `${zone.prefix ?? ""}${raw}`;
 }
 
+/**
+ * Un `^FD` que ningun dato puede romper.
+ *
+ * `^` y `~` son los prefijos de comando de ZPL: sin escapar, un nombre como "CAFE^FS^XZ"
+ * cierra el campo y la etiqueta, y un "~JA" cancela todos los trabajos de la impresora.
+ * `^FH\` hace que la impresora decodifique `\hh` como un byte, asi que se escapan esos dos
+ * y la propia barra. Los saltos de linea no significan nada en `^FD` y se vuelven espacios.
+ */
+function fieldData(value: string): string {
+  const escaped = value
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\\^~]/g, (c) => `\\${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `^FH\\^FD${escaped}^FS`;
+}
+
 function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan: BarcodePlan): string {
   const commands: string[] = [
     "^XA",
+    // UTF-8 para los textos: el catalogo tiene Ñ, tildes y Ç, y sin `^CI` la impresora usa
+    // su pagina de codigos por defecto. Los transportes envian UTF-8 (ver `zplPayload`).
+    "^CI28",
     `^PW${template.widthDots}`,
     `^LL${template.heightDots}`,
     "^LH0,0",
@@ -109,7 +127,7 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
       commands.push(
         barcodeFormat(plan, zone.heightDots, zone.interpretationLine),
         `^FO${barcodeX(template, zone, plan)},${zone.y}`,
-        `^FD${plan.data}^FS`,
+        fieldData(plan.fieldData),
       );
       continue;
     }
@@ -124,7 +142,7 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
       commands.push(`^FB${zone.maxWidthDots},${zone.maxLines ?? 2},0,${justify},0`);
     }
 
-    commands.push(`^FO${zone.x},${zone.y}`, `^FD${text}^FS`);
+    commands.push(`^FO${zone.x},${zone.y}`, fieldData(text));
   }
 
   commands.push("^XZ");

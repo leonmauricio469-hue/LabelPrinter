@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { buildLabelTemplate, type LabelZone } from "./label.template.ts";
+import { buildZpl } from "./zpl.builder.ts";
+import type { LabelData } from "./label.types.ts";
+
+const data = (barcode: string): LabelData => ({
+  businessName: "PA PICAR",
+  productName: "CAFE AMANECER DE 500GR",
+  price: 7.8,
+  reference: "0001",
+  barcode,
+});
+
+const golden = (name: string) =>
+  readFileSync(new URL(`../../../test/fixtures/label-50x25-${name}.zpl`, import.meta.url), "utf8");
+
+// Golden files were generated from the hand-made 50 x 25 template before it became
+// configurable: the default size must keep printing byte for byte the same label.
+for (const [name, barcode] of [
+  ["ean13", "7591234567801"],
+  ["code128", "0000180"],
+  ["sin-barcode", "0"],
+] as const) {
+  test(`50 x 25 mm still prints the original ${name} label`, () => {
+    const template = buildLabelTemplate({ widthMm: 50, heightMm: 25 });
+
+    assert.equal(buildZpl(template, data(barcode)), golden(name));
+  });
+}
+
+test("a 100 x 50 mm label sets the printer to that size", () => {
+  const zpl = buildZpl(buildLabelTemplate({ widthMm: 100, heightMm: 50 }), data("7591234567801"));
+
+  assert.ok(zpl.includes("^PW800\n^LL400\n"), zpl.slice(0, 60));
+});
+
+test("the logo and the barcode stay centred on a wider label", () => {
+  const zpl = buildZpl(buildLabelTemplate({ widthMm: 100, heightMm: 50 }), data("7591234567801"));
+
+  // logo 200 dots wide, EAN-13 95 modules x 3 dots = 285
+  assert.ok(zpl.includes("^FO300,"), "logo at (800 - 200) / 2");
+  assert.ok(zpl.includes("^FO258,"), "barcode at (800 - 285) / 2");
+});
+
+test("an EAN-13 that does not fit a narrow label is left out instead of clipped", () => {
+  // 40 mm = 320 dots: 106 modules minus 2 x 10X quiet zone = 86 < 95
+  const zpl = buildZpl(buildLabelTemplate({ widthMm: 40, heightMm: 25 }), data("7591234567801"));
+
+  assert.ok(!zpl.includes("^BE"), "a clipped EAN-13 prints fine and scans as nothing");
+});
+
+function assertInside(zones: LabelZone[], w: number, h: number, label: string) {
+  for (const z of zones) {
+    const right = z.kind === "text" && z.maxWidthDots ? z.x + z.maxWidthDots : z.x;
+    assert.ok(z.x >= 0 && right <= w, `${label}: ${z.kind} x ${z.x}..${right} outside ${w}`);
+    assert.ok(z.y >= 0 && z.y < h, `${label}: ${z.kind} y ${z.y} outside ${h}`);
+  }
+}
+
+test("every zone stays inside the label for the sizes the settings accept", () => {
+  for (const [widthMm, heightMm] of [[30, 20], [50, 25], [60, 40], [104, 100]]) {
+    const t = buildLabelTemplate({ widthMm, heightMm });
+    assertInside(t.zones, t.widthDots, t.heightDots, `${widthMm}x${heightMm}`);
+    assertInside(t.zonesWithoutBarcode ?? [], t.widthDots, t.heightDots, `${widthMm}x${heightMm} sin barcode`);
+  }
+});

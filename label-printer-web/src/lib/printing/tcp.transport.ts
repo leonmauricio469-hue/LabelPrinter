@@ -8,7 +8,8 @@ export async function sendZpl(host: string, port: number, zpl: string): Promise<
     const socket = net.createConnection({ host, port, timeout: DEFAULT_TIMEOUT_MS });
 
     socket.on("connect", () => {
-      socket.write(zpl);
+      // UTF-8 explicito: es lo que declara el `^CI28` de cada etiqueta, igual que por USB.
+      socket.write(zpl, "utf8");
       socket.end();
       resolve({ ok: true });
     });

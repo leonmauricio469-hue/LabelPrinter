@@ -14,6 +14,9 @@ import type { ProductRepository } from "./product.repository";
  *
  * - `exact`     -> el codigo o el barcode coinciden **enteros**. Se puede imprimir sin
  *                  preguntar: el operador escaneo justo ese producto.
+ * - `ambiguous` -> el termino es un identificador COMPLETO, pero no de uno solo: el barcode
+ *                  esta repetido, o tambien es el principio de otro barcode (lectura a
+ *                  medias posible). Los completos van primero; **alguien tiene que elegir**.
  * - `partial`   -> coincidencia por subcadena en codigo o nombre. Sirve para la busqueda
  *                  manual, pero **alguien tiene que elegir**. Nadie debe imprimir a ciegas.
  * - `none`      -> no hay nada. La respuesta correcta es avisar, no adivinar.
@@ -27,7 +30,7 @@ import type { ProductRepository } from "./product.repository";
  * codigo danado) coincidia por subcadena con el barcode completo y devolvia **un solo**
  * producto, indistinguible de una lectura buena. En `/fast` eso imprimia sin preguntar.
  */
-export type MatchKind = "exact" | "partial" | "none" | "all" | "too-short";
+export type MatchKind = "exact" | "ambiguous" | "partial" | "none" | "all" | "too-short";
 
 export interface LookupOutcome {
   match: MatchKind;
@@ -69,14 +72,14 @@ export const MAX_BUSQUEDA = 60;
  *
  * Orden deliberado, y el orden ES la logica:
  *
- *   1. descartar el termino si puede ser un barcode cortado por la mitad
- *   2. exacto por barcode
- *   3. exacto por codigo
+ *   1. completos: por barcode (guardado o impreso), y si no hay, por codigo
+ *   2. uno solo y que no sea el principio de otro barcode -> `exact`
+ *   3. varios, o principio de otro barcode -> `ambiguous`, los completos primero
  *   4. repetir 1-3 con la otra forma del mismo barcode (el 0 delante del UPC-A)
  *   5. subcadena, solo si el termino tiene `MIN_BUSQUEDA` caracteres
  *
- * Por que el paso 1 va el primero y no un filtro de longitud: este es el fallo mas grave
- * que abre el catalogo real, y no se arregla con un numero.
+ * Por que el paso 3 existe y no un filtro de longitud: este es el fallo mas grave que abre
+ * el catalogo real, y no se arregla con un numero.
  *
  *   Con los 12 productos de prueba, el `code` era "P-0001". Un escaner, que solo produce
  *   numeros, jamas podia acertar con un codigo, y el problema no existia.
@@ -93,7 +96,12 @@ export const MAX_BUSQUEDA = 60;
  * esos dejaria de proteger a los de 7 y solo moveria el fallo. La pregunta que si funciona
  * es "¿este texto puede ser un codigo de barras al que le falta el final?", y esa depende
  * de los datos, no de la forma del termino: por eso vive en el repositorio
- * (`esPrefijoDeBarcode`).
+ * (`findByBarcodePrefix`).
+ *
+ * Antes, un termino que era principio de otro barcode se DESCARTABA. Eso protegia el
+ * escaneo, pero dejaba sin busqueda exacta a 285 codigos completos ("1", "438"...) y a
+ * barcodes enteros como "4796019560234". Ofrecerlo para elegir protege igual y no pierde
+ * a nadie.
  *
  * El barcode va ANTES que el codigo. El barcode es lo que produce el escaner; el `code` es
  * un identificador interno de la app. Si un termino fuera las dos cosas, el operador casi
@@ -113,17 +121,24 @@ export async function resolveQuery(
   const variantes = variantesDeBusqueda(q);
 
   for (const candidato of variantes) {
-    // Lectura a medias: este texto puede ser un barcode al que le falta el final, asi que
-    // no es ni un barcode ni un codigo. Se descarta el candidato entero y se pasa al
-    // siguiente. Sin esto, "438" imprimiria COCINA ELECTRICA PARA CARBON... no, imprimiria
+    const porBarcode = await repo.findAllByBarcode(candidato);
+    const porCode = porBarcode.length > 0 ? null : await repo.findByCode(candidato);
+    const completos = porCode ? [porCode] : porBarcode;
+    if (completos.length === 0) continue;
+
+    // Lectura a medias: este texto puede ser un barcode al que le falta el final. Sin esto,
+    // escanear COCINA ELECTRICA PARA CARBON ("4388") comiendose el ultimo digito imprimiria
     // el producto 438. Que es justo el fallo.
-    if (await repo.esPrefijoDeBarcode(candidato)) continue;
+    const podriaSerCortado = await repo.findByBarcodePrefix(candidato);
 
-    const porBarcode = await repo.findByBarcode(candidato);
-    if (porBarcode) return { match: "exact", products: [porBarcode] };
-
-    const porCode = await repo.findByCode(candidato);
-    if (porCode) return { match: "exact", products: [porCode] };
+    if (completos.length === 1 && podriaSerCortado.length === 0) {
+      return { match: "exact", products: completos };
+    }
+    // Un identificador completo que ademas es ambiguo (barcode repetido, o prefijo de otro
+    // barcode) no se descarta ni se imprime a ciegas: se ofrece primero y alguien elige.
+    const vistos = new Set(completos);
+    const ofrecidos = [...completos, ...podriaSerCortado.filter((p) => !vistos.has(p))];
+    return { match: "ambiguous", products: ofrecidos.slice(0, MAX_BUSQUEDA) };
   }
 
   const limpio = variantes[0];

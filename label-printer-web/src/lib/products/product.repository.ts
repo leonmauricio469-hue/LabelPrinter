@@ -11,8 +11,15 @@ import type { Product } from "./product.types";
 export interface ProductRepository {
   /** Busca por codigo interno exacto. */
   findByCode(code: string): Promise<Product | null>;
-  /** Busca por codigo de barras exacto. */
-  findByBarcode(barcode: string): Promise<Product | null>;
+  /**
+   * Todos los productos cuyo barcode es exactamente este, guardado o tal como se imprime
+   * (ver `barcodeImpreso`).
+   *
+   * Devuelve una lista y no el primero porque el catalogo real tiene barcodes repetidos
+   * (`7509546074627` son dos jabones con precios distintos). Quedarse con el primero
+   * imprimia el otro producto sin avisar.
+   */
+  findAllByBarcode(barcode: string): Promise<Product[]>;
   /**
    * Busca coincidencias parciales en codigo y nombre.
    *
@@ -25,7 +32,8 @@ export interface ProductRepository {
   /** Devuelve el catalogo completo. */
   list(): Promise<Product[]>;
   /**
-   * ¿Es `term` un prefijo ESTRICTO de algun barcode? O sea, ¿puede ser una lectura a medias?
+   * Los productos de los que `term` es prefijo ESTRICTO del barcode. O sea: si esto fuera
+   * una lectura a medias, de cuales podria venir.
    *
    * Va en el contrato y no como funcion suelta porque es una pregunta **sobre los datos**:
    * la respuesta depende del catalogo, no de la forma del termino. Con 12 productos de
@@ -41,5 +49,5 @@ export interface ProductRepository {
    * "Estricto" quiere decir que un barcode entero no es prefijo de si mismo: sin ese matiz el
    * producto mas corto no se podria escanear nunca.
    */
-  esPrefijoDeBarcode(term: string): Promise<boolean>;
+  findByBarcodePrefix(term: string): Promise<Product[]>;
 }

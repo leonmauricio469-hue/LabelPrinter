@@ -3,7 +3,7 @@ id: E06
 tipo: ficha-aprendizaje
 area: etiquetas
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: reproducido en software
 fecha: 2026-09-29
 tags:
@@ -58,3 +58,7 @@ Aprender la diferencia entre validar datos y escaparlos para un lenguaje concret
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E18 - USB y TCP no usan la misma codificacion]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E06 E18 - Texto seguro en ZPL]]. Resumen de todas las fichas en [[Registro de correcciones]].

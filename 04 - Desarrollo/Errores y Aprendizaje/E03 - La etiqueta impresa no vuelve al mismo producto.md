@@ -3,7 +3,7 @@ id: E03
 tipo: ficha-aprendizaje
 area: productos
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: reproducido en software
 fecha: 2026-09-29
 tags:
@@ -61,3 +61,7 @@ Aprender una propiedad de extremo a extremo: generar algo válido no basta si el
 - [[E01 - Un barcode identifica dos productos]]
 - [[E02 - La proteccion de prefijos bloquea identificadores validos]]
 - [[E18 - USB y TCP no usan la misma codificacion]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E01 E02 E03 - Resolucion de productos]]. Resumen de todas las fichas en [[Registro de correcciones]].

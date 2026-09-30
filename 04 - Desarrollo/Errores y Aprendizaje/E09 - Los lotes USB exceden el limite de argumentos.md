@@ -3,7 +3,7 @@ id: E09
 tipo: ficha-aprendizaje
 area: impresion
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: tamaño medido y contrato oficial
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender límites de sistemas operativos, coste de codificaciones y elección de
 ## Fuentes
 
 [Microsoft: límite de CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E09 - Lotes USB por stdin]]. Resumen de todas las fichas en [[Registro de correcciones]].

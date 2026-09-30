@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScannerInput } from "@/components/scanner-input";
 import { PrintStatus } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import { lookupProducts, usePrint } from "@/components/use-print";
 import type { Product } from "@/lib/products/product.types";
+import { createScanQueue } from "@/lib/scanning/scan.queue";
 
 /**
  * Modo continuo ([[Modo Continuo]]): escanear -> imprimir -> listo, sin clics.
@@ -25,63 +26,61 @@ export default function FastPage() {
   // momento en que el trabajo ya esta en la cola y su estado es informativo de verdad.
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const runningRef = useRef(false);
-  const pendingRef = useRef<string | null>(null);
+  const processScan = useCallback(
+    async (code: string) => {
+      const { products, match, error } = await lookupProducts(code);
 
-  const handleScan = useCallback(
-    (code: string) => {
-      // Un escaneo puede llegar mientras el anterior sigue yendo al spooler. En vez de
-      // ignorarlo (y perder esa etiqueta) se apila y se imprime al terminar el actual.
-      if (runningRef.current) {
-        pendingRef.current = code;
-        return;
+      if (error) {
+        notify({ kind: "error", message: error });
+      } else if (match === "exact" && products.length === 1) {
+        const product = products[0];
+        setLast(product);
+        await print(product.code, 1, "fast");
+        setRefreshKey((k) => k + 1);
+      } else if (match === "ambiguous") {
+        // Un codigo completo que no identifica a uno solo: barcode repetido en el
+        // catalogo, o principio de otro barcode. Imprimir el primero seria adivinar.
+        notify({
+          kind: "error",
+          message:
+            `"${code}" corresponde a ${products.length} productos. Este modo no ` +
+            `puede elegir por ti: usa el modo normal.`,
+        });
+      } else if (match === "partial") {
+        // No se imprime nada. La coincidencia parcial necesita que alguien elija.
+        notify({
+          kind: "error",
+          message:
+            `"${code}" coincide con ${products.length} producto(s) de forma ` +
+            `aproximada, no es una coincidencia exacta. Este modo solo imprime ` +
+            `coincidencias exactas: usa el modo normal para elegir.`,
+        });
+      } else if (match === "too-short") {
+        // Lectura parcial. Con los codes del catalogo real siendo "1".."3080", aceptar
+        // un prefijo corto como codigo exacto imprimiria la etiqueta del producto
+        // equivocado. Ver MIN_DIGITOS_CODIGO en product.lookup.ts.
+        notify({
+          kind: "error",
+          message:
+            `"${code}" es demasiado corto para ser un codigo completo. Si el ` +
+            `escaner leyio el codigo a medias, vuelve a pasar el producto por el ` +
+            `escaner; no se imprime nada.`,
+        });
+      } else {
+        notify({ kind: "error", message: `Codigo "${code}" no esta en el catalogo` });
       }
-      runningRef.current = true;
-
-      void (async () => {
-        try {
-          const { products, match, error } = await lookupProducts(code);
-
-          if (error) {
-            notify({ kind: "error", message: error });
-          } else if (match === "exact" && products.length === 1) {
-            const product = products[0];
-            setLast(product);
-            await print(product.code, 1, "fast");
-            setRefreshKey((k) => k + 1);
-          } else if (match === "partial") {
-            // No se imprime nada. La coincidencia parcial necesita que alguien elija.
-            notify({
-              kind: "error",
-              message:
-                `"${code}" coincide con ${products.length} producto(s) de forma ` +
-                `aproximada, no es una coincidencia exacta. Este modo solo imprime ` +
-                `coincidencias exactas: usa el modo normal para elegir.`,
-            });
-          } else if (match === "too-short") {
-            // Lectura parcial. Con los codes del catalogo real siendo "1".."3080", aceptar
-            // un prefijo corto como codigo exacto imprimiria la etiqueta del producto
-            // equivocado. Ver MIN_DIGITOS_CODIGO en product.lookup.ts.
-            notify({
-              kind: "error",
-              message:
-                `"${code}" es demasiado corto para ser un codigo completo. Si el ` +
-                `escaner leyio el codigo a medias, vuelve a pasar el producto por el ` +
-                `escaner; no se imprime nada.`,
-            });
-          } else {
-            notify({ kind: "error", message: `Codigo "${code}" no esta en el catalogo` });
-          }
-        } finally {
-          runningRef.current = false;
-          const next = pendingRef.current;
-          pendingRef.current = null;
-          if (next) handleScan(next);
-        }
-      })();
     },
     [notify, print],
   );
+
+  // Un escaneo puede llegar mientras el anterior sigue yendo al spooler: se encola y se
+  // imprime en orden. La cola se crea una vez y siempre llama a la ultima `processScan`.
+  const processRef = useRef(processScan);
+  useEffect(() => {
+    processRef.current = processScan;
+  }, [processScan]);
+  const [queue] = useState(() => createScanQueue((code) => processRef.current(code)));
+  const handleScan = useCallback((code: string) => queue.push(code), [queue]);
 
   const waiting = state.kind === "idle" || state.kind === "ok" || state.kind === "info";
 

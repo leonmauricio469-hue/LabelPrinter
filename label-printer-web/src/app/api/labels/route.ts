@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
-import { DEFAULT_TEMPLATE } from "@/lib/labels/label.template";
+import { buildLabelTemplate } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
@@ -38,10 +38,12 @@ export async function POST(req: Request) {
   const products = getProductRepository();
   let product: Product | null;
   try {
-    // El escaner entrega el barcode; el operador a veces teclea el codigo interno.
+    // La UI envia el codigo interno. Un barcode solo se acepta si identifica a UN producto:
+    // con uno repetido, quedarse con el primero imprimiria el otro precio sin avisar.
+    const porBarcode = await products.findAllByBarcode(input.productCode);
     product =
       (await products.findByCode(input.productCode)) ??
-      (await products.findByBarcode(input.productCode));
+      (porBarcode.length === 1 ? porBarcode[0] : null);
   } catch (err) {
     // Un catalog.json corrupto es un 500 con el motivo, no un "producto no encontrado":
     // son dos fallos distintos y el operador debe poder distinguirlos.
@@ -68,8 +70,11 @@ export async function POST(req: Request) {
   // Antes esto era un 422, y con el catalogo real eso habria sido un error en el 62% de los
   // productos. No lo es: un UPC-A, un codigo alfanumerico o un codigo que no cabe son datos
   // del sistema de origen, no un fallo de quien pulsa. Se imprime igual y se avisa.
-  const barcodeZone = barcodeZoneOf(DEFAULT_TEMPLATE);
-  const plan = barcodeZone ? planForZone(DEFAULT_TEMPLATE, barcodeZone, product.barcode) : null;
+  // La plantilla sale de las medidas guardadas en /settings, no de una constante: antes se
+  // podian cambiar y la etiqueta seguia saliendo de 50 x 25.
+  const template = buildLabelTemplate(settings.label);
+  const barcodeZone = barcodeZoneOf(template);
+  const plan = barcodeZone ? planForZone(template, barcodeZone, product.barcode) : null;
 
   const avisos: string[] = [];
   if (plan?.printable && plan.correctedFrom) {
@@ -87,7 +92,7 @@ export async function POST(req: Request) {
   // ancho de modulo de la plantilla. Si salta, es un fallo interno y se responde 500 con el
   // motivo: un 422 diria al operador que su codigo esta mal, y no es verdad.
   if (barcodeZone && plan?.printable) {
-    const quiet = quietZoneDots(DEFAULT_TEMPLATE, barcodeZone, plan);
+    const quiet = quietZoneDots(template, barcodeZone, plan);
     const minQuiet = 10 * barcodeZone.moduleWidth;
     if (quiet < minQuiet) {
       return NextResponse.json(
@@ -102,7 +107,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const zpl = buildZplBatch(DEFAULT_TEMPLATE, data, input.qty);
+  const zpl = buildZplBatch(template, data, input.qty);
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(zpl);
 

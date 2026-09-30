@@ -240,6 +240,8 @@ export default function SettingsPage() {
               id="widthMm"
               type="number"
               step="0.5"
+              min={30}
+              max={104}
               value={settings.label.widthMm}
               onChange={(e) => patchLabel({ widthMm: Number(e.target.value) })}
               className={inputClass}
@@ -253,6 +255,8 @@ export default function SettingsPage() {
               id="heightMm"
               type="number"
               step="0.5"
+              min={20}
+              max={100}
               value={settings.label.heightMm}
               onChange={(e) => patchLabel({ heightMm: Number(e.target.value) })}
               className={inputClass}

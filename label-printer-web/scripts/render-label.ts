@@ -261,9 +261,15 @@ for (const raw of zpl.split("\n")) {
     inBarcode = true;
     continue;
   }
-  if (line.startsWith("^FD")) {
-    const text = line.slice(3).replace(/\^FS$/, "");
+  if (line.startsWith("^FD") || line.startsWith("^FH\\^FD")) {
+    // `^FH\` (ver `fieldData` en zpl.builder.ts): `\hh` es un byte en hexadecimal.
+    let text = line
+      .slice(line.indexOf("^FD") + 3)
+      .replace(/\^FS$/, "")
+      .replace(/\\([0-9A-Fa-f]{2})/g, (_, h: string) => String.fromCharCode(Number.parseInt(h, 16)));
     if (inBarcode) {
+      // Code 128 lleva los cambios de subconjunto en el dato (ver `encodeCode128Auto`).
+      text = text.replace(/>[;:56]/g, "").replace(/></g, ">");
       const xmm = (byW / 8).toFixed(3);
       const hmm = (bcH / 8).toFixed(2);
       console.log("Como queda AHORA:");

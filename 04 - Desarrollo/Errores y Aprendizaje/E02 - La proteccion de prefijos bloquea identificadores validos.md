@@ -3,7 +3,7 @@ id: E02
 tipo: ficha-aprendizaje
 area: productos
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: reproducido en software
 fecha: 2026-09-29
 tags:
@@ -60,3 +60,7 @@ Una regla defensiva puede producir falsos positivos. La intención y el contexto
 - [[Ruta de aprendizaje y correccion]]
 - [[E01 - Un barcode identifica dos productos]]
 - [[E24 - La busqueda oculta que faltan resultados]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E01 E02 E03 - Resolucion de productos]]. Resumen de todas las fichas en [[Registro de correcciones]].

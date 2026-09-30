@@ -3,7 +3,7 @@ id: E04
 tipo: ficha-aprendizaje
 area: concurrencia
 prioridad: P1
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -57,3 +57,7 @@ Aprender estructuras de datos, productor/consumidor y contrapresión: cuando una
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E22 - Un timeout puede causar etiquetas duplicadas]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E04 - Cola de escaneos]]. Resumen de todas las fichas en [[Registro de correcciones]].

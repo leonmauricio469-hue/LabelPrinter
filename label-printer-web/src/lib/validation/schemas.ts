@@ -44,8 +44,11 @@ export const updateSettingsSchema = z.object({
     printerName: z.string().min(1),
   }),
   label: z.object({
-    widthMm: z.number().positive(),
-    heightMm: z.number().positive(),
+    // 104 mm es el ancho maximo de impresion de la GK420t. Los minimos son donde la
+    // plantilla escalada (`buildLabelTemplate`) todavia deja nombre, precio y referencia
+    // legibles.
+    widthMm: z.number().min(30).max(104),
+    heightMm: z.number().min(20).max(100),
     businessName: z.string().min(1),
   }),
 });

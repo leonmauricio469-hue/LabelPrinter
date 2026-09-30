@@ -119,6 +119,11 @@ try {
         exit 0
     }
 
+    # The app sends the payload on stdin: a batch passed as -Base64 overflows the
+    # 32,767-char Windows command line at ~7 labels. -Base64 stays for manual tests.
+    if (-not $Base64 -and [Console]::IsInputRedirected) {
+        $Base64 = [Console]::In.ReadToEnd().Trim()
+    }
     $bytes = [Convert]::FromBase64String($Base64)
     if ($bytes.Length -eq 0) { Emit $false "payload vacio" $null; exit 1 }
 

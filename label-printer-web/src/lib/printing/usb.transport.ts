@@ -1,9 +1,8 @@
 import "server-only";
 import { spawn } from "node:child_process";
-import path from "node:path";
 import type { PrintResult } from "./printer.types";
+import { buildSpoolerInvocation, zplPayload, type SpoolerMode } from "./spooler.invocation";
 
-const SCRIPT = path.resolve(process.cwd(), "scripts", "send-raw.ps1");
 const DEFAULT_TIMEOUT_MS = 15000;
 
 interface SpoolResponse {
@@ -16,28 +15,16 @@ interface SpoolResponse {
 
 function runSpooler(
   printerName: string,
-  mode: "Send" | "Check",
+  mode: SpoolerMode,
   base64: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<SpoolResponse> {
   return new Promise((resolve) => {
-    const args = [
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      SCRIPT,
-      "-Printer",
-      printerName,
-      "-Mode",
-      mode,
-    ];
-    if (mode === "Send") {
-      args.push("-Base64", base64);
-    }
-
+    const { args, stdin } = buildSpoolerInvocation(printerName, mode, base64);
     const child = spawn("powershell.exe", args, { windowsHide: true });
+    // Closing stdin is required even when empty: the helper reads it to EOF in Send mode.
+    child.stdin.on("error", () => {});
+    child.stdin.end(stdin);
 
     let stdout = "";
     let stderr = "";
@@ -91,11 +78,7 @@ export async function sendZplUsb(
   printerName: string,
   zpl: string,
 ): Promise<PrintResult> {
-  const res = await runSpooler(
-    printerName,
-    "Send",
-    Buffer.from(zpl, "latin1").toString("base64"),
-  );
+  const res = await runSpooler(printerName, "Send", zplPayload(zpl));
   if (!res.ok) {
     return { ok: false, error: res.error ?? "error desconocido del spooler" };
   }

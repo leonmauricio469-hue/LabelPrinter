@@ -3,7 +3,7 @@ id: E05
 tipo: ficha-aprendizaje
 area: etiquetas
 prioridad: P2
-estado: pendiente
+estado: corregido-provisional
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -61,3 +61,7 @@ Aprender a evitar dos fuentes de verdad y a conectar una opción de interfaz con
 - [[Ruta de aprendizaje y correccion]]
 - [[E08 - El ancho de Code 128 no coincide con el comando emitido]]
 - [[E19 - Los nombres largos pueden superponerse]]
+
+## Corrección
+
+Estado: **corregido-provisional**. Registro: [[Correccion E05 - Medidas de etiqueta]]. Resumen de todas las fichas en [[Registro de correcciones]].

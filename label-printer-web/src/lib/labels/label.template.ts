@@ -102,116 +102,150 @@ export interface LabelTemplate {
 //
 // Altura 72 dots = 9 mm, por encima del minimo practico de 6,64 mm (con 6 mm las barras
 // no las leian los escaneres; ese fue el primer bug de legibilidad).
-export const DEFAULT_TEMPLATE: LabelTemplate = {
-  widthDots: dotsFromMm(50),
-  heightDots: dotsFromMm(25),
-  zones: [
-    // 1. Logo, centred: 200 x 67 dots, x = (400 - 200) / 2 = 100, y 1..68
-    {
-      kind: "graphic",
-      x: Math.round((dotsFromMm(50) - LOGO_DOTS_W) / 2),
-      y: 1,
-      gf: LOGO_GF,
-    },
-    // 2. Description, 8 dots/char, one line inside 240 dots, y 70..84
-    {
-      kind: "text",
-      x: 6,
-      y: 70,
-      format: "^A0N,14,8",
-      source: "productName",
-      maxWidthDots: 240,
-      maxLines: 1,
-      justify: "L",
-    },
-    // 3. Price: "$7.80" = 5 x 15 = 75 dots, x 250..325, y 68..92
-    {
-      kind: "text",
-      x: 250,
-      y: 68,
-      format: "^A0N,24,15",
-      source: "price",
-      prefix: "$",
-    },
-    // 4. Barcode, centrado. Con EAN-13 son 95 modulos x 3 dots = 285 dots,
-    //    x = (400 - 285) / 2 = 58 -> zonas quietas de 58 y 57 dots (7,1 mm), mucho por
-    //    encima de las 10X (30 dots) que pide la norma. Con Code 128 el ancho se calcula
-    //    con el codigo real y la zona quieta se comprueba antes de imprimir.
-    //    Barras y 96..168; la linea de interpretacion acaba hacia 182.
-    {
-      kind: "barcode",
-      x: 0,
-      y: 96,
-      heightDots: 72,
-      interpretationLine: true,
-      source: "barcode",
-      center: true,
-      moduleWidth: 3,
-    },
-    // 5. Reference, y 186..198
-    {
-      kind: "text",
-      x: 6,
-      y: 186,
-      format: "^A0N,12,8",
-      source: "reference",
-      prefix: "REF: ",
-    },
-  ],
+//
+// Las coordenadas de abajo son las de 50 x 25 mm. Para otra medida, `buildLabelTemplate`
+// escala posiciones con el ancho y el alto, y fuentes con el menor de los dos. Lo que NO
+// escala: el ancho de modulo (3 dots es la norma, ver arriba), el alto minimo del barcode
+// y el logo, que es un bitmap fijo.
 
-  /**
-   * Etiqueta sin codigo de barras: los 269 productos cuyo codigo no cabe a 3 de modulo, o
-   * que en el export vienen como "0" y "null".
-   *
-   * Se reparte el alto de 200 dots entre logo, nombre, precio y referencia, con el nombre
-   * y el precio centrados y mas grandes, que es lo que se ve de lejos. Los nombres mas
-   * largos del catalogo son de 50 caracteres y caben en 3 lineas de 384 dots a 14 dots de
-   * ancho de caracter (27 caracteres por linea).
-   *
-   * Las coordenadas son provisionales: estan puestas a ojo y sin ver la etiqueta impresa.
-   */
-  zonesWithoutBarcode: [
-    // 1. Logo, centrado: 200 x 67 dots, y 1..68
-    {
-      kind: "graphic",
-      x: Math.round((dotsFromMm(50) - LOGO_DOTS_W) / 2),
-      y: 1,
-      gf: LOGO_GF,
-    },
-    // 2. Nombre: hasta 3 lineas de 384 dots, centradas, y 74..116
-    {
-      kind: "text",
-      x: 8,
-      y: 74,
-      format: "^A0N,16,14",
-      source: "productName",
-      maxWidthDots: 384,
-      maxLines: 3,
-      justify: "C",
-    },
-    // 3. Precio grande y centrado, y 126..164
-    {
-      kind: "text",
-      x: 8,
-      y: 126,
-      format: "^A0N,34,24",
-      source: "price",
-      prefix: "$",
-      maxWidthDots: 384,
-      maxLines: 1,
-      justify: "C",
-    },
-    // 4. Referencia, al pie, y 182..194
-    {
-      kind: "text",
-      x: 8,
-      y: 182,
-      format: "^A0N,12,8",
-      source: "reference",
-      prefix: "REF: ",
-      maxWidthDots: 384,
-      maxLines: 1,
-      justify: "C",
-    },
-  ],
-};
+/** Base de las coordenadas: 50 x 25 mm. */
+const BASE_W = 400;
+const BASE_H = 200;
+/** 6,64 mm: por debajo los escaneres del puesto no leian las barras. */
+const MIN_BARCODE_DOTS = 53;
+/** Por debajo de 10 dots `^A0` deja de ser legible en papel termico. */
+const MIN_FONT_DOTS = 10;
+
+/**
+ * La plantilla para las medidas de etiqueta configuradas.
+ *
+ * Existe porque /settings deja guardar ancho y alto, y antes la etiqueta ignoraba esas
+ * medidas: siempre salia de 50 x 25 aunque el rollo fuera otro. Con 50 x 25 produce
+ * exactamente la etiqueta original (lo fija `test/fixtures/label-50x25-*.zpl`).
+ */
+export function buildLabelTemplate(size: { widthMm: number; heightMm: number }): LabelTemplate {
+  const widthDots = dotsFromMm(size.widthMm);
+  const heightDots = dotsFromMm(size.heightMm);
+  const sx = widthDots / BASE_W;
+  const sy = heightDots / BASE_H;
+  const X = (v: number) => Math.round(v * sx);
+  const Y = (v: number) => Math.round(v * sy);
+  const font = (h: number, w: number) => {
+    const s = Math.min(sx, sy);
+    return `^A0N,${Math.max(MIN_FONT_DOTS, Math.round(h * s))},${Math.max(MIN_FONT_DOTS * 0.6, Math.round(w * s))}`;
+  };
+
+  // El logo no se puede escalar: si la etiqueta es mas baja o mas estrecha que la de 50 x 25,
+  // pisaria el nombre. Sin logo la etiqueta sigue sirviendo; con el nombre tapado no.
+  const logo: LabelZone[] =
+    widthDots >= LOGO_DOTS_W && heightDots >= BASE_H
+      ? [{ kind: "graphic", x: Math.round((widthDots - LOGO_DOTS_W) / 2), y: 1, gf: LOGO_GF }]
+      : [];
+
+  return {
+    widthDots,
+    heightDots,
+    zones: [
+      // 1. Logo, centred: 200 x 67 dots, x = (400 - 200) / 2 = 100, y 1..68
+      ...logo,
+      // 2. Description, 8 dots/char, one line inside 240 dots, y 70..84
+      {
+        kind: "text",
+        x: X(6),
+        y: Y(70),
+        format: font(14, 8),
+        source: "productName",
+        maxWidthDots: X(240),
+        maxLines: 1,
+        justify: "L",
+      },
+      // 3. Price: "$7.80" = 5 x 15 = 75 dots, x 250..325, y 68..92
+      {
+        kind: "text",
+        x: X(250),
+        y: Y(68),
+        format: font(24, 15),
+        source: "price",
+        prefix: "$",
+      },
+      // 4. Barcode, centrado. Con EAN-13 son 95 modulos x 3 dots = 285 dots,
+      //    x = (400 - 285) / 2 = 58 -> zonas quietas de 58 y 57 dots (7,1 mm), mucho por
+      //    encima de las 10X (30 dots) que pide la norma. Con Code 128 el ancho se calcula
+      //    con el codigo real y la zona quieta se comprueba antes de imprimir.
+      //    Barras y 96..168; la linea de interpretacion acaba hacia 182.
+      {
+        kind: "barcode",
+        x: 0,
+        y: Y(96),
+        heightDots: Math.max(MIN_BARCODE_DOTS, Y(72)),
+        interpretationLine: true,
+        source: "barcode",
+        center: true,
+        moduleWidth: 3,
+      },
+      // 5. Reference, y 186..198
+      {
+        kind: "text",
+        x: X(6),
+        y: Y(186),
+        format: font(12, 8),
+        source: "reference",
+        prefix: "REF: ",
+      },
+    ],
+
+    /**
+     * Etiqueta sin codigo de barras: los 269 productos cuyo codigo no cabe a 3 de modulo, o
+     * que en el export vienen como "0" y "null".
+     *
+     * Se reparte el alto de 200 dots entre logo, nombre, precio y referencia, con el nombre
+     * y el precio centrados y mas grandes, que es lo que se ve de lejos. Los nombres mas
+     * largos del catalogo son de 50 caracteres y caben en 3 lineas de 384 dots a 14 dots de
+     * ancho de caracter (27 caracteres por linea).
+     *
+     * Las coordenadas son provisionales: estan puestas a ojo y sin ver la etiqueta impresa.
+     */
+    zonesWithoutBarcode: [
+      // 1. Logo, centrado: 200 x 67 dots, y 1..68
+      ...logo,
+      // 2. Nombre: hasta 3 lineas de 384 dots, centradas, y 74..116
+      {
+        kind: "text",
+        x: X(8),
+        y: Y(74),
+        format: font(16, 14),
+        source: "productName",
+        maxWidthDots: X(384),
+        maxLines: 3,
+        justify: "C",
+      },
+      // 3. Precio grande y centrado, y 126..164
+      {
+        kind: "text",
+        x: X(8),
+        y: Y(126),
+        format: font(34, 24),
+        source: "price",
+        prefix: "$",
+        maxWidthDots: X(384),
+        maxLines: 1,
+        justify: "C",
+      },
+      // 4. Referencia, al pie, y 182..194
+      {
+        kind: "text",
+        x: X(8),
+        y: Y(182),
+        format: font(12, 8),
+        source: "reference",
+        prefix: "REF: ",
+        maxWidthDots: X(384),
+        maxLines: 1,
+        justify: "C",
+      },
+    ],
+  };
+}
+
+/** La etiqueta de 50 x 25 mm, la medida por defecto de /settings. */
+export const DEFAULT_TEMPLATE: LabelTemplate = buildLabelTemplate({ widthMm: 50, heightMm: 25 });

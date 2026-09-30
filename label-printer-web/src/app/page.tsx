@@ -83,7 +83,10 @@ export default function Home() {
         setSelected(null);
         notify({
           kind: "info",
-          message: `${products.length} productos coinciden con "${q}" de forma aproximada — elige uno`,
+          message:
+            match === "ambiguous"
+              ? `"${q}" identifica a mas de un producto — elige cual (el primero coincide entero)`
+              : `${products.length} productos coinciden con "${q}" de forma aproximada — elige uno`,
         });
       })();
     },

@@ -3,7 +3,7 @@ id: E18
 tipo: ficha-aprendizaje
 area: etiquetas
 prioridad: P2
-estado: pendiente
+estado: corregido
 verificacion: bytes y contrato verificados - papel pendiente
 fecha: 2026-09-29
 tags:
@@ -63,3 +63,7 @@ Aprender Unicode, codificación y fuentes: que un texto se vea bien en el navega
 ## Fuentes
 
 [Zebra: ^CI y soporte de UTF-8](https://docs.zebra.com/us/en/printers/software/zpl-pg/c-zpl-zpl-commands/r-zpl-ci.html).
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E06 E18 - Texto seguro en ZPL]]. Resumen de todas las fichas en [[Registro de correcciones]].
