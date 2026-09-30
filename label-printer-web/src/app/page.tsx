@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/product-card";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { PrintStatus } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
-import { lookupProducts, usePrint } from "@/components/use-print";
+import { matchesMessage, lookupProducts, usePrint } from "@/components/use-print";
 import { MIN_BUSQUEDA } from "@/lib/products/product.lookup";
 import type { Product } from "@/lib/products/product.types";
 
@@ -33,7 +33,7 @@ export default function Home() {
 
       void (async () => {
         setSearching(true);
-        const { products, match, error } = await lookupProducts(q);
+        const { products, match, total, error } = await lookupProducts(q);
         setSearching(false);
 
         if (error) {
@@ -81,13 +81,7 @@ export default function Home() {
         // en vez de adivinar.
         setMatches(products);
         setSelected(null);
-        notify({
-          kind: "info",
-          message:
-            match === "ambiguous"
-              ? `"${q}" identifica a mas de un producto — elige cual (el primero coincide entero)`
-              : `${products.length} productos coinciden con "${q}" de forma aproximada — elige uno`,
-        });
+        notify({ kind: "info", message: matchesMessage(match, products.length, total, q) });
       })();
     },
     [notify],

@@ -71,3 +71,18 @@ test("a truncated read with no complete match is never exact", async () => {
   assert.notEqual(r.match, "exact");
   assert.notEqual(r.match, "ambiguous");
 });
+
+test("a partial search cut at the limit says how many matched in total", async () => {
+  const many = Array.from({ length: 61 }, (_, i) => product(`L${i}`, "", `LECHE ${i}`));
+  const r = await resolveQuery(createInMemoryRepository(async () => many), "LECHE");
+
+  assert.equal(r.match, "partial");
+  assert.equal(r.products.length, 60);
+  assert.equal(r.total, 61);
+});
+
+test("a partial search under the limit reports its real total", async () => {
+  const r = await resolveQuery(repo, "PALMOLIVE");
+
+  assert.equal(r.total, 2);
+});

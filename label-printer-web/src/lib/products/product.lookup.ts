@@ -35,6 +35,11 @@ export type MatchKind = "exact" | "ambiguous" | "partial" | "none" | "all" | "to
 export interface LookupOutcome {
   match: MatchKind;
   products: Product[];
+  /**
+   * Cuantos coincidian antes de cortar a `MAX_BUSQUEDA`. Sin esto la UI decia "60 productos
+   * coinciden" aunque fueran cientos, y no pedia escribir mas.
+   */
+  total?: number;
 }
 
 /**
@@ -138,7 +143,7 @@ export async function resolveQuery(
     // barcode) no se descarta ni se imprime a ciegas: se ofrece primero y alguien elige.
     const vistos = new Set(completos);
     const ofrecidos = [...completos, ...podriaSerCortado.filter((p) => !vistos.has(p))];
-    return { match: "ambiguous", products: ofrecidos.slice(0, MAX_BUSQUEDA) };
+    return { match: "ambiguous", products: ofrecidos.slice(0, MAX_BUSQUEDA), total: ofrecidos.length };
   }
 
   const limpio = variantes[0];
@@ -147,5 +152,5 @@ export async function resolveQuery(
   const partial = await repo.search(limpio);
   if (partial.length === 0) return { match: "none", products: [] };
 
-  return { match: "partial", products: partial.slice(0, MAX_BUSQUEDA) };
+  return { match: "partial", products: partial.slice(0, MAX_BUSQUEDA), total: partial.length };
 }

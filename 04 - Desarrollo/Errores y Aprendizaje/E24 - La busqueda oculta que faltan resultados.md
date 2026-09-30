@@ -3,7 +3,7 @@ id: E24
 tipo: ficha-aprendizaje
 area: interfaz
 prioridad: P3
-estado: pendiente
+estado: corregido
 verificacion: confirmado por lectura del codigo
 fecha: 2026-09-29
 tags:
@@ -57,3 +57,7 @@ Aprender contratos de paginación y diferencia entre tamaño de página y tamañ
 - [[Mapa de errores y aprendizaje]]
 - [[Ruta de aprendizaje y correccion]]
 - [[E02 - La proteccion de prefijos bloquea identificadores validos]]
+
+## Corrección
+
+Estado: **corregido**. Registro: [[Correccion E24 - Busqueda truncada]]. Resumen de todas las fichas en [[Registro de correcciones]].

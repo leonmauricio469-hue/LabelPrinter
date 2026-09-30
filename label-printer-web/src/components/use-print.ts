@@ -25,6 +25,8 @@ export interface LookupResult {
   products: Product[];
   /** Como los encontro el servidor. `exact` es el unico que permite imprimir sin preguntar. */
   match: MatchKind;
+  /** Cuantos coincidian antes de cortar la lista. */
+  total: number;
   error: string | null;
 }
 
@@ -36,21 +38,40 @@ export interface LookupResult {
  * el segundo caso imprimirlo es imprimir una suposicion.
  */
 export async function lookupProducts(q: string): Promise<LookupResult> {
-  const none: LookupResult = { products: [], match: "none", error: null };
+  const none: LookupResult = { products: [], match: "none", total: 0, error: null };
   try {
     const res = await fetch(`/api/products?q=${encodeURIComponent(q)}`);
     const data = (await res.json()) as {
       products?: Product[];
       match?: MatchKind;
+      total?: number;
       error?: string;
     };
     if (!res.ok) {
       return { ...none, error: data.error ?? `La app respondio ${res.status}` };
     }
-    return { products: data.products ?? [], match: data.match ?? "none", error: null };
+    const products = data.products ?? [];
+    return { products, match: data.match ?? "none", total: data.total ?? products.length, error: null };
   } catch (err) {
     return { ...none, error: `No se pudo contactar la app: ${(err as Error).message}` };
   }
+}
+
+/**
+ * El mensaje de una lista para elegir.
+ *
+ * `total` es cuantos coincidian antes de cortar la lista (ver `MAX_BUSQUEDA`). Si faltan
+ * resultados se dice, y se pide escribir mas: antes se contaba la lista recibida y se
+ * anunciaban "60 productos" aunque fueran cientos.
+ */
+export function matchesMessage(match: MatchKind, shown: number, total: number, q: string): string {
+  if (match === "ambiguous") {
+    return `"${q}" identifica a mas de un producto. Elige cual (el primero coincide entero).`;
+  }
+  if (total > shown) {
+    return `Se muestran ${shown} de ${total} productos que coinciden con "${q}" de forma aproximada. Escribe mas para acotar.`;
+  }
+  return `${shown} productos coinciden con "${q}" de forma aproximada. Elige uno.`;
 }
 
 /**
