@@ -1,0 +1,153 @@
+import type { LabelData } from "./label.types";
+import type { LabelTemplate, BarcodeZone, LabelZone, TextZone } from "./label.template";
+import { planBarcode, barcodeFormat, QUIET_FACTOR } from "./barcode-plan";
+import type { BarcodePlan } from "./barcode-plan";
+
+/**
+ * Que symbologia lleva un codigo en una etiqueta concreta.
+ *
+ * Es un envoltorio de `planBarcode()` con los parametros de la etiqueta puestos, para que
+ * quien construye el ZPL no tenga que acordarse del ancho de modulo ni del factor de zona
+ * quieta. Toda la decision vive en `barcode-plan.ts`.
+ */
+export function planForZone(
+  template: LabelTemplate,
+  zone: BarcodeZone,
+  barcode: string,
+): BarcodePlan {
+  return planBarcode(barcode, {
+    labelWidthDots: template.widthDots,
+    moduleWidthDots: zone.moduleWidth,
+    quietFactor: QUIET_FACTOR,
+  });
+}
+
+export function barcodeZoneOf(template: LabelTemplate): BarcodeZone | undefined {
+  return template.zones.find((z): z is BarcodeZone => z.kind === "barcode");
+}
+
+/** Ancho del simbolo en dots, o 0 si el codigo no se puede imprimir. */
+export function symbolDots(zone: BarcodeZone, plan: BarcodePlan): number {
+  return plan.printable ? plan.modules * zone.moduleWidth : 0;
+}
+
+function barcodeX(template: LabelTemplate, zone: BarcodeZone, plan: BarcodePlan): number {
+  if (!zone.center) return zone.x;
+  return Math.max(0, Math.round((template.widthDots - symbolDots(zone, plan)) / 2));
+}
+
+/**
+ * Zona quieta a la derecha con el barcode centrado. Negativa si el simbolo no cabe.
+ *
+ * El estandar pide 10X a cada lado. X es el ancho de modulo en dots, o sea
+ * `zone.moduleWidth`: el suelo de la zona quieta crece con el, no es un numero fijo.
+ */
+export function quietZoneDots(
+  template: LabelTemplate,
+  zone: BarcodeZone,
+  plan: BarcodePlan,
+): number {
+  return template.widthDots - barcodeX(template, zone, plan) - symbolDots(zone, plan);
+}
+
+/**
+ * Que zonas se emiten, y con que symbologia.
+ *
+ * Se resuelve ANTES de emitir nada, y no zona a zona, porque cuando el codigo no se puede
+ * imprimir no basta con callarse la zona del barcode: sobrarian 12,5 mm de papel en blanco
+ * en 269 de los 3080 productos del catalogo real, y eso parece una etiqueta rota. Con
+ * `zonesWithoutBarcode` la etiqueta entera se recompone.
+ *
+ * Se devuelve siempre el plan, tambien con la lista alternativa, para que quien llama
+ * pueda avisar al operador sin tener que recalcularlo.
+ */
+export function resolveLabel(
+  template: LabelTemplate,
+  data: LabelData,
+): { zones: LabelZone[]; plan: BarcodePlan } {
+  const zone = barcodeZoneOf(template);
+  if (!zone) {
+    return {
+      zones: template.zones,
+      plan: { printable: false, reason: "vacio", detail: "la plantilla no tiene zona de codigo" },
+    };
+  }
+  const plan = planForZone(template, zone, data.barcode);
+  const sinCodigo = !plan.printable && template.zonesWithoutBarcode;
+  return { zones: sinCodigo ? template.zonesWithoutBarcode! : template.zones, plan };
+}
+
+function textFor(zone: TextZone, data: LabelData): string {
+  const raw =
+    zone.source === "header"
+      ? (zone.header ?? data.businessName)
+      : zone.source === "price"
+        ? data.price.toFixed(2)
+        : String(data[zone.source]);
+  return `${zone.prefix ?? ""}${raw}`;
+}
+
+function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan: BarcodePlan): string {
+  const commands: string[] = [
+    "^XA",
+    `^PW${template.widthDots}`,
+    `^LL${template.heightDots}`,
+    "^LH0,0",
+  ];
+
+  for (const zone of zones) {
+    if (zone.kind === "graphic") {
+      commands.push(`^FO${zone.x},${zone.y}`, zone.gf);
+      continue;
+    }
+
+    if (zone.kind === "barcode") {
+      // Aqui se decide la symbologia. Si el codigo no se puede imprimir y la plantilla no
+      // trae lista alternativa, la zona no se emite: es preferible una etiqueta sin codigo
+      // a un simbolo recortado, que sale bonito y no lo lee nadie.
+      if (!plan.printable) continue;
+      commands.push(
+        barcodeFormat(plan, zone.heightDots, zone.interpretationLine),
+        `^FO${barcodeX(template, zone, plan)},${zone.y}`,
+        `^FD${plan.data}^FS`,
+      );
+      continue;
+    }
+
+    const text = textFor(zone, data);
+    commands.push(zone.format);
+
+    // ^FB must come AFTER the font command and BEFORE ^FD, otherwise ZPL
+    // ignores the wrap and long text overflows the label.
+    if (zone.maxWidthDots !== undefined) {
+      const justify = zone.justify === "C" ? "C" : zone.justify === "R" ? "R" : "L";
+      commands.push(`^FB${zone.maxWidthDots},${zone.maxLines ?? 2},0,${justify},0`);
+    }
+
+    commands.push(`^FO${zone.x},${zone.y}`, `^FD${text}^FS`);
+  }
+
+  commands.push("^XZ");
+  return commands.join("\n");
+}
+
+export function buildZpl(template: LabelTemplate, data: LabelData): string {
+  const { zones, plan } = resolveLabel(template, data);
+  return emit(template, zones, data, plan);
+}
+
+/**
+ * Genera N copias de la misma etiqueta en un unico trabajo de impresion.
+ *
+ * Cada copia es un bloque `^XA ... ^XZ` completo, que es como la Zebra delimita una
+ * etiqueta: el spooler las cuenta como N etiquetas de un solo job.
+ *
+ * Se manda todo junto en vez de N jobs por dos razones: una sola ida y vuelta al
+ * spooler, y una impresion atomica (si algo falla, no sale la mitad del lote).
+ */
+export function buildZplBatch(template: LabelTemplate, data: LabelData, qty: number): string {
+  const copies = Math.max(1, Math.floor(qty));
+  if (copies === 1) return buildZpl(template, data);
+  const one = buildZpl(template, data);
+  return one.repeat(copies);
+}

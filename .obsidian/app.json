@@ -1,0 +1,9 @@
+{
+  "userIgnoreFilters": [
+    "label-printer-web/node_modules/",
+    "label-printer-web/.next/",
+    "**/node_modules/",
+    "**/.next/",
+    "**/*.tsbuildinfo"
+  ]
+}

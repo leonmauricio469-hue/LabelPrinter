@@ -1,0 +1,34 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": ".preview-build",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": [
+    "scripts/preview-zpl.ts",
+    "scripts/render-label.ts",
+    "scripts/code128.ts",
+    "scripts/check-ean.ts",
+    "scripts/check-queue-status.ts",
+    "scripts/analyze-catalogo.ts",
+    "scripts/analiza-codigos.ts",
+    "scripts/mide-codigos.ts",
+    "scripts/familia-tipo.ts",
+    "scripts/no-caben.ts",
+    "scripts/retail-estrecho.ts",
+    "scripts/sonda-busqueda.ts",
+    "scripts/solo-0250.ts",
+    "scripts/importar-catalogo.ts",
+    "scripts/check-barcode-plan.ts",
+    "scripts/check-busqueda.ts",
+    "scripts/generar-prueba-symbology.ts",
+    "src/lib/validation/schemas.ts",
+    "src/lib/products/product.lookup.ts",
+    "src/lib/labels/**/*.ts"
+  ]
+}

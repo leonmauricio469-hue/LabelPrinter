@@ -1,0 +1,153 @@
+# Sends raw bytes to a Windows printer queue (no rendering, no driver wrapping).
+# Used by the USB transport: the Zebra interprets the bytes as ZPL.
+# ASCII only on purpose: Windows PowerShell 5.1 reads .ps1 as ANSI without a BOM.
+
+param(
+    [Parameter(Mandatory = $true)][string]$Printer,
+    [Parameter(Mandatory = $true)][ValidateSet('Send', 'Check', 'Status')][string]$Mode,
+    [string]$Base64 = ""
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Emit($ok, $error, $extra) {    $o = [ordered]@{ ok = $ok; error = $error }
+    if ($extra) { foreach ($k in $extra.Keys) { $o[$k] = $extra[$k] } }
+    Write-Output ($o | ConvertTo-Json -Compress)
+}
+
+# --- Status mode: what Windows knows about the queue ---
+# Deliberately before Add-Type: this mode does not open the queue, and compiling the
+# P/Invoke block costs a few hundred ms on every call. Measured on this PC: a powershell.exe
+# spawn costs ~2 s end to end, so anything avoidable here is worth avoiding.
+if ($Mode -eq 'Status') {
+    $q = Get-Printer -Name $Printer -ErrorAction SilentlyContinue
+    if (-not $q) {
+        $q = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$Printer*" }) | Select-Object -First 1
+    }
+    if (-not $q) {
+        Emit $true $null @{ queue = $Printer; found = $false }
+        exit 0
+    }
+    # PrinterStatus is a FLAGS enum, so the integer matters more than the name: the name is
+    # only printed when a single bit is set. statusFlags is what the app interprets.
+    Emit $true $null @{
+        queue       = $q.Name
+        found       = $true
+        statusFlags = [int]$q.PrinterStatus
+        statusText  = "$($q.PrinterStatus)"
+        jobCount    = [int]$q.JobCount
+        port        = $q.PortName
+        driver      = $q.DriverName
+    }
+    exit 0
+}
+
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class Spool
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DOCINFOW
+    {
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
+    }
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool OpenPrinter(string name, out IntPtr handle, IntPtr pDefault);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr handle);
+
+    // CharSet.Unicode resolves this to StartDocPrinterW, so it MUST take DOCINFOW.
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool StartDocPrinter(IntPtr handle, int level, ref DOCINFOW docInfo, out IntPtr jobId);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr handle);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr handle, byte[] buffer, int count, out int written);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool SetPrinter(IntPtr handle, uint level, IntPtr pPrinterParam, IntPtr pcb);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool GetPrinter(IntPtr handle, uint level, IntPtr pPrinter, ref uint cb);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool DocumentProperties(IntPtr hWnd, IntPtr hPrinter, string pDeviceName,
+        IntPtr pDevModeOutput, IntPtr pDevModeInput, IntPtr fMode);
+}
+
+public static class Win32Message
+{
+    public static string Get(int code)
+    {
+        try { return new System.ComponentModel.Win32Exception(code).Message; }
+        catch { return "Win32=" + code; }
+    }
+}
+"@
+
+# --- resolve the queue by exact name (fallback: substring match) ---
+$queue = Get-Printer -Name $Printer -ErrorAction SilentlyContinue
+if (-not $queue) {
+    $queue = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$Printer*" }) | Select-Object -First 1
+}
+
+$handle = [IntPtr]::Zero
+$jobId = [IntPtr]::Zero
+
+try {
+    $di = New-Object Spool+DOCINFOW
+    $di.pDocName = "LabelPrinter"
+    $di.pOutputFile = $null
+    $di.pDataType = "RAW"   # raw passthrough: no PJL, no driver rendering
+
+    if (-not [Spool]::OpenPrinter($Printer, [ref]$handle, [IntPtr]::Zero)) {
+        $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Emit $false "OpenPrinter('$Printer') fallo: $([Win32Message]::Get($e)) (Win32=$e)" @{ matchedName = $(if ($queue) { $queue.Name } else { $null }) }
+        exit 1
+    }
+
+    if ($Mode -eq 'Check') {
+        Emit $true $null @{ queue = $Printer; port = $(if ($queue) { $queue.PortName } else { $null }) }
+        exit 0
+    }
+
+    $bytes = [Convert]::FromBase64String($Base64)
+    if ($bytes.Length -eq 0) { Emit $false "payload vacio" $null; exit 1 }
+
+    if (-not [Spool]::StartDocPrinter($handle, 1, [ref]$di, [ref]$jobId)) {
+        $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Emit $false "StartDocPrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
+        exit 1
+    }
+
+    $written = 0
+    if (-not [Spool]::WritePrinter($handle, $bytes, $bytes.Length, [ref]$written)) {
+        $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Emit $false "WritePrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
+        exit 1
+    }
+
+    if (-not [Spool]::EndDocPrinter($handle)) {
+        $e = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Emit $false "EndDocPrinter fallo: $([Win32Message]::Get($e)) (Win32=$e)" $null
+        exit 1
+    }
+
+    Emit $true $null @{ bytes = $written; queue = $Printer }
+    exit 0
+}
+catch {
+    Emit $false $_.Exception.Message $null
+    exit 1
+}
+finally {
+    if ($handle -ne [IntPtr]::Zero) { [void][Spool]::ClosePrinter($handle) }
+}

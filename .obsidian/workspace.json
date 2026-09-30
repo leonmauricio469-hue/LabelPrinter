@@ -1,0 +1,232 @@
+{
+  "main": {
+    "id": "cdeaa4fdd8916364",
+    "type": "split",
+    "children": [
+      {
+        "id": "6c4eb520c99870cb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4e43d76ff0ddcf71",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "05 - Referencias/Zebra GK420t Specs.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Zebra GK420t Specs"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "08217a3fa2fd0d52",
+    "type": "split",
+    "children": [
+      {
+        "id": "9853c610fed39610",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6f961324d3890b69",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "7f6e025ef2ebddb7",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "fe88a1c910857c05",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "bee980f7685054ac",
+    "type": "split",
+    "children": [
+      {
+        "id": "e67c06299e8ccc1d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "eebfd2f58bdc31ba",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes"
+            }
+          },
+          {
+            "id": "b34141e50b537065",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "02 - Tecnico/ZPL Lenguaje Impresion.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes"
+            }
+          },
+          {
+            "id": "718ea2e54c24b2d6",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "e0a52187cddbb9a2",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "b49aa4ed750ec4e8",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "05 - Referencias/Zebra GK420t Specs.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema"
+            }
+          }
+        ],
+        "currentTab": 4
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false
+    }
+  },
+  "active": "4e43d76ff0ddcf71",
+  "lastOpenFiles": [
+    "04 - Desarrollo/Catalogo Real y Symbologia.md",
+    "label-printer-web/scripts/generar-prueba-symbology.ts",
+    "04 - Desarrollo/Prueba Fisica Rueda.md",
+    "04 - Desarrollo/Prueba Coincidencias.md",
+    "04 - Desarrollo/Proximos Pasos.md",
+    "label-printer-web/scripts/comprobar-caso.js",
+    "label-printer-web/scripts/medir-barcode-numerico.js",
+    "label-printer-web/scripts/check-busqueda.ts",
+    "label-printer-web/scripts/mide-riesgo-codigo.ps1",
+    "label-printer-web/scripts/check-barcode-plan.ts",
+    "label-printer-web/src/lib/labels/barcode-plan.ts",
+    "label-printer-web/data/informe-catalogo.md",
+    "label-printer-web/data/catalog.json.bak",
+    "label-printer-web/scripts/importar-catalogo.ts",
+    "label-printer-web/scripts/leer-catalogo.ps1",
+    "04 - Desarrollo/Prueba Estado Impresora.md",
+    "04 - Desarrollo/Prueba Legibilidad Barcode.md",
+    "03 - Diseno/Plantilla Etiqueta.md",
+    "03 - Diseno/Interfaz de Usuario.md",
+    "label-printer-web/preview/label-preview.png",
+    "04 - Desarrollo/Prueba Patineta.md",
+    "02 - Tecnico/ZPL Lenguaje Impresion.md",
+    "02 - Tecnico/Impresora Zebra GK420t.md",
+    "02 - Tecnico/Arquitectura General.md",
+    "02 - Tecnico/API XETUX POSADMIN.md",
+    "00 - Inicio/Resumen Ejecutivo.md",
+    "00 - Inicio/Inicio.md",
+    "04 - Desarrollo/Estado del Proyecto.md",
+    "04 - Desarrollo/Estructura de Carpetas.md",
+    "02 - Tecnico/Dimensiones Etiqueta.md",
+    "04 - Desarrollo/Convenciones de Codigo.md",
+    "Templates/template-reunion.md",
+    "label-printer-web/node_modules/@tailwindcss/node/README.md",
+    "label-printer-web/node_modules/@next/swc-win32-x64-msvc/README.md",
+    "label-printer-web/node_modules/@jridgewell/resolve-uri/README.md",
+    "label-printer-web/node_modules/@img/colour/README.md",
+    "label-printer-web/node_modules/undici-types/README.md",
+    "Sin título.canvas",
+    "Sin título 1.canvas"
+  ]
+}

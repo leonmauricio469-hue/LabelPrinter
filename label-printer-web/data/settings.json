@@ -1,0 +1,13 @@
+{
+  "printer": {
+    "transport": "usb",
+    "host": "127.0.0.1",
+    "port": 9100,
+    "printerName": "ZDesigner GX420t"
+  },
+  "label": {
+    "widthMm": 50,
+    "heightMm": 25,
+    "businessName": "PA PICAR"
+  }
+}
