@@ -45,5 +45,14 @@ Verificación: `npm test` y `npm run typecheck` en `label-printer-web/`. Nada de
 ### Mejorado
 
 - **M01 — historial reconstruible.** Cada línea guarda el estado real del envío (enviado / fallido / incierto), el precio, el código emitido, los avisos, la medida de etiqueta y los tres identificadores (auditoría, solicitud, spooler). Las líneas anteriores se siguen leyendo. La pantalla de historial muestra estado, precio y código.
-- **M02, M03, M04, M06 — proceso.** `npm run check` corre typecheck, 101 tests y las verificaciones del catálogo desde las fuentes, y falla con código distinto de cero. Historial de Git por ficha en la rama `fix/revision-2026-09-29`. README, Inicio, Estado del Proyecto y el mapa de fichas reflejan el estado real; el informe de Anexos queda como histórico. `.preview-build/` ignorado.
-- **M05 — plan de prueba física.** 13 pruebas con 11 productos reales representativos para el puesto con Windows, la GK420t y el lector. Sin ejecutar: no hay hardware en este entorno.
+- **M02, M03, M04, M06 — proceso.** `npm run check` corre typecheck, los tests (114 al cerrar la rama) y las verificaciones del catálogo desde las fuentes, y falla con código distinto de cero. Historial de Git por ficha en la rama `fix/revision-2026-09-29`. README, Inicio, Estado del Proyecto y el mapa de fichas reflejan el estado real; el informe de Anexos queda como histórico. `.preview-build/` ignorado.
+- **M05 — plan de prueba física.** 14 pruebas con 11 productos reales representativos para el puesto con Windows, la GK420t y el lector. Sin ejecutar: no hay hardware en este entorno.
+
+### Pendiente — no se puede hacer desde el código
+
+- **Rotar la clave de Share Note (E27).** Estuvo publicada en el commit inicial de este repositorio público. Solo se puede hacer desde la cuenta de Share Note. Decidir además si se reescribe el historial de `main` para borrar el archivo (requiere `force-push`).
+- **Ejecutar el [Plan de prueba física](04%20-%20Desarrollo/Errores%20y%20Aprendizaje/Plan%20de%20prueba%20fisica.md)** en el puesto con Windows, la GK420t y el lector. Todo lo anterior está verificado en software, no en papel.
+- **Reinstalar los plugins de Obsidian** `obsidian-git` y `share-note` desde Obsidian (E26); están desactivados.
+- **Quitar `HOST=127.0.0.1` de `label-printer-web/.env.example`** (E20): nadie lo lee. El archivo está protegido por los permisos del entorno donde se hicieron las correcciones y no se tocó.
+- **Fijar la medida estándar de etiqueta** (E05) y, si hace falta, diseñarle su plantilla.
+- **Test propio de la ruta `/api/labels`** (hallazgo R3-003 de la revisión de código): requiere montar Next.js en los tests.
