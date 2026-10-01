@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_TEMPLATE, MM_TO_DOTS, dotsFromMm } from "@/lib/labels/label.template";
+import {
+  ASIDERES,
+  TITULO_ASIDERA,
+  ejesRedimensionables,
+  redimensionar,
+  type Asider,
+} from "@/lib/labels/label.resize";
+import { graphicDots, scaleGraphic } from "@/lib/labels/gf-graphic";
+import { buscarProblemas } from "@/lib/labels/label-solapes";
 import type { LabelZone } from "@/lib/labels/label.template";
 
 /**
@@ -48,8 +57,58 @@ interface Preview {
 const MM = (dots: number) => dots / MM_TO_DOTS;
 const DOTS = (mm: number) => Math.round(mm * MM_TO_DOTS);
 
-/** Las zonas que se pueden tocar. El marco y el logo no: son fijos. */
-const EDITABLES = new Set(["text", "barcode"]);
+/** Donde va cada asa, en tanto por ciento de la caja. */
+const POS_ASIDERA: Record<Asider, { x: number; y: number }> = {
+  nw: { x: 0, y: 0 },
+  n: { x: 0.5, y: 0 },
+  ne: { x: 1, y: 0 },
+  e: { x: 1, y: 0.5 },
+  se: { x: 1, y: 1 },
+  s: { x: 0.5, y: 1 },
+  sw: { x: 0, y: 1 },
+  w: { x: 0, y: 0.5 },
+};
+
+/** El cursor de cada asa. Da la pista de que se puede arrastrar sin tener que leer el titulo. */
+const CURSA_ASIDERA: Record<Asider, string> = {
+  nw: "cursor-nwse-resize",
+  n: "cursor-ns-resize",
+  ne: "cursor-nesw-resize",
+  e: "cursor-ew-resize",
+  se: "cursor-nwse-resize",
+  s: "cursor-ns-resize",
+  sw: "cursor-nesw-resize",
+  w: "cursor-ew-resize",
+};
+
+/**
+ * Ancho en dots de la caja de texto de una zona, tal y como la ha dibujado el servidor.
+ *
+ * Sale del render y no de la zona porque, sin `maxWidthDots`, `emit()` no escribe `^FB`: la caja
+ * no existe como dato y su ancho es el que ocupa el texto, que cambia con cada producto. Para
+ * ensanchar esa caja hay que empezar por la medida que se ve, no por un supuesto.
+ */
+function anchoCajaDeTexto(
+  indice: number,
+  preview: Preview | null,
+  pegables: number[],
+): number | undefined {
+  if (!preview) return undefined;
+  const caja = preview.cajas[pegables.indexOf(indice)];
+  if (!caja) return undefined;
+  return Math.max(1, caja.x1 - caja.x0);
+}
+
+/**
+ * Las zonas que se pueden mover y redimensionar arrastrando.
+ *
+ * Antes eran solo `text` y `barcode`: el marco y el logo estaban fijos por diseno, y el boton
+ * de la lista los ponia en gris con la palabra "(fija)". Ahora los cuatro se mueven y se
+ * redimensionan, porque no hay ninguna razon para que el borde de la etiqueta no se pueda
+ * colocar igual que el resto: si el marco va a 2 mm del borde, eso se decide mirando la
+ * etiqueta, y mirar exige poder arrastrarlo.
+ */
+const EDITABLES = new Set(["text", "barcode", "shape", "graphic"]);
 
 const TITULOS: Record<string, string> = {
   productName: "descripcion",
@@ -109,6 +168,14 @@ function mapearCajas(
     }
     if (c.etiqueta === "logo") {
       map[i] = zones.findIndex((z) => z.kind === "graphic");
+      usados.add(i);
+      return;
+    }
+    // El marco no tiene texto, asi que antes caia en el `return` de abajo y se quedaba sin
+    // emparejar: era la razon de que no se pudiera mover. Ahora se empareja por tipo, que es
+    // directo porque solo hay una zona de cada tipo.
+    if (c.etiqueta === "marco") {
+      map[i] = zones.findIndex((z) => z.kind === "shape");
       usados.add(i);
       return;
     }
@@ -297,7 +364,41 @@ export default function EditorPage() {
     setZones((prev) => prev.map((z, j) => (j === i ? conAnchoDeFuente(z, mm) : z)));
   }
 
+  /**
+   * Cambia el ancho o el alto del logo reescalando el `^GFA`.
+   *
+   * Se pasa por `redimensionar()` en vez de calcular el factor aqui, para que el campo numerico
+   * y el tirador den EXACTAMENTE el mismo resultado. Si cada uno calculara su propia
+   * proporcion, pondrias 30,0 mm en el campo y 31,0 mm desde la esquina, y no sabrias cual de
+   * los dos manda.
+   *
+   * `ancho` o `alto` a `null` significa "no lo toques", que es como se reescala manteniendo la
+   * proporcion: se cambia un lado y el otro le sigue.
+   */
+  function editarLogo(i: number, anchoMm: number | null, altoMm: number | null) {
+    setZones((prev) =>
+      prev.map((z, j) => {
+        if (j !== i) return z;
+        const gf = String(z.gf ?? "");
+        const actual = graphicDots(gf).dots;
+        if (!actual) return z;
+        const wObjetivo = anchoMm === null ? actual.w : DOTS(anchoMm);
+        const hObjetivo = altoMm === null ? actual.h : DOTS(altoMm);
+        const r = scaleGraphic(gf, wObjetivo, hObjetivo);
+        // Un fallo aqui (medida demasiado pequena, o un `^GF` ilegible) NO se guarda: dejar la
+        // zona con un `gf` a medio cambiar dejaria el logo en blanco sin decir por que.
+        return "error" in r ? z : { ...z, gf: r.gf };
+      }),
+    );
+  }
+
   const zona = zones[sel];
+
+  /** Que ejes se pueden estirar en la zona seleccionada, y el aviso de lo que no se puede. */
+  const zonaEjes = useMemo(
+    () => (zona ? ejesRedimensionables(zona as unknown as LabelZone) : null),
+    [zona],
+  );
 
   /**
    * Lo que se imprime de verdad en la zona seleccionada, con el nombre de prueba actual.
@@ -325,10 +426,11 @@ export default function EditorPage() {
   const lienzoRef = useRef<HTMLDivElement | null>(null);
   const arrastre = useRef<{
     indice: number;
+    /** `null` = mover la zona entera. Con nombre = redimensionar por esa arista. */
+    asidera: Asider | null;
     tomaX: number;
     tomaY: number;
-    origenX: number;
-    origenY: number;
+    origen: LabelZone;
   } | null>(null);
 
   /** Posicion del puntero sobre la etiqueta, en dots. */
@@ -348,7 +450,30 @@ export default function EditorPage() {
 
   const empezarArrastre = useCallback(
     (e: React.MouseEvent) => {
-      const caja = (e.target as HTMLElement).closest<HTMLElement>("[data-caja]");
+      const objetivo = e.target as HTMLElement;
+      // El asa se mira ANTES que la caja: el asa esta DENTRO de la caja, asi que si se
+      // buscase la caja primero, tirar de una esquina moveria la zona en vez de estirarla.
+      const asa = objetivo.closest<HTMLElement>("[data-asidera]");
+      if (asa) {
+        const caja = asa.closest<HTMLElement>("[data-caja]");
+        if (!caja) return;
+        const i = Number(caja.dataset.caja);
+        const indice = pegables[i];
+        if (indice < 0 || indice !== sel) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const { dx, dy } = dotsDelPuntero(e);
+        arrastre.current = {
+          indice,
+          asidera: asa.dataset.asidera as Asider,
+          tomaX: dx,
+          tomaY: dy,
+          origen: structuredClone(zones[indice]) as unknown as LabelZone,
+        };
+        return;
+      }
+
+      const caja = objetivo.closest<HTMLElement>("[data-caja]");
       if (!caja) return;
       const i = Number(caja.dataset.caja);
       const indice = pegables[i];
@@ -357,14 +482,32 @@ export default function EditorPage() {
       const { dx, dy } = dotsDelPuntero(e);
       arrastre.current = {
         indice,
+        asidera: null,
         tomaX: dx,
         tomaY: dy,
-        origenX: Number(zones[indice]?.x ?? 0),
-        origenY: Number(zones[indice]?.y ?? 0),
+        origen: structuredClone(zones[indice]) as unknown as LabelZone,
       };
     },
     [pegables, sel, zones, dotsDelPuntero],
   );
+
+  /**
+   * Modulos del simbolo que hay en pantalla ahora mismo.
+   *
+   * El ancho de las barras es un escalon de `modulos` dots, y cuantos hay lo decide el servidor
+   * al elegir la symbologia. Sin este numero, `redimensionar()` no puede pasar de "el rato se
+   * ha movido 40 dots" a "`moduleWidth` 4".
+   *
+   * Se deduce del ancho de simbolo que ya devuelve el preview: `modulos = ancho / moduleWidth`.
+   * No hace falta pedirlo aparte, y sale del mismo numero que se ve en el informe.
+   */
+  const modulosActuales = useMemo(() => {
+    if (!preview || preview.anchoSimbolo <= 0) return 0;
+    const bz = zones.find((z) => z.kind === "barcode");
+    const mw = Number((bz as { moduleWidth?: number } | undefined)?.moduleWidth ?? 0);
+    if (mw <= 0) return 0;
+    return Math.max(1, Math.round(preview.anchoSimbolo / mw));
+  }, [preview, zones]);
 
   useEffect(() => {
     const mover = (e: MouseEvent) => {
@@ -373,11 +516,21 @@ export default function EditorPage() {
       const { dx, dy } = dotsDelPuntero(e);
       // El desplazamiento se mide en dots y se redondea al dot entero mas cercano: es la
       // unidad que entiende la impresora, y dejar fracciones solo produciria ruido.
-      const x = Math.max(0, Math.round(a.origenX + (dx - a.tomaX)));
-      const y = Math.max(0, Math.round(a.origenY + (dy - a.tomaY)));
-      setZones((prev) =>
-        prev.map((z, i) => (i === a.indice ? { ...z, x, y } : z)),
-      );
+      const ex = Math.round(dx - a.tomaX);
+      const ey = Math.round(dy - a.tomaY);
+
+      if (a.asidera === null) {
+        const x = Math.max(0, a.origen.x + ex);
+        const y = Math.max(0, a.origen.y + ey);
+        setZones((prev) => prev.map((z, i) => (i === a.indice ? { ...z, x, y } : z)));
+        return;
+      }
+
+      const nueva = redimensionar(a.origen, a.asidera, ex, ey, {
+        modulos: modulosActuales,
+        anchoCajaTexto: anchoCajaDeTexto(sel, preview, pegables),
+      });
+      setZones((prev) => prev.map((z, i) => (i === a.indice ? (nueva as unknown as AnyZone) : z)));
     };
     const soltar = () => {
       arrastre.current = null;
@@ -388,16 +541,40 @@ export default function EditorPage() {
       window.removeEventListener("mousemove", mover);
       window.removeEventListener("mouseup", soltar);
     };
-  }, [dotsDelPuntero]);
+  }, [dotsDelPuntero, modulosActuales, sel, preview, pegables]);
 
+  /**
+   * La zona seleccionada como bloque de TypeScript para `label.template.ts`.
+   *
+   * El logo no sale aqui. Su tamano va DENTRO del `^GFA` y no en un campo de la zona, asi que
+   * el reescalado produce un bitmap distinto y no un numero que pegar. Se dice en su lugar, con
+   * la medida nueva, para que quede claro que el cambio no cabe en un objeto literal y hay que
+   * regenerar el dato o usar el boton de aplicar.
+   */
   const codigo = useMemo(() => {
     if (!zona) return "";
     const l: string[] = [];
     l.push(`    // ${etiquetaDe(zona, sel)}`);
-    if (zona.kind === "barcode") {
-      l.push(`    { kind: "barcode", x: ${zona.x}, y: ${zona.y}, heightDots: ${zona.heightDots},`);
-      l.push(`      interpretationLine: true, source: "barcode", center: true,`);
-      l.push(`      moduleWidth: ${zona.moduleWidth}, hriHeightDots: ${zona.hriHeightDots ?? 14} },`);
+    if (zona.kind === "shape") {
+      l.push(
+        `    { kind: "shape", x: ${zona.x}, y: ${zona.y}, widthDots: ${zona.widthDots}, ` +
+          `heightDots: ${zona.heightDots}, thicknessDots: ${zona.thicknessDots}` +
+          `${zona.radiusDots ? `, radiusDots: ${zona.radiusDots}` : ""} },`,
+      );
+    } else if (zona.kind === "graphic") {
+      const d = graphicDots(String(zona.gf));
+      l.push(`    // El logo son ${d.dots?.w ?? 0} x ${d.dots?.h ?? 0} dots ahora mismo.`);
+      l.push(`    // Su tamano va dentro del ^GFA, no en la zona, asi que esto no se pega: o se`);
+      l.push(`    // regenera con scripts/generate-logo.ps1, o se deja el boton de aplicar, que`);
+      l.push(`    // guarda el bitmap reescalado entero.`);
+      l.push(`    { kind: "graphic", x: ${zona.x}, y: ${zona.y}, gf: LOGO_GF },`);
+    } else if (zona.kind === "barcode") {
+      l.push(
+        `    { kind: "barcode", x: ${zona.x}, y: ${zona.y}, heightDots: ${zona.heightDots},` +
+          ` interpretationLine: true, source: "barcode",` +
+          ` center: ${zona.center !== false}, moduleWidth: ${zona.moduleWidth}` +
+          `${zona.hriHeightDots !== undefined ? `, hriHeightDots: ${zona.hriHeightDots}` : ""} },`,
+      );
     } else {
       const af = zona.autoFit as Record<string, number> | undefined;
       const partes = [`kind: "text"`, `x: ${zona.x}`, `y: ${zona.y}`, `format: "${zona.format}"`];
@@ -415,23 +592,28 @@ export default function EditorPage() {
     return l.join("\n");
   }, [zona, sel]);
 
-  const solapes = useMemo(() => {
+  // La misma regla que usa el endpoint de guardar, desde el mismo modulo. Si aqui se aceptara
+  // algo que el servidor luego rechaza con un 422, el boton de aplicar pareceria roto sin que
+  // hubiera forma de saber cual de los dos se equivoca.
+  const solapes = useMemo(
+    () =>
+      preview
+        ? buscarProblemas(preview.cajas, DEFAULT_TEMPLATE.widthDots, DEFAULT_TEMPLATE.heightDots)
+        : [],
+    [preview],
+  );
+
+  /**
+   * Lineas del informe que describen algo que NO se ha dibujado.
+   *
+   * El render puede salir bien y aun asi no haber pintado una zona: un `^GFA` que no llega al
+   * ZPL, un bitmap vacio, una medida que no se puede leer. La etiqueta se ve medio en blanco y
+   * el informe lo dice en una linea de texto pequeno, que es justo el sitio donde no se lee
+   * nada. Por eso se sacan aparte.
+   */
+  const avisos = useMemo(() => {
     if (!preview) return [];
-    const c = preview.cajas;
-    const fuera: string[] = [];
-    for (const a of c) {
-      if (a.x0 < 0 || a.y0 < 0 || a.x1 > DEFAULT_TEMPLATE.widthDots || a.y1 > DEFAULT_TEMPLATE.heightDots) {
-        fuera.push(`"${a.texto ?? a.etiqueta}" se sale del rollo (${a.x1} > ${DEFAULT_TEMPLATE.widthDots})`);
-      }
-    }
-    for (let i = 0; i < c.length; i++) {
-      for (let j = i + 1; j < c.length; j++) {
-        if (c[i].x1 > c[j].x0 && c[j].x1 > c[i].x0 && c[i].y1 > c[j].y0 && c[j].y1 > c[i].y0) {
-          fuera.push(`"${c[i].texto ?? c[i].etiqueta}" pisa a "${c[j].texto ?? c[j].etiqueta}"`);
-        }
-      }
-    }
-    return fuera;
+    return preview.informe.filter((l) => /\bNO\b|EN BLANCO/.test(l));
   }, [preview]);
 
   return (
@@ -440,8 +622,9 @@ export default function EditorPage() {
         <h2 className="text-lg font-semibold text-neutral-900">Editor de plantilla</h2>
         <p className="mt-1 text-sm text-neutral-600">
           El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
-          se imprime. Al final copias el bloque de TypeScript en{" "}
-          <code>src/lib/labels/label.template.ts</code>.
+          se imprime. Todo se mueve y se redimensiona arrastrando. Con el boton de{" "}
+          <strong>Aplicar cambios</strong> el cambio vale para imprimir al instante; el bloque de
+          TypeScript de abajo es para llevarlo al codigo.
         </p>
       </section>
 
@@ -469,7 +652,6 @@ export default function EditorPage() {
                     }`}
                   >
                     {etiquetaDe(z, i)}
-                    {!editable && <span className="ml-1 text-xs">(fija)</span>}
                   </button>
                 );
               })}
@@ -493,6 +675,70 @@ export default function EditorPage() {
                   onChange={(v) => editar(sel, { y: DOTS(v) })}
                 />
               </div>
+
+              {zona.kind === "shape" && (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="ancho marco (mm)"
+                      value={MM(Number(zona.widthDots))}
+                      onChange={(v) => editar(sel, { widthDots: DOTS(v) })}
+                    />
+                    <Num
+                      label="alto marco (mm)"
+                      value={MM(Number(zona.heightDots))}
+                      onChange={(v) => editar(sel, { heightDots: DOTS(v) })}
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="grosor (dots)"
+                      step={1}
+                      value={Number(zona.thicknessDots)}
+                      onChange={(v) => editar(sel, { thicknessDots: Math.max(1, Math.round(v)) })}
+                    />
+                    <Num
+                      label="esquina (dots)"
+                      step={1}
+                      value={Number(zona.radiusDots ?? 0)}
+                      onChange={(v) => editar(sel, { radiusDots: Math.max(0, Math.round(v)) })}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-neutral-500">
+                    El marco se dibuja con <code>^GB</code>. El grosor va hacia dentro, como en la
+                    Zebra, y la esquina redondeada es opcional: ponla a 0 para un borde recto.
+                  </p>
+                </>
+              )}
+
+              {zona.kind === "graphic" && (
+                <>
+                  {(() => {
+                    const d = graphicDots(String(zona.gf));
+                    return (
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <Num
+                          label="ancho logo (mm)"
+                          value={MM(d.dots?.w ?? 0)}
+                          onChange={(v) => editarLogo(sel, v, null)}
+                        />
+                        <Num
+                          label="alto logo (mm)"
+                          value={MM(d.dots?.h ?? 0)}
+                          onChange={(v) => editarLogo(sel, null, v)}
+                        />
+                      </div>
+                    );
+                  })()}
+                  <p className="mt-2 text-xs text-neutral-500">
+                    El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
+                    aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
+                    dots. Al cambiarlo se reescala manteniendo la proporcion, con vecino mas
+                    proximo y sin suavizado, que es lo unico que una impresora termica de 203 dpi
+                    sabe hacer.
+                  </p>
+                </>
+              )}
 
               {zona.kind === "barcode" ? (
                 <>
@@ -521,7 +767,7 @@ export default function EditorPage() {
                     0,250 mm, por debajo. Con 2 hay que leer en fisico antes de dejarlo.
                   </p>
                 </>
-              ) : (
+              ) : zona.kind === "text" ? (
                 <>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Num
@@ -595,6 +841,15 @@ export default function EditorPage() {
                     }
                   />
                 </>
+              ) : null}
+
+              {/* Lo que las asas hacen de verdad en ESTA zona. Sin esto, tirar de un tirador y
+                  que no pase nada parece un fallo del editor, y en el codigo de barras y en el
+                  logo es justo lo que pasa a proposito. */}
+              {zonaEjes?.nota && (
+                <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                  {zonaEjes.nota}
+                </p>
               )}
             </div>
           )}
@@ -739,7 +994,9 @@ export default function EditorPage() {
               ver cajas
             </label>
             <span className="text-xs text-neutral-500">
-              Elige una zona y arrastra su caja para moverla. El marco y el logo son fijos.
+              Elige una zona, arrastra su caja para moverla y tira de los puntos blancos de las
+              esquinas o los bordes para cambiarle el tamano. Vale para todo: marco, logo,
+              textos y barras.
             </span>
             <span className="text-xs text-neutral-500">
               {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
@@ -757,11 +1014,11 @@ export default function EditorPage() {
           {solapes.length > 0 && (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
               <p className="text-sm font-semibold text-amber-900">
-                Con estos valores la etiqueta se imprime encima de si misma
+                Con estos valores algo se pisa o se sale de la etiqueta
               </p>
               <ul className="mt-1 list-disc pl-5 text-xs text-amber-800">
                 {solapes.map((s, i) => (
-                  <li key={i}>{s}</li>
+                  <li key={i}>{s.mensaje}</li>
                 ))}
               </ul>
             </div>
@@ -783,8 +1040,23 @@ export default function EditorPage() {
               {mostrarCajas &&
                 preview.cajas.map((c, i) => {
                   // Solo se puede arrastrar la caja que corresponde a la zona seleccionada, y
-                  // solo si esa zona es editable: el marco y el logo son fijos por diseno.
+                  // solo si esa zona es editable.
                   const pegable = pegables[i] === sel;
+                  const nota = pegable && zona ? ejesRedimensionables(zona as unknown as LabelZone) : null;
+                  // Las asas de un eje que la zona no admite no se dibujan. Un tirador que no
+                  // hace nada parece un fallo del editor, y para el codigo de barras hay una
+                  // razon de peso: el simbolo va centrado y su ancho es un multiplo de 95 dots.
+                  const asas: Asider[] = !nota
+                    ? []
+                    : ASIDERES.filter((a) => {
+                        const horizontal = a === "e" || a === "w";
+                        const vertical = a === "n" || a === "s";
+                        const esquina = !horizontal && !vertical;
+                        // Una esquina arrastra los dos ejes a la vez. Si la zona no admite uno,
+                        // la esquina no se ofrece: estirarla solo deformaria el elemento.
+                        if (esquina) return nota.x && nota.y;
+                        return horizontal ? nota.x : nota.y;
+                      });
                   return (
                     <div
                       key={i}
@@ -807,8 +1079,26 @@ export default function EditorPage() {
                         }`}
                       >
                         {c.texto ?? c.etiqueta} · x{c.x0}-{c.x1} y{c.y0}-{c.y1}
-                        {pegable && " · arrastra"}
+                        {pegable && (asas.length > 0 ? " · arrastra o estira" : " · arrastra")}
                       </span>
+                      {asas.map((a) => (
+                        <div
+                          key={a}
+                          data-asidera={a}
+                          title={TITULO_ASIDERA[a]}
+                          className={`absolute h-3 w-3 rounded-sm border border-blue-700 bg-white ${
+                            CURSA_ASIDERA[a]
+                          }`}
+                          style={{
+                            left: `${POS_ASIDERA[a].x * 100}%`,
+                            top: `${POS_ASIDERA[a].y * 100}%`,
+                            // El asa va ENCIMA del borde, no pegada dentro: tiene que caer justo
+                            // sobre la linea que estira, que es donde el raton ya esta.
+                            marginLeft: -6,
+                            marginTop: -6,
+                          }}
+                        />
+                      ))}
                     </div>
                   );
                 })}
@@ -818,6 +1108,20 @@ export default function EditorPage() {
           {preview && (
             <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
               <h3 className="mb-2 text-sm font-semibold text-neutral-900">Informe</h3>
+
+              {/* Fallos de dibujado, arriba y en grande.
+                  Lo que dice "NO" o "EN BLANCO" significa que hay algo que NO se ha pintado en
+                  la pantalla, y por lo tanto esta differente de lo que va a salir. Abajo, en el
+                  `<pre>`, esa linea se leeria como un dato mas entre otros, y justo estos son
+                  los que no se pueden perder de vista. */}
+              {avisos.length > 0 && (
+                <ul className="mb-3 list-disc space-y-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 pl-6 text-xs text-red-800">
+                  {avisos.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              )}
+
               <pre className="whitespace-pre-wrap font-mono text-xs text-neutral-700">
                 {[
                   `symbologia: ${preview.symbology ?? "-"}`,

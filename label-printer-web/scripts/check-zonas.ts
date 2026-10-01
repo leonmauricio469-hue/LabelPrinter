@@ -11,7 +11,8 @@
 //   tsc -p tsconfig.preview.json
 //   node .preview-build/scripts/check-zonas.js
 import { TEMPLATES } from "../src/lib/labels/label.template";
-import { LOGO_DOTS_W, LOGO_DOTS_H } from "../src/lib/labels/pa-picar-logo";
+import { graphicDots } from "../src/lib/labels/gf-graphic";
+import { intersectan } from "../src/lib/labels/label-solapes";
 import type { LabelTemplate, LabelZone } from "../src/lib/labels/label.template";
 import { planForZone, barcodeZoneOf } from "../src/lib/labels/zpl.builder";
 import type { BarcodeImprimible } from "../src/lib/labels/barcode-plan";
@@ -22,6 +23,7 @@ interface Caja {
   y0: number;
   x1: number;
   y1: number;
+  texto?: string;
 }
 
 function altoDeFuente(format: string): number {
@@ -136,8 +138,22 @@ function cajasDeBarcode(
   return cajas;
 }
 
+/**
+ * Dos cajas se pisan de verdad.
+ *
+ * Delega en `intersectan()` de `label-solapes.ts`, que es la misma regla que usan el editor y el
+ * endpoint que guarda, para que este script no pueda dar verde con una cuenta y la pantalla
+ * naranja con otra.
+ *
+ * La exencion de contencion que hay para el marco NO se aplica aqui, y no por capricho: estas
+ * cajas no llevan el marco, y entre contenido no hay exencion. Un texto metido dentro de las
+ * barras esta encima de las barras.
+ */
 function seSolapan(a: Caja, b: Caja): boolean {
-  return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  return intersectan(
+    { etiqueta: a.etiqueta, x0: a.x0, y0: a.y0, x1: a.x1, y1: a.y1, texto: a.texto },
+    { etiqueta: b.etiqueta, x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, texto: b.texto },
+  );
 }
 
 /** Lo mismo que hace `foldAscii()` en los signos que salen en el catalogo. */
@@ -242,16 +258,21 @@ for (const template of TEMPLATES) {
         const largo = z.source === "productName" ? plegado.length : (LARGO_POR_FUENTE[z.source] ?? 8);
         cajas.push(...cajasDeTexto(z, largo));
       } else if (z.kind === "graphic") {
-        // Del tamaño real del ^GFA, no a mano: si `generate-logo.ps1` regenera el logo mas
-        // grande, esta comprobacion tiene que crecer con el o dira que no hay choques cuando
-        // si los hay.
-        cajas.push({
-          etiqueta: "logo",
-          x0: z.x,
-          y0: z.y,
-          x1: z.x + LOGO_DOTS_W,
-          y1: z.y + LOGO_DOTS_H,
-        });
+        // Del tamaño real del ^GFA, no a mano y no de una constante al lado: si
+        // `generate-logo.ps1` regenera el logo mas grande, o si `/editor` lo reescala, esta
+        // comprobacion tiene que crecer con el o dira que no hay choques cuando si los hay.
+        const logo = graphicDots(z.gf);
+        if (logo.fallo || !logo.dots) {
+          problemas.push(`${template.id}: el ^GF del logo no se puede medir (${logo.fallo})`);
+        } else {
+          cajas.push({
+            etiqueta: "logo",
+            x0: z.x,
+            y0: z.y,
+            x1: z.x + logo.dots.w,
+            y1: z.y + logo.dots.h,
+          });
+        }
       }
     }
     cajas.push(...cajasBarcode);
@@ -311,13 +332,16 @@ for (const template of TEMPLATES) {
       const largo = z.source === "productName" ? 50 : (LARGO_POR_FUENTE[z.source] ?? 8);
       cajasResumen.push(...cajasDeTexto(z, largo));
     } else if (z.kind === "graphic") {
-      cajasResumen.push({
-      etiqueta: "logo",
-      x0: z.x,
-      y0: z.y,
-      x1: z.x + LOGO_DOTS_W,
-      y1: z.y + LOGO_DOTS_H,
-    });
+      const logo = graphicDots(z.gf);
+      if (logo.dots) {
+        cajasResumen.push({
+          etiqueta: "logo",
+          x0: z.x,
+          y0: z.y,
+          x1: z.x + logo.dots.w,
+          y1: z.y + logo.dots.h,
+        });
+      }
     }
   }
   cajasResumen.push(...cajasBarcode);

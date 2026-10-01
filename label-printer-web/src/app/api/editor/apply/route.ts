@@ -5,6 +5,7 @@ import {
   type LabelTemplate,
 } from "@/lib/labels/label.template";
 import { renderLabel } from "@/lib/labels/label.render";
+import { buscarProblemas } from "@/lib/labels/label-solapes";
 import { resolveZoneText } from "@/lib/labels/zpl.builder";
 import type { TextZone } from "@/lib/labels/label.template";
 import type { LabelData } from "@/lib/labels/label.types";
@@ -32,59 +33,16 @@ import { writeOverride, clearOverride, readOverride } from "@/lib/labels/label-o
  * precio encima del nombre, y eso no se ve hasta que gastas papel. Se avisa en pantalla y el
  * boton dice que no.
  *
- * La comprobacion es la MISMA que hace el preview, porque las dos salen de `renderLabel()`.
- */
-interface Caja {
-  etiqueta: string;
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  texto?: string;
-}
-
-/**
- * Solapes y salidas de rollo.
- *
  * Va en el servidor y no solo en el navegador a proposito: el boton escribe en disco, y lo que
  * se decide antes de escribir tiene que depender solo del servidor. Si la comprobacion viviera
- * en el cliente, un `POST` a mano saltarsela entero, que es justo lo que pasa cuando el que
+ * en el cliente, un `POST` a mano la saltaria entero, que es justo lo que pasa cuando el que
  * prueba ya no es el navegador.
+ *
+ * La comprobacion es la MISMA que hace el preview, por dos motivos que no son el mismo: las dos
+ * salen de `renderLabel()`, y ademas comparten la funcion `buscarProblemas()`. Con la regla
+ * duplicada, el editor decia "no hay choques" con una cuenta y el servidor rechazaba con otra, y
+ * el boton de aplicar parecia roto sin que se supiera cual de los dos miente.
  */
-function problemas(
-  cajas: Caja[],
-  ancho: number,
-  alto: number,
-): string[] {
-  const fuera: string[] = [];
-  for (const c of cajas) {
-    const que = c.texto ?? c.etiqueta;
-    if (c.x0 < 0 || c.y0 < 0) {
-      fuera.push(`"${que}" se sale por la izquierda o por arriba (${c.x0},${c.y0})`);
-    }
-    if (c.x1 > ancho) {
-      fuera.push(
-        `"${que}" se sale por la derecha: llega a ${c.x1} y el rollo acaba en ${ancho} dots`,
-      );
-    }
-    if (c.y1 > alto) {
-      fuera.push(
-        `"${que}" se sale por abajo: llega a ${c.y1} y el rollo acaba en ${alto} dots`,
-      );
-    }
-  }
-  for (let i = 0; i < cajas.length; i++) {
-    for (let j = i + 1; j < cajas.length; j++) {
-      const a = cajas[i];
-      const b = cajas[j];
-      const encima = a.x1 > b.x0 && b.x1 > a.x0 && a.y1 > b.y0 && b.y1 > a.y0;
-      if (encima) {
-        fuera.push(`"${a.texto ?? a.etiqueta}" pisa a "${b.texto ?? b.etiqueta}"`);
-      }
-    }
-  }
-  return fuera;
-}
 
 /**
  * Estado guardado, con las zonas.
@@ -155,8 +113,8 @@ export async function POST(req: Request) {
   for (const data of pruebas) {
     const r = renderLabel(template, data, { scale: 1, grid: false });
     fallos.push(
-      ...problemas(r.cajas, template.widthDots, template.heightDots).map(
-        (p) => `"${data.productName}": ${p}`,
+      ...buscarProblemas(r.cajas, template.widthDots, template.heightDots).map(
+        (p) => `"${data.productName}": ${p.mensaje}`,
       ),
     );
     // Un texto que se sale del rollo por la derecha sale ya en `informe`, pero se recoge aqui

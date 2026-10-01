@@ -31,4 +31,24 @@ next-env.d.ts
 
 # temporal de la escritura atomica de data/plantilla-override.json
 # (ver label-override.store.ts): solo existe mientras se renombra el archivo bueno.
+# temporal de la escritura atomica de data/plantilla-override.json
+# (ver label-override.store.ts): solo existe mientras se renombra el archivo bueno.
 *.tmp
+
+# La geometria que se esta usando ahora mismo, por maquina. No se sigue a proposito, y no por
+# descuido como el resto de data/.
+#
+# Los otros archivos de data/ son cosas que son verdad en cualquier sitio: el catalogo, la
+# configuracion de la impresora, el registro de impresiones. Este es distinto: es lo que el
+# boton de /editor escribio en ESTA impresora, aplicado encima de la plantilla del codigo.
+#
+# Si se siguiera, pasarian dos cosas malas. Una: la geometria que alguien ajusto aqui pasaria a
+# ser la que imprimen las demas maquinas al hacer pull, y label.template.ts dejaria de decir lo
+# que se imprime sin que nada lo avise. Dos: es un bloque de geometria duplicada, que da
+# conflictos de merge en cuanto dos personas tocan la etiqueta a la vez, y encima sobre un
+# archivo que existe justamente para poder deshacer sin git.
+#
+# Que no este en git es ademas lo que hace que la ausencia sea el estado bueno: si no hay
+# archivo, se imprime la plantilla del codigo. Ese es el estado al que hay que poder volver sin
+# pedirle nada a nadie.
+data/plantilla-override.json

@@ -224,9 +224,14 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       radiusDots: dotsFromMm(2),
     },
     // 2. Logo, centrado horizontal. El `^GFA` existente mide 200 x 67 dots (25 x 8,4 mm) y
-    //    ZPL no escala un campo grafico, asi que se centra al tamaño que hay. Para ocupar
-    //    los 35 mm que pide la especificacion habria que regenerar `pa-picar-logo.ts` con
-    //    `generate-logo.ps1` a 280 dots de ancho.
+    //    ZPL no escala un campo grafico, asi que se centra al tamaño que hay: `LOGO_DOTS_W`
+    //    es la unica medida que se usa aqui, y `check-gf` verifica que coincide con la del
+    //    `^GFA`, asi que no pueden separarse sin que la suite se queje.
+    //
+    //    Para otro tamaño NO hay que regenerar `pa-picar-logo.ts`: en `/editor` se estira el
+    //    logo con el asa de la derecha, `scaleGraphic()` reescribe el `^GFA` conservando la
+    //    proporcion, y "Aplicar cambios" lo guarda entero. La `x` de esta zona es la del logo
+    //    sin tocar; en cuanto se guarda uno redimensionado, manda la que venga guardada.
     {
       kind: "graphic",
       x: Math.round((dotsFromMm(59) - LOGO_DOTS_W) / 2),

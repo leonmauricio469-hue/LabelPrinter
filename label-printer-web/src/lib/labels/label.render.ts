@@ -1,6 +1,6 @@
 import { deflateSync } from "node:zlib";
 import { buildZpl, symbolDots, quietZoneDots, barcodeZoneOf, planForZone } from "./zpl.builder";
-import { LOGO_DOTS_W, LOGO_DOTS_H } from "./pa-picar-logo";
+import { graphicDots } from "./gf-graphic";
 import type { LabelData } from "./label.types";
 import type { LabelTemplate, BarcodeZone } from "./label.template";
 import { encodeCode128Auto } from "./code128";
@@ -45,6 +45,14 @@ export interface RenderedZone {
   /** Alto de fuente resuelto (el de `autoFit` si la zona lo tiene, si no el de `format`). */
   alto?: number;
   anchoUsado?: number;
+  /**
+   * Grosor del marco. Solo lo lleva la caja del marco.
+   *
+   * El marco es un anillo: hay un rectangulo y, dentro, un hueco. Para decir si una zona esta
+   * "dentro" hace falta saber cuanto se come el borde, y sin este numero lo unico que se puede
+   * medir es el rectangulo, que daria por buena una zona tumbada justo encima del borde.
+   */
+  grosorDots?: number;
 }
 
 export interface RenderResult {
@@ -58,6 +66,14 @@ export interface RenderResult {
   datosImpresos: string | null;
   anchoSimbolo: number;
   zonaQuieta: number;
+  /**
+   * Dots negros del logo realmente pintados.
+   *
+   * 0 significa que no se ha dibujado nada, sea porque no hay zona grafica, porque su `^GFA` no
+   * aparece en el ZPL, o porque el bitmap venia vacio. Las tres cosas se ven igual desde fuera
+   * sin este numero, y son fallos muy distintos.
+   */
+  pixelesLogo: number;
 }
 
 /**
@@ -99,6 +115,9 @@ export function renderLabel(
   const FB: Rgb = [150, 195, 255];
   const OKEDGE: Rgb = [0, 150, 0];
   const BADEDGE: Rgb = [225, 45, 45];
+  // El marco va en gris medio: se ve lo justo para saber donde esta el borde y agarrarlo en el
+  // editor, sin que se confunda con el contenido (texto y barras son casi negros).
+  const MARCO: Rgb = [170, 170, 170];
 
   const informe: string[] = [];
   const cajas: RenderedZone[] = [];
@@ -121,6 +140,25 @@ export function renderLabel(
   }
   const vLine = (x: number, y0: number, y1: number, c: Rgb) => rect(x, y0, 1, Math.max(1, y1 - y0), c);
   const hLine = (x0: number, x1: number, y: number, c: Rgb) => rect(x0, y, Math.max(1, x1 - x0), 1, c);
+  /**
+   * Un tramo del `^GB`, con su grosor.
+   *
+   * El grosor va hacia DENTRO de la caja, que es como lo dibuja la Zebra: `^GB` deja el
+   * rectangulo de `w` x `h` y el borde Come desde la esquina. Dibujarlo hacia fuera haria que
+   * el marco de la pantalla pareciera un dot mas grande que el de la etiqueta.
+   */
+  const marcoLine = (
+    xa: number,
+    ya: number,
+    xb: number,
+    yb: number,
+    grosor: number,
+    c: Rgb,
+  ) => {
+    const t = Math.max(1, grosor);
+    if (ya === yb) rect(xa, ya, xb - xa, t, c);
+    else rect(xa, ya, t, yb - ya, c);
+  };
 
   /**
    * Dibuja `text` con celdas de `wDot` de ancho y `hDot` de alto. Devuelve el ancho usado.
@@ -149,22 +187,34 @@ export function renderLabel(
     return cx - xDot;
   }
 
-  function drawGraphic(gf: string, xDot: number, yDot: number) {
+  /**
+   * Dibuja un `^GFA` y devuelve cuantos dots negros ha pintado.
+   *
+   * El recuento no es cosmetico: sin el, "el logo se dibuja" y "el logo se pinta en blanco" son
+   * indistinguibles desde fuera, y un fallo asi no se ve en un test que mire cajas. Con el, un
+   * test puede decir que un logo reescalado sigue teniendo tinta, que es lo unico que importa.
+   */
+  function drawGraphic(gf: string, xDot: number, yDot: number): number {
     const m = gf.match(/\^GFA,(\d+),(\d+),(\d+),([\s\S]*)/);
-    if (!m) return;
+    if (!m) return 0;
     const bytesPerRow = Number.parseInt(m[3], 10);
     const hex = m[4].replace(/[^0-9a-fA-F]/g, "");
     const bytes: number[] = [];
     for (let i = 0; i + 1 < hex.length; i += 2) bytes.push(Number.parseInt(hex.slice(i, i + 2), 16));
+    let negros = 0;
     for (let r = 0; r * bytesPerRow < bytes.length; r++) {
       for (let b = 0; b < bytesPerRow; b++) {
         const v = bytes[r * bytesPerRow + b];
         if (v === undefined) break;
         for (let bit = 0; bit < 8; bit++) {
-          if (v & (1 << (7 - bit))) rect(xDot + b * 8 + bit, yDot + r, 1, 1, BLACK);
+          if (v & (1 << (7 - bit))) {
+            rect(xDot + b * 8 + bit, yDot + r, 1, 1, BLACK);
+            negros++;
+          }
         }
       }
     }
+    return negros;
   }
 
   function quietOk(x: number, right: number, moduleW: number) {
@@ -235,19 +285,49 @@ export function renderLabel(
     return { zones: sinCodigo ? template.zonesWithoutBarcode! : template.zones };
   })();
 
-  // El ^GFA lleva saltos de linea internos: se saca del ZPL completo antes de trocear.
+  // El ^GFA se dibuja desde LA ZONA, no buscando `^GFA` en el ZPL con un regex.
+  //
+  // Antes se hacia `zpl.match(/\^GFA,[\s\S]*?\n\^FS/)`, que parecia funcionar y no: el patron
+  // se comia el payload entero y "`\n^FS`" era el `^FS` del PRIMER texto que hubiera despues, o
+  // sea que casaba por casualidad con el separador de linea que traia el logo generado y no con
+  // nada que tuviera que ver con el fin del campo. En cuanto `scaleGraphic()` reescribio el
+  // separador, el logo desaparecio de la previsualizacion sin ningun error: el regex, en vez de
+  // fallar, seguia casando con otra cosa.
+  //
+  // La zona lleva el `^GFA` EXACTO que `emit()` mete en el ZPL, sin transformar, asi que de ahi
+  // sale. Y para que un desajuste futuro se vea en vez de pasar, se comprueba que ese texto este
+  // de verdad en el ZPL que se acaba de construir.
   const gfZone = zones.find((z) => z.kind === "graphic");
-  const gfMatch = zpl.match(/\^GFA,[\s\S]*?\n\^FS/);
-  if (gfMatch && gfZone && gfZone.kind === "graphic") {
-    drawGraphic(gfMatch[0], gfZone.x, gfZone.y);
-    informe.push(`logo ${LOGO_DOTS_W} x ${LOGO_DOTS_H} dots en ${gfZone.x},${gfZone.y}`);
-    cajas.push({
-      etiqueta: "logo",
-      x0: gfZone.x,
-      y0: gfZone.y,
-      x1: gfZone.x + LOGO_DOTS_W,
-      y1: gfZone.y + LOGO_DOTS_H,
-    });
+  let pixelesLogo = 0;
+  if (gfZone && gfZone.kind === "graphic") {
+    if (!zpl.includes(gfZone.gf)) {
+      // Si se llega aqui, el ZPL que se ha construido no lleva este ^GFA. Dibujar la zona aun
+      // asi seria enseñar algo que la impresora no va a ver, que es justo el fallo que el
+      // editor no puede permitirse.
+      informe.push("logo NO DIBUJADO: el ^GFA de la zona no aparece en el ZPL generado.");
+    } else {
+      pixelesLogo = drawGraphic(gfZone.gf, gfZone.x, gfZone.y);
+      if (pixelesLogo === 0) {
+        informe.push("logo EN BLANCO: el ^GFA esta en el ZPL pero no tiene ningun dot negro.");
+      }
+    }
+
+    // La medida sale del `^GFA` que se acaba de dibujar, no de `LOGO_DOTS_W`. Si en `/editor`
+    // se reescala el logo, la constante se queda vieja y la caja mediria un logo distinto del
+    // dibujado, que es como el comprobador de solapes acaba mintiendo en verde.
+    const { dots, fallo } = graphicDots(gfZone.gf);
+    if (fallo || !dots) {
+      informe.push(`logo NO MEDIDO: ${fallo}. La caja del logo no se puede comprobar.`);
+    } else {
+      informe.push(`logo ${dots.w} x ${dots.h} dots en ${gfZone.x},${gfZone.y}`);
+      cajas.push({
+        etiqueta: "logo",
+        x0: gfZone.x,
+        y0: gfZone.y,
+        x1: gfZone.x + dots.w,
+        y1: gfZone.y + dots.h,
+      });
+    }
   }
 
   // ------------------------------------------------------------------- parseo del ZPL
@@ -266,7 +346,26 @@ export function renderLabel(
     if (line === "" || line.startsWith("^XA") || line.startsWith("^XZ")) continue;
     if (line.startsWith("^PW") || line.startsWith("^LL") || line.startsWith("^LH")) continue;
     if (line.startsWith("^GFA")) continue;
-    if (line.startsWith("^GB")) continue; // el marco no se dibuja: ensuciaria la previsualizacion
+
+    // El marco (`^GB`) antes no se dibujaba ni se midia: "ensuciaria la previsualizacion".
+    // Eso era verdad cuando el marco era fijo y no habia nada que hacer con el, pero dejaba al
+    // editor sin nada donde agarrar la mitad de la etiqueta. Ahora se dibuja en gris claro,
+    // que se ve lo justo para moverlo sin que parezca parte del contenido, y se emite su caja
+    // para que el editor lo pueda redimensionar.
+    if (line.startsWith("^GB")) {
+      const p = line.slice(3).split(",");
+      const w = Number.parseInt(p[0] ?? "0", 10);
+      const h = Number.parseInt(p[1] ?? "0", 10);
+      const grosor = Number.parseInt(p[2] ?? "1", 10);
+      const x0 = curX;
+      const y0 = curY;
+      marcoLine(x0, y0, x0 + w, y0, grosor, MARCO);
+      marcoLine(x0, y0 + h, x0 + w, y0 + h, grosor, MARCO);
+      marcoLine(x0, y0, x0, y0 + h, grosor, MARCO);
+      marcoLine(x0 + w, y0, x0 + w, y0 + h, grosor, MARCO);
+      cajas.push({ etiqueta: "marco", x0, y0, x1: x0 + w, y1: y0 + h, grosorDots: grosor });
+      continue;
+    }
 
     if (line.startsWith("^FO")) {
       const [x, y] = line.slice(3).split(",").map(Number);
@@ -327,6 +426,7 @@ export function renderLabel(
     datosImpresos,
     anchoSimbolo,
     zonaQuieta,
+    pixelesLogo,
   };
 }
 
