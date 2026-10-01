@@ -1,3 +1,5 @@
+import { DEFAULT_TEMPLATE_ID } from "@/lib/labels/label.template";
+
 export type PrinterTransportKind = "tcp" | "usb";
 
 export interface PrinterSettings {
@@ -42,9 +44,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
     printerName: "ZDesigner GX420t",
   },
   label: {
-    widthMm: 50,
-    heightMm: 25,
+    // Valores de una etiqueta de 59 x 35 mm. Ya no son la fuente de la medida (esa sale de
+    // la plantilla), pero se mise ahi para que un `settings.json` viejo, escrito cuando la
+    // unica medida era la de settings, no abra en 50 mm y mande a medir la impresora con el
+    // rollo equivocado.
+    widthMm: 59,
+    heightMm: 35,
     businessName: "PA PICAR",
-    templateId: "papicar-50x25",
+    templateId: DEFAULT_TEMPLATE_ID,
   },
 };

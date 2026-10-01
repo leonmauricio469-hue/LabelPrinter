@@ -1,4 +1,7 @@
 import { z } from "zod";
+// Import RELATIVO a proposito: los scripts de `scripts/` compilan con `tsconfig.preview.json`,
+// que no tiene los alias `@/*` de la app. Ver AGENTS.md.
+import { DEFAULT_TEMPLATE_ID } from "../labels/label.template";
 
 /**
  * Producto del catalogo local (`data/catalog.json`).
@@ -73,7 +76,7 @@ export const updateSettingsSchema = z.object({
     widthMm: z.number().positive(),
     heightMm: z.number().positive(),
     businessName: z.string().min(1),
-    templateId: z.string().min(1).default("papicar-50x25"),
+    templateId: z.string().min(1).default(DEFAULT_TEMPLATE_ID),
   }),
 });
 

@@ -83,7 +83,7 @@ export type BarcodeImprimible = {
 export type BarcodePlan = BarcodeImprimible | BarcodeNoImprimible;
 
 export interface BarcodePlanOptions {
-  /** Ancho de la etiqueta en dots. 50 mm a 8 dots/mm = 400. */
+  /** Ancho de la etiqueta en dots. 59 mm a 8 dots/mm = 472. */
   labelWidthDots: number;
   moduleWidthDots?: number;
   quietFactor?: number;
@@ -197,12 +197,12 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
  * el valor por defecto, que segun el manual de ZPL II es la altura de fuente VIGENTE en ese
  * momento, no 10 veces el ancho de modulo. Y la fuente vigente es la ultima que se emitio antes.
  *
- * En la plantilla de 50 mm esa fuente es `^A0N,24` del precio: las barras van de y 96 a 168, la
- * linea de interpretacion de 168 a 192, y la zona de referencia de 186 a 198. Se pisan 6 dots.
- * Es poco y solo se nota si la referencia cae justo debajo del numero, pero se pisan.
+ * Asi se solapaba en la plantilla de 50 x 25 mm (v1.2): la fuente vigente era `^A0N,24` del
+ * precio, las barras iban de y 96 a 168, la linea de interpretacion de 168 a 192, y la
+ * referencia de 186 a 198. Se pisan 6 dots.
  *
- * `hriHeight` lo fija y quita el solape. Si no se pasa, se emite `^BY` a secas y el ZPL es
- * exactamente el de la version 1.1, que es lo que se ha impreso en fisico hasta ahora.
+ * `hriHeight` lo fija y quita el solape. La plantilla de 59 x 35 mm lo dice (14 dots). Si una
+ * zona no lo dice, se emite `^BY` a secas y la linea cae donde le toque.
  */
 export function barcodeFormat(
   plan: BarcodeImprimible,

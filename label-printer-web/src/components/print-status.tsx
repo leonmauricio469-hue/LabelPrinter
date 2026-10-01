@@ -4,7 +4,7 @@
  * Estado de la ultima operacion. `info` es un aviso que no es error ni exito.
  *
  * `ok` lleva `avisos` opcionales porque hay impresiones que salen bien y aun asi hay que
- * contarlasle al operador: 269 productos del catalogo real salen SIN codigo de barras, y 6
+ * contarselo al operador: 261 productos del catalogo real salen SIN codigo de barras, y 6
  * salen con el digito de control corregido. En los dos casos el papel esta en su mano y el
  * trabajo esta hecho, asi que el estado es `ok`; lo que cambia es que no se puede ir sin
  * enterarse.

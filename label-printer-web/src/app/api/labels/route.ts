@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
 import { templateById } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
+import { QUIET_FACTOR } from "@/lib/labels/barcode-plan";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 import { appendPrintRecord, type PrintRecord } from "@/lib/audit/audit.store";
@@ -59,8 +60,9 @@ export async function POST(req: Request) {
 
   // La plantilla sale de `settings.label.templateId`. Antes era `DEFAULT_TEMPLATE` fijo, y
   // `widthMm`/`heightMm` no los leia nadie: cambiar el tamano de etiqueta en /settings no
-  // hacia nada. `templateById()` cae en la de 50 mm si el id no existe, para que un
-  // `settings.json` editado a mano siga imprimiendo en vez de tumbar la ruta entera.
+  // hacia nada. `templateById()` cae en la de 59 x 35 mm si el id no existe, para que un
+  // `settings.json` de antes de v1.3 (con `papicar-50x25`) siga imprimiendo en vez de tumbar
+  // la ruta entera.
   const template = templateById(settings.label.templateId);
 
   const data: LabelData = {
@@ -95,7 +97,7 @@ export async function POST(req: Request) {
   // motivo: un 422 diria al operador que su codigo esta mal, y no es verdad.
   if (barcodeZone && plan?.printable) {
     const quiet = quietZoneDots(template, barcodeZone, plan);
-    const minQuiet = 10 * barcodeZone.moduleWidth;
+    const minQuiet = QUIET_FACTOR * barcodeZone.moduleWidth;
     if (quiet < minQuiet) {
       return NextResponse.json(
         {

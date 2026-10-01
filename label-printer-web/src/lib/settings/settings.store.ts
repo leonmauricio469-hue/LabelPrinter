@@ -27,8 +27,8 @@ export async function readSettings(): Promise<AppSettings> {
   // Con `{ ...DEFAULT_SETTINGS, ...guardado }` el objeto `label` del archivo SUSTITUYE entero
   // al del default. Un `settings.json` guardado antes de que existiera `label.templateId`
   // vuelve con `label: { widthMm, heightMm, businessName }` y sin `templateId`, que queda
-  // `undefined`. La pagina de configuracion entonces muestra el selector de plantilla sin
-  // nada elegido, y `templateById(undefined)` cae en la de 50 mm sin decir nada.
+  // `undefined`. La pagina de configuracion entonces avisa de que el id guardado no existe, y
+  // `templateById(undefined)` cae en la de 59 x 35 mm sin decir nada.
   //
   // Un merge plano hace que cada campo nuevo que se añada a `LabelSettings` desaparezca en
   // silencio en cuanto exista un `settings.json` viejo. Que es exactamente lo que pasó al

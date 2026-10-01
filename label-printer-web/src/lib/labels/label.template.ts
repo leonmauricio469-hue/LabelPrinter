@@ -84,11 +84,10 @@ export interface BarcodeZone {
    *
    * Si se omite, `barcodeFormat()` emite `^BY3` a secas y el alto de la linea de
    * interpretacion cae al valor por defecto, que es la altura de fuente vigente en ese
-   * momento. Medido sobre la plantilla de 50 mm, esa fuente es la del precio (`^A0N,24`), y
-   * la linea queda en y 168..192 mientras la referencia esta en 186..198: 6 dots de solape.
+   * momento. En la plantilla de 50 x 25 mm (v1.2) esa fuente era la del precio (`^A0N,24`) y
+   * la linea caia en y 168..192 mientras la referencia estaba en 186..198: 6 dots de solape.
    *
-   * Decirlo a mano lo quita de juego. No se pone por defecto en la de 50 mm porque cambiaria
-   * el ZPL que ya se ha impreso en fisico; la de 59 mm si lo dice.
+   * Decirlo a mano lo quita de juego, y la plantilla de 59 x 35 mm lo dice.
    */
   hriHeightDots?: number;
 }
@@ -142,7 +141,7 @@ export interface LabelTemplate {
   /**
    * Zonas a usar cuando el producto NO tiene codigo imprimible.
    *
-   * Sin esta lista, 269 de los 3080 productos del catalogo real (el 8,7%) saldrian con el
+   * Sin esta lista, 261 de los 3080 productos del catalogo real (el 8,5%) saldrian con el
    * logo, el nombre y el precio arriba, y los 12,5 mm de abajo en blanco. Se decide aqui y
    * no en el constructor para que `buildZpl()` siga siendo un traductor de zonas a ZPL.
    *
@@ -153,169 +152,48 @@ export interface LabelTemplate {
   zonesWithoutBarcode?: LabelZone[];
 }
 
-// Layout for 50 x 25 mm @ 203 dpi (8 dots/mm) = 400 x 200 dots, landscape.
-// Every ^A0N command sets BOTH height and width: ZPL defaults char width to the
-// height value, which is what made long names and the price run off the label.
+// ---------------------------------------------------------------------------------------
+// Papicar 59 x 35 mm
+// ---------------------------------------------------------------------------------------
 //
-// La symbologia NO se decide aqui. La decide `planBarcode()`, producto a producto, porque
-// con el catalogo real de PA PICAR (3080 productos) no todos los codigos son EAN-13 y forzar
-// uno solo se salia del papel en 6 de cada 10 productos. Reparto real:
+// 472 x 280 dots a 203 dpi (8 dots/mm). Horizontal. Esta es la UNICA plantilla: la de
+// 50 x 25 mm se borro en v1.3. Sigue en `git` en el tag `v1.2` por si hay que volver a ella.
+//
+// MEDIDA FISICA Y CONFIGURACION DE LA IMPRESORA
+//
+// Los dots de esta plantilla son el ancho de la ZONA IMPRESORA, no el del rollo. La GK420t
+// tiene que tener el ancho de medio ajustado a 59 mm (o al rollo que se monte), porque si no
+// el sensor de GAP se dispara con el ancho del rollo y el contenido sale corrido hacia un
+// lado. `^PW472` por si solo no corrige eso: ^PW recorta, no posiciona. Hay que cambiar el
+// medio en la impresora, no solo en el ZPL.
+//
+// LA SYMBOLOGIA NO SE DECIDE AQUI
+//
+// La decide `planBarcode()`, producto a producto, porque no todos los codigos del catalogo
+// real de PA PICAR (3080 productos) son EAN-13 y forzar uno solo se salia del papel en 6 de
+// cada 10 productos. Reparto real:
 //
 //   2250 productos  EAN-13  (^BE, 95 modulos fijos, el ancho no depende del dato)
 //     1180 con 13 digitos y el control correcto
 //     1064 UPC-A de 12 digitos, impresos con un 0 delante
 //        (un UPC-A ES un EAN-13 con 0 delante: no es una convencion, sigue siendo valido)
 //       6 con el digito de control mal, corregido al imprimir y avisado
-//    561 productos  Code 128 (^BC, el ancho SI depende del dato)
-//    269 productos  sin codigo: 264 no caben a 3 de modulo y 5 no traen codigo en origen
+//    569 productos  Code 128 (^BC, el ancho SI depende del dato)
+//    261 productos  sin codigo: 256 no caben a 3 de modulo y 5 no traen codigo en origen
 //
-// Por que 3 dots y no 2:
+// POR QUE 3 DOTS DE MODULO Y NO 2
 //
-//   El minimo de X en ISO/IEC 15420 es 0,264 mm. 3 dots son 0,375 mm, por encima. 2 dots
-//   son 0,250 mm, un 5% por debajo, y con el sangrado termico de un cabeza a 203 dpi las
-//   barras estrechas se cierran. A 2 de modulo cabrian 180 modulos en vez de 113, y con
-//   eso 182 productos mas tendrian codigo, pero de los que se escanean en caja solo
-//   pasarian de 29 a 2 sin codigo. Se eligio respetar la norma antes que eso: son 29
-//   productos de RETAIL, y se imprimen con nombre y precio a la espera de una decision
-//   sobre la medida de la etiqueta.
-//
-// Altura 72 dots = 9 mm, por encima del minimo practico de 6,64 mm (con 6 mm las barras
-// no las leian los escaneres; ese fue el primer bug de legibilidad).
-export const DEFAULT_TEMPLATE: LabelTemplate = {
-  id: "papicar-50x25",
-  name: "Papicar 50 x 25 mm (actual)",
-  widthMm: 50,
-  heightMm: 25,
-  widthDots: dotsFromMm(50),
-  heightDots: dotsFromMm(25),
-  zones: [
-    // 1. Logo, centred: 200 x 67 dots, x = (400 - 200) / 2 = 100, y 1..68
-    {
-      kind: "graphic",
-      x: Math.round((dotsFromMm(50) - LOGO_DOTS_W) / 2),
-      y: 1,
-      gf: LOGO_GF,
-    },
-    // 2. Description, 8 dots/char, one line inside 240 dots, y 70..84
-    {
-      kind: "text",
-      x: 6,
-      y: 70,
-      format: "^A0N,14,8",
-      source: "productName",
-      maxWidthDots: 240,
-      maxLines: 1,
-      justify: "L",
-    },
-    // 3. Price: "$7.80" = 5 x 15 = 75 dots, x 250..325, y 68..92
-    {
-      kind: "text",
-      x: 250,
-      y: 68,
-      format: "^A0N,24,15",
-      source: "price",
-      prefix: "$",
-    },
-    // 4. Barcode, centrado. Con EAN-13 son 95 modulos x 3 dots = 285 dots,
-    //    x = (400 - 285) / 2 = 58 -> zonas quietas de 58 y 57 dots (7,1 mm), mucho por
-    //    encima de las 10X (30 dots) que pide la norma. Con Code 128 el ancho se calcula
-    //    con el codigo real y la zona quieta se comprueba antes de imprimir.
-    //    Barras y 96..168; la linea de interpretacion acaba hacia 182.
-    {
-      kind: "barcode",
-      x: 0,
-      y: 96,
-      heightDots: 72,
-      interpretationLine: true,
-      source: "barcode",
-      center: true,
-      moduleWidth: 3,
-    },
-    // 5. Reference, y 186..198
-    {
-      kind: "text",
-      x: 6,
-      y: 186,
-      format: "^A0N,12,8",
-      source: "reference",
-      prefix: "REF: ",
-    },
-  ],
-
-  /**
-   * Etiqueta sin codigo de barras: los 269 productos cuyo codigo no cabe a 3 de modulo, o
-   * que en el export vienen como "0" y "null".
-   *
-   * Se reparte el alto de 200 dots entre logo, nombre, precio y referencia, con el nombre
-   * y el precio centrados y mas grandes, que es lo que se ve de lejos. Los nombres mas
-   * largos del catalogo son de 50 caracteres y caben en 3 lineas de 384 dots a 14 dots de
-   * ancho de caracter (27 caracteres por linea).
-   *
-   * Las coordenadas son provisionales: estan puestas a ojo y sin ver la etiqueta impresa.
-   */
-  zonesWithoutBarcode: [
-    // 1. Logo, centrado: 200 x 67 dots, y 1..68
-    {
-      kind: "graphic",
-      x: Math.round((dotsFromMm(50) - LOGO_DOTS_W) / 2),
-      y: 1,
-      gf: LOGO_GF,
-    },
-    // 2. Nombre: hasta 3 lineas de 384 dots, centradas, y 74..116
-    {
-      kind: "text",
-      x: 8,
-      y: 74,
-      format: "^A0N,16,14",
-      source: "productName",
-      maxWidthDots: 384,
-      maxLines: 3,
-      justify: "C",
-    },
-    // 3. Precio grande y centrado, y 126..164
-    {
-      kind: "text",
-      x: 8,
-      y: 126,
-      format: "^A0N,34,24",
-      source: "price",
-      prefix: "$",
-      maxWidthDots: 384,
-      maxLines: 1,
-      justify: "C",
-    },
-    // 4. Referencia, al pie, y 182..194
-    {
-      kind: "text",
-      x: 8,
-      y: 182,
-      format: "^A0N,12,8",
-      source: "reference",
-      prefix: "REF: ",
-      maxWidthDots: 384,
-      maxLines: 1,
-      justify: "C",
-    },
-  ],
-};
-
-// ---------------------------------------------------------------------------------------
-// Papicar 59 x 35 mm
-// ---------------------------------------------------------------------------------------
-//
-// 472 x 280 dots a 203 dpi (8 dots/mm). Horizontal.
-//
-// MEDIDA FISICA Y CONFIGURACION DE LA IMPRESORA
-//
-// Los dots de esta plantilla son el ancho de la ZONA IMPRESORA, no el del rollo. La GK420t
-// tiene que tener el ancho de medio ajustado a 59 mm (o al rollo que se monte), porque si no
-// el sensor deGAP se dispara con el ancho del rollo y el contenido sale corrido hacia un
-// lado. `^PW472` por si solo no corrige eso: ^PW recorta, no posiciona. Hay que cambiar el
-// medio en la impresora, no solo en el ZPL.
+// El minimo de X en ISO/IEC 15420 es 0,264 mm. 3 dots son 0,375 mm, por encima. 2 dots
+// son 0,250 mm, un 5% por debajo, y con el sangrado termico de un cabeza a 203 dpi las
+// barras estrechas se cierran. A 2 de modulo caben 180 modulos en vez de 113, y con eso los
+// 261 productos que hoy salen sin barras si tendrian, pero de los que se escanean en caja
+// solo pasarian de 29 a 2 sin codigo. Se eligio respetar la norma: son 29 productos de
+// RETAIL. Bajarlo a 2 es una decision de modulo, no de plantilla, y hay que probarla
+// leyendo en fisico.
 //
 // LO QUE NO SE PUDO HACER Y POR QUE
 //
-// El ancho de barcode pedido son 20,5 mm. Es imposible con EAN-13, que es el 80 % del
+// El ancho de barcode pedido son 20,5 mm. Es imposible con EAN-13, que es el 73 % del
 // catalogo: son 95 modulos fijos, y el modulo mas estrecho que permite ISO/IEC 15420 es
 // 0,264 mm. El piso absoluto son 95 x 0,264 = 25,1 mm, ya por encima de los 20,5 pedidos.
 // A 3 dots (0,375 mm, el que respeta el margen de la norma) el simbolo mide 285 dots =
@@ -326,15 +204,9 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
 //
 // Decision: el barcode va centrado y a su ancho natural, y REF baja a su propia linea,
 // alineado a la derecha. Es lo unico que cabe para EAN-13 con la norma respetada.
-//
-// La alternativa es bajar el modulo a 2 dots: 190 dots = 23,75 mm, y ahi REF si cabe al
-// lado como en el dibujo original. Es justo lo que la version 1.1 rechazo a proposito,
-// porque a 2 dots las barras estrechas se cierran con el sangrado termico de un cabeza a
-// 203 dpi. Si se quiere el dibujo original, es una decision de rollo y de modulo, no de
-// plantilla, y hay que probarla en fisico antes.
-const PAPICAR_59X35: LabelTemplate = {
+export const DEFAULT_TEMPLATE: LabelTemplate = {
   id: "papicar-59x35",
-  name: "Papicar 59 x 35 mm (nueva)",
+  name: "Papicar 59 x 35 mm",
   widthMm: 59,
   heightMm: 35,
   widthDots: dotsFromMm(59),
@@ -419,8 +291,8 @@ const PAPICAR_59X35: LabelTemplate = {
       format: "^A0N,30,17",
       source: "price",
       // El "$" va aqui y no dentro de `LabelData` porque es una decision de la plantilla, no
-      // del producto. La de 50 mm tambien lo lleva, y quitarlo seria un cambio de aspecto en
-      // el mostrador sin que nadie lo haya pedido.
+      // del producto. La plantilla de 50 x 25 mm tambien lo llevaba y asi sigue en el
+      // mostrador: quitarlo seria un cambio de aspecto que nadie ha pedido.
       prefix: "$",
       maxWidthDots: 160,
       maxLines: 1,
@@ -431,9 +303,10 @@ const PAPICAR_59X35: LabelTemplate = {
   /**
    * Sin codigo de barras: los productos cuyo simbolo no cabe o que no traen codigo en origen.
    *
-   * Misma logica que la de 50 mm (recomponer la etiqueta entera, no dejar un hueco), pero con
-   * el alto que sobra al bajar el nombre y el codigo: 35 mm dan para nombre grande y dos
-   * lineas de precio, que es lo que se lee de lejos.
+   * Recomponer la etiqueta entera, no dejar un hueco: los 12,5 mm de abajo quedarian en blanco
+   * y eso parece una etiqueta rota. Con 35 mm hay alto de sobra para bajar el nombre y el
+   * codigo y aun asi poner el precio grande y la referencia debajo, que es lo que se lee de
+   * lejos.
    */
   zonesWithoutBarcode: [
     {
@@ -504,17 +377,23 @@ const PAPICAR_59X35: LabelTemplate = {
  * empieza a fallar.
  */
 
-/** Todas las plantillas. El orden es el que ve el operador en /settings. */
-export const TEMPLATES: readonly LabelTemplate[] = [DEFAULT_TEMPLATE, PAPICAR_59X35];
+/**
+ * Todas las plantillas. El orden es el que ve el operador en /settings.
+ *
+ * Solo hay una desde v1.3. Se mantiene el array y no una constante suelta para que volver a
+ * anadir una segunda plantilla sea solo meterla aqui, sin tocar `templateById()` ni la pagina
+ * de ajustes.
+ */
+export const TEMPLATES: readonly LabelTemplate[] = [DEFAULT_TEMPLATE];
 
 export const DEFAULT_TEMPLATE_ID = DEFAULT_TEMPLATE.id;
 
 /**
- * Devuelve la plantilla pedida, o la de 50 mm si el id no existe.
+ * Devuelve la plantilla pedida, o la de 59 x 35 si el id no existe.
  *
- * Cae en la de 50 mm y no lanza a proposito: un `settings.json` con un id que ya no existe
- * (plantilla borrada, fichero editado a mano) tiene que seguir imprimiendo, no tumbar la
- * ruta de impresion entera.
+ * Cae en la de 59 x 35 y no lanza a proposito: un `settings.json` con el id de la plantilla
+ * que se borro en v1.3 (`papicar-50x25`) tiene que seguir imprimiendo, no tumbar la ruta de
+ * impresion entera. Es justo el caso que se va a dar en cuanto se actualice.
  */
 export function templateById(id: string | undefined | null): LabelTemplate {
   return TEMPLATES.find((t) => t.id === id) ?? DEFAULT_TEMPLATE;

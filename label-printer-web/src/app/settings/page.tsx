@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import type { AppSettings } from "@/lib/settings/settings.types";
-import { TEMPLATES } from "@/lib/labels/label.template";
+import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
 
 const inputClass =
   "mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none";
@@ -122,11 +122,14 @@ export default function SettingsPage() {
       ? printers
       : [...printers, settings.printer.printerName];
 
-  // `TEMPLATES.find` puede no encontrar: un `settings.json` editado a mano con un id que ya
-  // no existe. La impresora usa `templateById()`, que cae en la de 50 mm; aqui solo se
-  // avisa, que es lo que puede hacer una pagina.
+  // `TEMPLATES.find` puede no encontrar: un `settings.json` de antes de v1.3 sigue teniendo
+  // `papicar-50x25`, que ya no existe en el codigo. La impresora usa `templateById()`, que cae
+  // en la de 59 mm; aqui solo se avisa, que es lo que puede hacer una pagina.
   const plantillaActiva = TEMPLATES.find((t) => t.id === settings.label.templateId);
-  const esRolloDe59 = plantillaActiva?.id === "papicar-59x35";
+  // Con una sola plantilla no hace falta el selector, pero el aviso del medio NO es opcional:
+  // es la unica vez que el operador ve, en la pagina que va a leer antes de imprimir, que el
+  // rollo tiene que estar cambiado en la impresora.
+  const idObsoleto = plantillaActiva ? null : settings.label.templateId;
 
   return (
     <main className="flex flex-col gap-6">
@@ -239,60 +242,33 @@ export default function SettingsPage() {
       <section className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-neutral-900">Etiqueta</h2>
 
-        <div>
-          <label htmlFor="templateId" className={labelClass}>
-            Plantilla
-          </label>
-          <select
-            id="templateId"
-            value={settings.label.templateId}
-            onChange={(e) => patchLabel({ templateId: e.target.value })}
-            className={inputClass}
-          >
-            {TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-neutral-500">
-            Cambia los dots que se mandan a la impresora, no solo como se ven en pantalla.
-          </p>
-        </div>
-
         <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-          {plantillaActiva ? (
-            <>
-              <p>
-                Medida de la plantilla activa:{" "}
-                <strong>
-                  {plantillaActiva.widthMm} x {plantillaActiva.heightMm} mm
-                </strong>{" "}
-                = {plantillaActiva.widthDots} x {plantillaActiva.heightDots} dots a 203 dpi.
-              </p>
-              <p className="mt-1">
-                Los campos de ancho y alto de abajo ya no mandan: la medida sale de la
-                plantilla. Se conservan para no romper el `settings.json` guardado.
-              </p>
-            </>
-          ) : (
-            <p>
-              La plantilla <code>{settings.label.templateId}</code> no existe en el codigo, asi
-              que se usara la de 50 x 25 mm. Vuelve a elegirla en la lista de arriba.
+          <p>
+            Plantilla: <strong>{DEFAULT_TEMPLATE.name}</strong> ={" "}
+            {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
+            {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots a 203 dpi.
+          </p>
+          {idObsoleto && (
+            <p className="mt-1">
+              Guardada la <code>{idObsoleto}</code>, que ya no existe en el codigo. Se va a
+              imprimir con la de 59 x 35 mm de todos modos. Pulsa Guardar para dejar el
+              <code> settings.json</code> limpio.
             </p>
           )}
+          <p className="mt-1">
+            Los campos de ancho y alto de abajo ya no mandan: la medida sale de la plantilla. Se
+            conservan para no romper el <code>settings.json</code> guardado.
+          </p>
         </div>
 
-        {esRolloDe59 && (
-          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <strong>Antes de imprimir en la de 59 mm, cambia el rollo en la impresora.</strong>{" "}
-            Los {plantillaActiva?.widthDots} dots del ZPL son el ancho de la zona de impresion,
-            no el del rollo. Si la GK420t sigue con el medio a 50 mm, el sensor de separacion
-            se dispara con el ancho del rollo y el contenido sale corrido hacia un lado.
-            <code>^PW</code> recorta, no posiciona: hay que cambiar el medio en la impresora, no
-            solo en el ZPL.
-          </p>
-        )}
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <strong>Antes de imprimir, cambia el rollo en la impresora.</strong> Los{" "}
+          {DEFAULT_TEMPLATE.widthDots} dots del ZPL son el ancho de la zona de impresion, no el
+          del rollo. Si la GK420t sigue con el medio a 50 mm, el sensor de separacion se dispara
+          con el ancho del rollo y el contenido sale corrido hacia un lado.{" "}
+          <code>^PW</code> recorta, no posiciona: hay que cambiar el medio en la impresora, no
+          solo en el ZPL.
+        </p>
 
         <div className="grid grid-cols-2 gap-4">
           <div>

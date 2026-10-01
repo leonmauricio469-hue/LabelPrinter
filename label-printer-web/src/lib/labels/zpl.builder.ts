@@ -62,7 +62,7 @@ export function quietZoneDots(
  *
  * Se resuelve ANTES de emitir nada, y no zona a zona, porque cuando el codigo no se puede
  * imprimir no basta con callarse la zona del barcode: sobrarian 12,5 mm de papel en blanco
- * en 269 de los 3080 productos del catalogo real, y eso parece una etiqueta rota. Con
+ * en 261 de los 3080 productos del catalogo real, y eso parece una etiqueta rota. Con
  * `zonesWithoutBarcode` la etiqueta entera se recompone.
  *
  * Se devuelve siempre el plan, tambien con la lista alternativa, para que quien llama
@@ -92,9 +92,9 @@ export function resolveLabel(
  * vivas. No hacen falta circulos ni cuatro comandos.
  *
  * OJO con el radio: el manual de ZPL II documenta `r` entre 0 y 8 dots, que a 203 dpi son
- * 1 mm. La plantilla de 59 mm pide 16 (2 mm) y la de 50 mm no pide radio, asi que el caso de
- * 16 todavia no se ha visto en fisico. Si el firmware de la GK420t se lo come tal cual, sale
- * redondeado a 1 mm, que es aceptable. Si se queja, se baja el numero en la plantilla.
+ * 1 mm. La plantilla pide 16 (2 mm), asi que ese caso todavia no se ha visto en fisico. Si el
+ * firmware de la GK420t se lo come tal cual, sale redondeado a 1 mm, que es aceptable. Si se
+ * queja, se baja el numero en la plantilla.
  */
 function shapeCommands(zone: ShapeZone): string[] {
   const r = Math.max(0, Math.min(zone.radiusDots ?? 0, Math.floor(zone.widthDots / 2), Math.floor(zone.heightDots / 2)));

@@ -6,9 +6,9 @@
     "printerName": "ZDesigner GX420t"
   },
   "label": {
-    "widthMm": 50,
-    "heightMm": 25,
+    "widthMm": 59,
+    "heightMm": 35,
     "businessName": "PA PICAR",
-    "templateId": "papicar-50x25"
+    "templateId": "papicar-59x35"
   }
 }

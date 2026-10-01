@@ -11,6 +11,7 @@
 //   tsc -p tsconfig.preview.json
 //   node .preview-build/scripts/check-zonas.js
 import { TEMPLATES } from "../src/lib/labels/label.template";
+import { LOGO_DOTS_W, LOGO_DOTS_H } from "../src/lib/labels/pa-picar-logo";
 import type { LabelTemplate, LabelZone } from "../src/lib/labels/label.template";
 import { planForZone, barcodeZoneOf } from "../src/lib/labels/zpl.builder";
 import type { BarcodeImprimible } from "../src/lib/labels/barcode-plan";
@@ -93,9 +94,9 @@ function cajasDeTexto(zone: Extract<LabelZone, { kind: "text" }>, largo: number)
  * de ZPL II, `^BY` sin argumento `h` deja la linea de interpretacion a la altura de la fuente
  * que este vigente, que es la ultima que se emitio antes del comando de simbolo.
  *
- * Verificado sobre el ZPL real de la plantilla de 50 mm: las barras se emiten con `^BY3` a
- * secas, y justo antes el precio habia puesto `^A0N,24,15`. La linea sale a 24 dots, en
- * 168..192, contra la referencia en 186..198.
+ * Verificado sobre el ZPL real de la plantilla de 50 x 25 mm (v1.2, ya borrada): las barras se
+ * emitian con `^BY3` a secas, y justo antes el precio habia puesto `^A0N,24,15`. La linea
+ * salia a 24 dots, en 168..192, contra la referencia en 186..198.
  */
 function altoHriPorDefecto(template: LabelTemplate): number {
   const indiceBarcode = template.zones.findIndex((z) => z.kind === "barcode");
@@ -184,18 +185,17 @@ const problemas: string[] = [];
  *
  * Ponerlos aqui NO es decir que no importen. Es decir que arreglarlo cambia el ZPL de una
  * plantilla que ya salio en papel, y ese papel hay que volver a mirarlo antes de darlo por
- * bueno. Un `hriHeightDots: 12` en la zona de barras de 50 mm lo quita en una linea.
+ * bueno.
  *
  * La clave es de la zona y del par que se pisa, para que si el reparto de la plantilla cambia
  * esto salte en vez de estorbar.
+ *
+ * VACIO desde v1.3. La unica entrada que habia era el solape de 6 dots entre la linea de
+ * interpretacion y `REF:` de la plantilla de 50 x 25 mm, que se llevo por delante la
+ * plantilla entera. La de 59 x 35 mm lo evita diciendo `hriHeightDots: 14` en la zona de
+ * barras, en vez de dejar que la linea caiga a la altura de la fuente vigente.
  */
-const SOLAPES_CONOCIDOS: Record<string, string> = {
-  "papicar-50x25|choque|linea de interpretacion (alto 24)|texto reference":
-    "La linea de interpretacion cae a la altura de la fuente vigente, que es la del precio " +
-    "(`^A0N,24`), y se come 6 dots de `REF:`. Preexistente en v1.1, impreso y sin mirar de cerca. " +
-    "Se arregla con un `hriHeightDots: 12` en la zona de barras, pero eso cambia el ZPL de una " +
-    "plantilla que ya salio en papel.",
-};
+const SOLAPES_CONOCIDOS: Record<string, string> = {};
 
 let conocidos = 0;
 
@@ -242,8 +242,16 @@ for (const template of TEMPLATES) {
         const largo = z.source === "productName" ? plegado.length : (LARGO_POR_FUENTE[z.source] ?? 8);
         cajas.push(...cajasDeTexto(z, largo));
       } else if (z.kind === "graphic") {
-        // El ^GFA mide 200 x 67, ver pa-picar-logo.ts
-        cajas.push({ etiqueta: "logo", x0: z.x, y0: z.y, x1: z.x + 200, y1: z.y + 67 });
+        // Del tamaño real del ^GFA, no a mano: si `generate-logo.ps1` regenera el logo mas
+        // grande, esta comprobacion tiene que crecer con el o dira que no hay choques cuando
+        // si los hay.
+        cajas.push({
+          etiqueta: "logo",
+          x0: z.x,
+          y0: z.y,
+          x1: z.x + LOGO_DOTS_W,
+          y1: z.y + LOGO_DOTS_H,
+        });
       }
     }
     cajas.push(...cajasBarcode);
@@ -303,7 +311,13 @@ for (const template of TEMPLATES) {
       const largo = z.source === "productName" ? 50 : (LARGO_POR_FUENTE[z.source] ?? 8);
       cajasResumen.push(...cajasDeTexto(z, largo));
     } else if (z.kind === "graphic") {
-      cajasResumen.push({ etiqueta: "logo", x0: z.x, y0: z.y, x1: z.x + 200, y1: z.y + 67 });
+      cajasResumen.push({
+      etiqueta: "logo",
+      x0: z.x,
+      y0: z.y,
+      x1: z.x + LOGO_DOTS_W,
+      y1: z.y + LOGO_DOTS_H,
+    });
     }
   }
   cajasResumen.push(...cajasBarcode);
