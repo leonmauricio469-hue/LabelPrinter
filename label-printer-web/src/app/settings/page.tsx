@@ -18,6 +18,24 @@ export default function SettingsPage() {
   // El estado de la cola se relee despues de guardar (puede haber cambiado el nombre) y
   // despues de la prueba de conexion.
   const [refreshKey, setRefreshKey] = useState(0);
+  // Si `/editor` ha guardado una geometria, esta pagina es el unico sitio donde el operador
+  // se entera antes de imprimir. Sin este aviso, alguien que nunca abra el editor imprimiria
+  // con unos numeros distintos de los del codigo sin saberlo.
+  const [override, setOverride] = useState<{ activo: boolean; savedAt?: string } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/editor/apply");
+        if (!res.ok) return;
+        const j = await res.json();
+        setOverride({ activo: Boolean(j.activo), savedAt: j.savedAt ?? undefined });
+      } catch {
+        // Si no se puede leer, no se avisa. Es informacion secundaria: lo grave seria que la
+        // impresion fallara por esto, y no falla, `readOverride()` cae a la plantilla del codigo.
+      }
+    })();
+  }, [refreshKey]);
 
   // El formulario no espera a la lista de impresoras.
   //
@@ -259,6 +277,17 @@ export default function SettingsPage() {
             Los campos de ancho y alto de abajo ya no mandan: la medida sale de la plantilla. Se
             conservan para no romper el <code>settings.json</code> guardado.
           </p>
+          {override?.activo && (
+            <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+              <strong>Se esta imprimiendo con una geometria guardada desde el editor</strong> (
+              {override.savedAt}), no con los numeros del codigo. Se guarda en{" "}
+              <code>data/plantilla-override.json</code>. En{" "}
+              <a href="/editor" className="underline">
+                /editor
+              </a>{" "}
+              hay un boton para descartarla y volver a la del codigo.
+            </p>
+          )}
         </div>
 
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">

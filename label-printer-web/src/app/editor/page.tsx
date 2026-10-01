@@ -137,7 +137,108 @@ export default function EditorPage() {
   const [precio, setPrecio] = useState(5.68);
   const [zoom, setZoom] = useState(3);
   const [mostrarCajas, setMostrarCajas] = useState(true);
+  const [aplicando, setAplicando] = useState(false);
+  const [aplicado, setAplicado] = useState<string | null>(null);
+  const [rechazo, setRechazo] = useState<string | null>(null);
+  const [rechazoDetalle, setRechazoDetalle] = useState<string[]>([]);
+  const [hayOverride, setHayOverride] = useState(false);
+  const [guardado, setGuardado] = useState<{ savedAt: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Carga el estado guardado al abrir.
+   *
+   * Sin esto, recargar la pagina con un override activo ensenaria la plantilla del `.ts` y
+   * pareceria que el boton no ha hecho nada, cuando en realidad se sigue imprimiendo con lo
+   * guardado. La pantalla tiene que abrir en lo que de verdad se usa.
+   */
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/editor/apply");
+        const j = await r.json();
+        if (!vivo) return;
+        setHayOverride(Boolean(j.activo));
+        setGuardado(j.activo ? { savedAt: j.savedAt } : null);
+
+        if (!j.activo || !Array.isArray(j.zones)) return;
+        const cargadas = structuredClone(j.zones) as unknown as AnyZone[];
+        setZones(cargadas);
+        setSel(primeraEditable(cargadas));
+        setAplicado(
+          `Cargado lo que hay guardado (${j.savedAt}). Estos son los valores con los que se ` +
+            `esta imprimiendo, no los del codigo.`,
+        );
+      } catch {
+        // Si el estado guardado no se puede leer, la pantalla arranca con la del codigo. Es
+        // mejor que quedarse en blanco: el preview se dibuja igual y se ve en que plantilla.
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /**
+   * Guarda la geometria en `data/plantilla-override.json`.
+   *
+   * El servidor vuelve a renderizar antes de escribir y devuelve 422 con el detalle si las
+   * zonas se pisan o se salen del rollo, asi que el boton no guarda nunca una plantilla rota.
+   * Ahi se pierde el cambio, pero no el papel.
+   */
+  async function aplicar() {
+    setAplicando(true);
+    setRechazo(null);
+    setRechazoDetalle([]);
+    try {
+      const res = await fetch("/api/editor/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: DEFAULT_TEMPLATE.id,
+          zones,
+          zonesWithoutBarcode: DEFAULT_TEMPLATE.zonesWithoutBarcode,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setAplicado(null);
+        setRechazo(j.error ?? "no se ha podido guardar");
+        setRechazoDetalle(Array.isArray(j.detalles) ? j.detalles : []);
+        return;
+      }
+      setAplicado(j.aviso ?? "Guardado.");
+      setHayOverride(true);
+      setGuardado({ savedAt: new Date().toISOString() });
+    } catch (e) {
+      setAplicado(null);
+      setRechazo((e as Error).message);
+    } finally {
+      setAplicando(false);
+    }
+  }
+
+  /** Borra el override. A partir de aqui se imprime con la plantilla del codigo. */
+  async function descartar() {
+    setAplicando(true);
+    try {
+      const res = await fetch("/api/editor/apply", { method: "DELETE" });
+      if (!res.ok) {
+        setRechazo("No se ha podido descartar.");
+        return;
+      }
+      setHayOverride(false);
+      setGuardado(null);
+      setAplicado("Descartado. Se vuelve a la plantilla del codigo.");
+      setZones(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]);
+      setSel(primeraEditable(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]));
+    } catch (e) {
+      setRechazo((e as Error).message);
+    } finally {
+      setAplicando(false);
+    }
+  }
 
   const pedir = useCallback(async () => {
     setBusy(true);
@@ -525,6 +626,67 @@ export default function EditorPage() {
               Prueba con un nombre corto y con uno de 50 caracteres. El alto de letra sale
               distinto en cada caso: esa es la gracia del autoFit.
             </p>
+          </div>
+
+          {/* ------------------------------------------------------------ aplicar */}
+          <div className="rounded-lg border-2 border-neutral-300 bg-white p-4 shadow-sm">
+            <h3 className="mb-2 text-sm font-semibold text-neutral-900">Aplicar</h3>
+            <p className="mb-3 text-xs text-neutral-600">
+              Guarda estos valores y a partir de ya imprimen. No toca{" "}
+              <code>label.template.ts</code>: se guardan en{" "}
+              <code>data/plantilla-override.json</code>, que se aplica encima de la plantilla del
+              codigo. Borrar ese archivo, o el boton de abajo, vuelve a como estaba.
+            </p>
+
+            {aplicado && (
+              <div className="mb-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
+                <p className="text-xs font-semibold text-emerald-900">{aplicado}</p>
+                {guardado && (
+                  <p className="mt-0.5 font-mono text-[11px] text-emerald-800">
+                    data/plantilla-override.json · {guardado.savedAt}
+                  </p>
+                )}
+              </div>
+            )}
+            {rechazo && (
+              <div className="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2">
+                <p className="text-xs font-semibold text-red-800">{rechazo}</p>
+                {rechazoDetalle.length > 0 && (
+                  <ul className="mt-1 list-disc pl-4 text-[11px] text-red-700">
+                    {rechazoDetalle.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={aplicar}
+              disabled={aplicando}
+              className="w-full rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:bg-neutral-300"
+            >
+              {aplicando ? "guardando..." : "Aplicar cambios"}
+            </button>
+
+            {hayOverride && (
+              <button
+                type="button"
+                onClick={descartar}
+                disabled={aplicando}
+                className="mt-2 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:bg-neutral-100"
+              >
+                Descartar y volver al codigo
+              </button>
+            )}
+
+            {hayOverride && !aplicado && (
+              <p className="mt-2 text-[11px] text-amber-700">
+                Hay cambios guardados que todavia no has aplicado en pantalla. Si aplicas ahora,
+                se reemplazan.
+              </p>
+            )}
           </div>
 
           {/* ------------------------------------------------------------ salida */}

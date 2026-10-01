@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  DEFAULT_TEMPLATE,
+  templateById,
   type LabelTemplate,
-  type LabelZone,
   type TextZone,
 } from "@/lib/labels/label.template";
 import { renderLabel } from "@/lib/labels/label.render";
 import { resolveZoneText } from "@/lib/labels/zpl.builder";
 import type { LabelData } from "@/lib/labels/label.types";
+import { zoneSchema } from "@/lib/labels/label-zones.schema";
+import { readOverride } from "@/lib/labels/label-override.store";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 
 /**
@@ -25,51 +26,6 @@ import { getProductRepository } from "@/lib/products/product.catalog.repository"
  * memoria y se dibuja esa. El fichero del codigo no se modifica nunca desde aqui.
  */
 
-const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
-  z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.literal("text"),
-      x: z.number(),
-      y: z.number(),
-      format: z.string(),
-      source: z.string(),
-      prefix: z.string().optional(),
-      maxWidthDots: z.number().optional(),
-      maxLines: z.number().optional(),
-      justify: z.enum(["L", "C", "R"]).optional(),
-      autoFit: z
-        .object({ maxHeight: z.number(), minHeight: z.number(), widthRatio: z.number() })
-        .optional(),
-    }),
-    z.object({
-      kind: z.literal("barcode"),
-      x: z.number(),
-      y: z.number(),
-      heightDots: z.number(),
-      interpretationLine: z.boolean(),
-      source: z.literal("barcode"),
-      center: z.boolean().optional(),
-      moduleWidth: z.number(),
-      hriHeightDots: z.number().optional(),
-    }),
-    z.object({
-      kind: z.literal("graphic"),
-      x: z.number(),
-      y: z.number(),
-      gf: z.string(),
-    }),
-    z.object({
-      kind: z.literal("shape"),
-      x: z.number(),
-      y: z.number(),
-      widthDots: z.number(),
-      heightDots: z.number(),
-      thicknessDots: z.number(),
-      radiusDots: z.number().optional(),
-    }),
-  ]),
-) as z.ZodType<LabelZone>;
-
 const bodySchema = z.object({
   zones: z.array(zoneSchema),
   zonesWithoutBarcode: z.array(zoneSchema).optional(),
@@ -83,6 +39,24 @@ const bodySchema = z.object({
   scale: z.number().int().min(1).max(8).default(3),
 });
 
+/**
+ * Plantilla vigente: la del codigo con el override aplicado encima.
+ *
+ * Es la misma funcion que usa la ruta de impresion, y se reutiliza aqui a proposito: si el
+ * preview dibujara la del codigo y la impresora usara la otra, el editor ensenaria una
+ * etiqueta que no es la que sale.
+ */
+async function plantillaVigente(): Promise<LabelTemplate> {
+  const o = await readOverride();
+  const base = templateById(o?.templateId);
+  if (!o || o.templateId !== base.id) return base;
+  return {
+    ...base,
+    zones: o.zones,
+    zonesWithoutBarcode: o.zonesWithoutBarcode ?? base.zonesWithoutBarcode,
+  };
+}
+
 /** Los productos reales del catalogo, para probar con nombres de verdad y no de mentira. */
 export async function GET() {
   const products = await getProductRepository().list();
@@ -90,7 +64,11 @@ export async function GET() {
     .filter((p) => p.barcode && p.barcode !== "0")
     .slice(0, 400)
     .map((p) => ({ code: p.code, name: p.name, barcode: p.barcode, price: p.price }));
-  return NextResponse.json({ productos: muestra });
+  const o = await readOverride();
+  return NextResponse.json({
+    productos: muestra,
+    override: o ? { activo: true, templateId: o.templateId, savedAt: o.savedAt } : { activo: false },
+  });
 }
 
 export async function POST(req: Request) {
@@ -104,11 +82,15 @@ export async function POST(req: Request) {
     );
   }
 
-  // Copia superficial: el objeto del codigo no se toca. Las zonas vienen del cuerpo.
+  // La base es la plantilla CON el override guardado, no la del codigo. Si se edita la
+  // pantalla con un override activo y se recarga, hay que ver lo que se esta usando de verdad,
+  // no la del `.ts`: dibujar sobre la base equivocada haria que el preview dijera una cosa y
+  // la impresora otra, que es el fallo que este editor existe para evitar.
+  const base = await plantillaVigente();
   const template: LabelTemplate = {
-    ...DEFAULT_TEMPLATE,
+    ...base,
     zones: parsed.zones,
-    zonesWithoutBarcode: parsed.zonesWithoutBarcode ?? DEFAULT_TEMPLATE.zonesWithoutBarcode,
+    zonesWithoutBarcode: parsed.zonesWithoutBarcode ?? base.zonesWithoutBarcode,
   };
 
   const data: LabelData = parsed.data;
