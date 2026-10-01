@@ -76,6 +76,25 @@ const logo = (patch: Partial<GraphicZone> = {}): GraphicZone => ({
 
 console.log("Marco");
 {
+  // AVISO SOBRE LO QUE ESTA DEMOSTRANDO ESTE BLOQUE
+  //
+  // Estas comprobaciones son verdad: `redimensionar()` sabe ensanchar un `shape` bien, con la
+  // x quieta al tirar del borde derecho y quieta la derecha al tirar del izquierdo. La funcion
+  // existe y funciona.
+  //
+  // Pero el editor YA NO LLEGA HASTA AQUI. `EDITABLES` no lleva `"shape"`, porque el marco es
+  // el margen fisico del papel y no se toca (ver el comentario de `EDITABLES` en
+  // `src/app/editor/page.tsx`).
+  //
+  // Se deja el bloque, y se deja la rama de `shape` en `redimensionar()`, a proposito: es
+  // geometria pura, esta probada, y si el marco algun dia vuelve a ser movible (o si aparece
+  // otra forma que si lo sea) ya esta. Lo que no se hace es fingir que el usuario puede
+  // redimensionar el marco, que es lo que pasaria si estas pruebas se presentaran como la
+  // garantia de una funcion que la pantalla no ofrece.
+  //
+  // Lo que si se comprueba, y es lo que de verdad importa, es que el marco NO se pueda tocar
+  // desde el editor. Eso vive en la pagina, no aqui.
+
   // Tirar del borde derecho 20 dots ensancha 20 y no mueve la x.
   const r = redimensionar(marco(), "e", 20, 0, CTX) as ShapeZone;
   eq("borde derecho: ancho +20", r.widthDots, 476);

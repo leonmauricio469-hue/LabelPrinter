@@ -7,9 +7,9 @@
 | Requisitos | Completado | Documentados en `01 - Requisitos` |
 | Stack | Definido | Next.js monolitico 100% TypeScript |
 | Arquitectura | Redefinida | App Router + capas + sin base de datos |
-| Rueda (MVP minimo) | **Completado** | Etiqueta fisica 50x25 mm verificada por USB (cola `ZDesigner GX420t`) |
+| Rueda (MVP minimo) | **Completado** | Etiqueta fisica verificada por USB, a 50 x 25 mm |
 | Patineta (escaneo) | **Completado** | Ciclo verificado con el escaner USB fisico: escanea, imprime, y la etiqueta se lee |
-| Carro (producto completo) | **En curso** | Corregidos el fallo de coincidencias y el del BOM; el estado real de impresora esta codificado pero **sin prueba fisica**; sigue CRUD, busqueda y servicio |
+| Carro (producto completo) | **En curso** | Geometria de la etiqueta lista y con editor visual; **la 59 x 35 mm se ha impreso dos veces pero nadie ha mirado el papel**; el estado real de impresora esta codificado pero **sin prueba fisica**; sigue CRUD, busqueda y servicio |
 | XETUX | En suspenso | Integracion temporalmente fuera de alcance |
 
 ## Definicion del stack
@@ -60,21 +60,42 @@
 - [x] **`settings.json` con BOM ya no tumba la app**: PowerShell y muchos editores de
       Windows guardan con BOM, y `JSON.parse` lo rechaza. Antes, `/api/settings` y
       `/api/printer/status` devolvian 500 sin explicacion
+- [x] **Plantilla unica de 59 x 35 mm** (472 x 280 dots). Se borro la de 50 x 25 y con ella
+      el selector de plantillas de `/settings`. Sin escalado proporcional: cada zona tiene sus
+      numeros en dots
+- [x] **Editor de geometria en `/editor`**: el contenido se mueve y se redimensiona, con
+      la previsualizacion dibujada por el mismo `renderLabel()` que produce el ZPL, no una
+      maqueta. **El marco queda fuera** (`EDITABLES` no lleva `shape`): es el margen fisico del
+      papel, se deduce solo de la plantilla y no se toca. Ver [[Plantilla 59x35 y Editor]]
+- [x] **El ancho del rollo se puede cambiar sin arrastrarlo**: `/settings` ->
+      `printer.mediaWidthMm`, y de ahi sale el `^PW`. Es el **medio**, no el diseno: se evita a
+      proposito que acabe en `template.widthDots`, porque entonces el EAN-13 se centraria sobre
+      el rollo y la zona quieta se mediria contra el canto del papel. Con un rollo mas estrecho
+      que la etiqueta, `POST /api/labels` devuelve 422 en vez de imprimir recortado en silencio
+- [x] **"Aplicar cambios"** guarda la geometria en `data/plantilla-override.json`, que se
+      aplica encima de la plantilla del codigo al imprimir. No reescribe `label.template.ts`,
+      **no hace falta `next build`** y se deshace borrando un archivo. Rechaza con 422 si algo se
+      pisa o se sale del rollo
 
 ## Que falta
 
+- [ ] **Mirar las dos etiquetas que ya salieron** (producto `475` con EAN-13, producto `1` con
+      codigo interno): entera o cortada por la derecha, con el radio del marco a 2 mm o a
+      1 mm, con la `N` de `ANON` o sin ella. Y **confirmar el ancho real del rollo**: ahora
+      `/settings` tiene 59 mm, que es una suposicion puesta para no bloquear, no un dato
+      medido. Si el rollo real es de 50, las dos etiquetas estan cortadas y hay que repetirlo
+      todo. Bloquea el resto de la lista siguiente
 - [ ] **Probar fisicamente el estado de la impresora**: quitar el papel o apagarla y
       confirmar que la app avisa. Es lo unico que cierra el punto anterior
+- [ ] **261 productos (8,5 %) se imprimen sin codigo de barras**: sus codigos internos no caben
+      a 3 dots de modulo en 472 dots. A 2 dots caben, pero 0,250 mm esta bajo el minimo de
+      ISO/IEC 15420. Solo el lector fisico puede decir si los acepta
 - [ ] Fase Carro: **CRUD del catalogo** desde la web (hoy `catalog.json` se edita a mano)
 - [ ] Fase Carro: **busqueda manual por nombre** como requisito propio (hoy la busqueda
       parcial existe y ya no imprime sin confirmacion)
 - [ ] Fase Carro: **servicio de Windows**, para que la app arranque sola en el puesto
 - [ ] Fase Carro: **probar el ciclo de ida y vuelta** de Patineta (escanear la etiqueta
       resultante y comprobar que devuelve el mismo producto)
-- [ ] Fase Carro, **al final por decision del operador**: editor de plantillas y aspecto
-      final de la etiqueta
-- [ ] Cargar el **catalogo real de PA PICAR** (todavia no existe; el Excel de RESPALDO se
-      descarto) y decidir que se hace con los codigos que no sean EAN-13
 - [ ] Corregir que `buildZpl()` ignora `label.widthMm` / `heightMm` de `settings.json`
 - [ ] **Imprimir cuesta ~2,4 s**, por un `powershell.exe` por etiqueta. Limita `/fast` a
       unas 25 etiquetas por minuto. Se arreglaria con un proceso PowerShell persistente
@@ -92,6 +113,7 @@
 ## Ver tambien
 
 - [[Proximos Pasos]]
+- [[Plantilla 59x35 y Editor]]
 - [[Prueba Fisica Rueda]]
 - [[Prueba Patineta]]
 - [[Prueba Legibilidad Barcode]]

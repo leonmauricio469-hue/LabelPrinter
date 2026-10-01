@@ -204,24 +204,58 @@ export interface LabelTemplate {
 //
 // Decision: el barcode va centrado y a su ancho natural, y REF baja a su propia linea,
 // alineado a la derecha. Es lo unico que cabe para EAN-13 con la norma respetada.
+
+// Medidas de la etiqueta, en un sitio solo.
+//
+// Antes cada consumidor de la medida volvia a escribir `dotsFromMm(59)`: el marco, el centrado del
+// logo, y las dos propiedades de la plantilla. Tres sitios, el mismo numero, y nada que
+// compruebe que siguen siendo el mismo. Cambiar el ancho de la etiqueta a mano era cambiar
+// uno y olvidarse de los otros dos, y el que se olvidaba era el marco, que es justo el que no
+// se puede equivocar.
+const MM_ANCHO = 59;
+const MM_ALTO = 35;
+/** Margen del marco por los cuatro lados. 1 mm: lo justo para que el borde no caiga en el canto. */
+const MM_MARGEN = 1;
+/** Radio de las esquinas del marco. */
+const MM_RADIO = 2;
+/** Las mismas medidas en dots, que es como trabaja todo lo demas. */
+const ANCHO_DOTS = dotsFromMm(MM_ANCHO);
+const ALTO_DOTS = dotsFromMm(MM_ALTO);
+
 export const DEFAULT_TEMPLATE: LabelTemplate = {
   id: "papicar-59x35",
   name: "Papicar 59 x 35 mm",
-  widthMm: 59,
-  heightMm: 35,
-  widthDots: dotsFromMm(59),
-  heightDots: dotsFromMm(35),
+  widthMm: MM_ANCHO,
+  heightMm: MM_ALTO,
+  widthDots: ANCHO_DOTS,
+  heightDots: ALTO_DOTS,
   zones: [
     // 1. Marco: 1 mm de margen (8 dots) por los cuatro lados, trazo de 1 dot, esquinas de
     //    2 mm (16 dots). El rectangulo utilizable es 8,8 .. 464,272.
+    //
+    //    EL MARCO NO SE TOCA, Y POR ESO SE CALCULA.
+    //
+    //    Es el margen fisico de la etiqueta, y su valor es el que hace que la etiqueta salga
+    //    bien. No es un elemento mas de los que se colocan: si el borde queda a 0,4 mm del
+    //    canto del papel, la impresora puede cortarlo y la etiqueta sale con un lado comido, y
+    //    eso no lo arregla ni el ZPL ni el editor.
+    //
+    //    Por eso sus medidas salen de `widthDots` y `heightDots`, los de la plantilla, y no
+    //    de un 59 y un 35 escritos aqui. Escritos a mano, cambiar el ancho de la plantilla
+    //    dejaba el marco en la medida de antes, pasando a 1 mm del canto o metido en el papel,
+    //    sin que nada se quejara: el mismo fallo que hubo con `LOGO_DOTS_W`, que `check-gf`
+    //    vigila, y aqui no habia nadie vigilando.
+    //
+    //    Y en `/editor` no se puede mover ni estirar (`EDITABLES` no lleva `"shape"`). Un tirador
+    //    que se puede agarrar invita a moverlo, y esta es la unica zona que no se debe.
     {
       kind: "shape",
-      x: dotsFromMm(1),
-      y: dotsFromMm(1),
-      widthDots: dotsFromMm(59) - dotsFromMm(2),
-      heightDots: dotsFromMm(35) - dotsFromMm(2),
+      x: dotsFromMm(MM_MARGEN),
+      y: dotsFromMm(MM_MARGEN),
+      widthDots: ANCHO_DOTS - dotsFromMm(MM_MARGEN * 2),
+      heightDots: ALTO_DOTS - dotsFromMm(MM_MARGEN * 2),
       thicknessDots: 1,
-      radiusDots: dotsFromMm(2),
+      radiusDots: dotsFromMm(MM_RADIO),
     },
     // 2. Logo, centrado horizontal. El `^GFA` existente mide 200 x 67 dots (25 x 8,4 mm) y
     //    ZPL no escala un campo grafico, asi que se centra al tamaño que hay: `LOGO_DOTS_W`
@@ -332,12 +366,12 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
   zonesWithoutBarcode: [
     {
       kind: "shape",
-      x: dotsFromMm(1),
-      y: dotsFromMm(1),
-      widthDots: dotsFromMm(59) - dotsFromMm(2),
-      heightDots: dotsFromMm(35) - dotsFromMm(2),
+      x: dotsFromMm(MM_MARGEN),
+      y: dotsFromMm(MM_MARGEN),
+      widthDots: ANCHO_DOTS - dotsFromMm(MM_MARGEN * 2),
+      heightDots: ALTO_DOTS - dotsFromMm(MM_MARGEN * 2),
       thicknessDots: 1,
-      radiusDots: dotsFromMm(2),
+      radiusDots: dotsFromMm(MM_RADIO),
     },
     {
       kind: "graphic",

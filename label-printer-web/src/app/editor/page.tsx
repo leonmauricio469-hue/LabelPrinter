@@ -102,13 +102,25 @@ function anchoCajaDeTexto(
 /**
  * Las zonas que se pueden mover y redimensionar arrastrando.
  *
- * Antes eran solo `text` y `barcode`: el marco y el logo estaban fijos por diseno, y el boton
- * de la lista los ponia en gris con la palabra "(fija)". Ahora los cuatro se mueven y se
- * redimensionan, porque no hay ninguna razon para que el borde de la etiqueta no se pueda
- * colocar igual que el resto: si el marco va a 2 mm del borde, eso se decide mirando la
- * etiqueta, y mirar exige poder arrastrarlo.
+ * El marco NO esta, y es lo unico que se ha sacado de aqui.
+ *
+ * En v1.6 se dejo que los cuatro tipos se movieran, con la razon de que "si el marco va a
+ * 2 mm del borde, eso se decide mirando la etiqueta, y mirar exige poder arrastrarlo". La
+ * razon era buena y la conclusion estaba equivocada: lo que se decide mirando la etiqueta
+ * es el ancho del rollo, que es lo de `/settings`, no la posicion del marco.
+ *
+ * El marco es el margen fisico del papel. Si el borde queda a 0,4 mm del canto, la impresora
+ * lo corta y la etiqueta sale con un lado comido, y eso no se arregla ni con ZPL ni con
+ * arrastre. Es ademas la unica zona cuya medida se deduce sola de la plantilla
+ * (`ANCHO_DOTS` menos el margen), de modo que si se pudiera mover, `label.template.ts` y lo
+ * guardado en `data/plantilla-override.json` dirian dos cosas distintas y no habria forma de
+ * saber cual manda.
+ *
+ * Sigue apareciendo en la lista, en gris y con "(fija)", y sigue dibujandose en la
+ * previsualizacion: quitado del editor no es quitado de la etiqueta. Lo que se quita es el
+ * tirador, que es lo que invita a moverlo.
  */
-const EDITABLES = new Set(["text", "barcode", "shape", "graphic"]);
+const EDITABLES = new Set(["text", "barcode", "graphic"]);
 
 const TITULOS: Record<string, string> = {
   productName: "descripcion",
@@ -131,7 +143,12 @@ function etiquetaDe(z: AnyZone, i: number): string {
   return TITULOS[src] ?? `zona ${i}`;
 }
 
-/** La primera zona que se puede tocar: arrancar editando el marco no lleva a nada. */
+/**
+ * La primera zona que se puede tocar.
+ *
+ * El marco es la primera zona de la plantilla, y ya no es editable, asi que sin esto el editor
+ * abriria con el marco seleccionado y sin ningun panel que enseñe. Empieza en la siguiente.
+ */
 function primeraEditable(zonas: AnyZone[]): number {
   const i = zonas.findIndex((z) => EDITABLES.has(z.kind));
   return i < 0 ? 0 : i;
@@ -676,40 +693,10 @@ export default function EditorPage() {
                 />
               </div>
 
-              {zona.kind === "shape" && (
-                <>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <Num
-                      label="ancho marco (mm)"
-                      value={MM(Number(zona.widthDots))}
-                      onChange={(v) => editar(sel, { widthDots: DOTS(v) })}
-                    />
-                    <Num
-                      label="alto marco (mm)"
-                      value={MM(Number(zona.heightDots))}
-                      onChange={(v) => editar(sel, { heightDots: DOTS(v) })}
-                    />
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <Num
-                      label="grosor (dots)"
-                      step={1}
-                      value={Number(zona.thicknessDots)}
-                      onChange={(v) => editar(sel, { thicknessDots: Math.max(1, Math.round(v)) })}
-                    />
-                    <Num
-                      label="esquina (dots)"
-                      step={1}
-                      value={Number(zona.radiusDots ?? 0)}
-                      onChange={(v) => editar(sel, { radiusDots: Math.max(0, Math.round(v)) })}
-                    />
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">
-                    El marco se dibuja con <code>^GB</code>. El grosor va hacia dentro, como en la
-                    Zebra, y la esquina redondeada es opcional: ponla a 0 para un borde recto.
-                  </p>
-                </>
-              )}
+              {/* El marco (`kind: "shape"`) no tiene panel, y no es un olvido: ya no es
+                  editable. Tenia sus numeros de ancho, alto, grosor y esquina, y se han
+                  quitado con el resto. Su medida sale de la plantilla, asi que un panel de
+                  esos seria un formulario para desincronizar el marco de lo que se imprime. */}
 
               {zona.kind === "graphic" && (
                 <>
@@ -995,8 +982,9 @@ export default function EditorPage() {
             </label>
             <span className="text-xs text-neutral-500">
               Elige una zona, arrastra su caja para moverla y tira de los puntos blancos de las
-              esquinas o los bordes para cambiarle el tamano. Vale para todo: marco, logo,
-              textos y barras.
+              esquinas o los bordes para cambiarle el tamano. Vale para el logo, los textos y
+              las barras. <strong>El marco no</strong>: es el margen del papel y se calcula
+              solo desde el ancho de la etiqueta.
             </span>
             <span className="text-xs text-neutral-500">
               {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}

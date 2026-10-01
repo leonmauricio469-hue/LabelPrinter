@@ -140,6 +140,10 @@ export default function SettingsPage() {
       ? printers
       : [...printers, settings.printer.printerName];
 
+  // El rollo frente a la etiqueta. El segundo caso es el que se niega a imprimir.
+  const mediaMenorQueDiseno = settings.printer.mediaWidthMm < DEFAULT_TEMPLATE.widthMm;
+  const mediaMayorQueDiseno = settings.printer.mediaWidthMm > DEFAULT_TEMPLATE.widthMm;
+
   // `TEMPLATES.find` puede no encontrar: un `settings.json` de antes de v1.3 sigue teniendo
   // `papicar-50x25`, que ya no existe en el codigo. La impresora usa `templateById()`, que cae
   // en la de 59 mm; aqui solo se avisa, que es lo que puede hacer una pagina.
@@ -239,6 +243,62 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* El ancho del MEDIO, que no es el ancho de la etiqueta.
+            Va aqui y no en la seccion de "Etiqueta" porque es una medida de la impresora: lo
+            pone la persona, en la impresora, y de aqui solo sale el `^PW` que le dice a la
+            impresora cuanto papel hay. */}
+        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-3">
+          <div className="flex items-end gap-4">
+            <div className="w-40">
+              <label htmlFor="mediaWidthMm" className={labelClass}>
+                Ancho del rollo (mm)
+              </label>
+              <input
+                id="mediaWidthMm"
+                type="number"
+                step={0.5}
+                min={20}
+                max={170}
+                value={settings.printer.mediaWidthMm}
+                onChange={(e) => patchPrinter({ mediaWidthMm: Number(e.target.value) })}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex-1 text-xs text-neutral-600">
+              <p>
+                Lo que mide el <strong>rollo que hay puesto</strong>, no lo que mide la
+                etiqueta. Sale de aqui el <code>^PW</code>, que es el ancho de la zona de
+                impresion.
+              </p>
+              <p className="mt-1">
+                No es el ancho de la etiqueta, que son {DEFAULT_TEMPLATE.widthMm} mm, ni lo que
+                pone <code>settings.json</code> en sus campos de ancho. Si no sabes cuanto mide
+                el rollo, se mide en la impresora (el panel, o el menu de medios) antes de
+                imprimir: es el unico dato de esta pantalla que no se puede deducir de nada
+                mas.
+              </p>
+            </div>
+          </div>
+
+          {mediaMenorQueDiseno ? (
+            <p className="mt-3 rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-900">
+              <strong>No se va a poder imprimir.</strong> Con {settings.printer.mediaWidthMm} mm
+              de rollo y {DEFAULT_TEMPLATE.widthMm} mm de etiqueta, <code>^PW</code> recorta y
+              no escala: la etiqueta saldria cortada por la derecha, con el ZPL perfectamente
+              valido y sin que la impresora diga nada. La app se niega a imprimir mientras el
+              rollo sea mas estrecho que la etiqueta.
+            </p>
+          ) : mediaMayorQueDiseno ? (
+            <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+              Sale entero, con{" "}
+              {((settings.printer.mediaWidthMm - DEFAULT_TEMPLATE.widthMm) / 2).toFixed(1)} mm
+              de papel de mas a cada lado. El diseno va pegado a la izquierda, asi que el
+              sobrante se queda todo a la derecha. Si al verlo sale descuadrado, se ajusta el
+              margen en la impresora, no en el ZPL.
+            </p>
+          ) : null}
+        </div>
+
         <div className="flex gap-2">
           <button
             type="button"
@@ -291,12 +351,12 @@ export default function SettingsPage() {
         </div>
 
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <strong>Antes de imprimir, cambia el rollo en la impresora.</strong> Los{" "}
-          {DEFAULT_TEMPLATE.widthDots} dots del ZPL son el ancho de la zona de impresion, no el
-          del rollo. Si la GK420t sigue con el medio a 50 mm, el sensor de separacion se dispara
-          con el ancho del rollo y el contenido sale corrido hacia un lado.{" "}
-          <code>^PW</code> recorta, no posiciona: hay que cambiar el medio en la impresora, no
-          solo en el ZPL.
+          <strong>El rollo hay que cambiarlo en la impresora, no aqui.</strong> El ancho del
+          rollo de arriba sale del <code>^PW</code>, pero el medio de verdad lo pone la
+          impresora. Si el <code>^PW</code> no coincide con el rollo, lo que se ve{" "}
+          <code>^PW</code> hace es <strong>recortar</strong>: no escala, no centra y no avisa.
+          Con el rollo de 50 mm y la etiqueta de {DEFAULT_TEMPLATE.widthMm} mm, la etiqueta
+          saldria cortada por la derecha sin que nada proteste.
         </p>
 
         <div className="grid grid-cols-2 gap-4">

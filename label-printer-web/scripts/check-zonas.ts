@@ -10,11 +10,11 @@
 //
 //   tsc -p tsconfig.preview.json
 //   node .preview-build/scripts/check-zonas.js
-import { TEMPLATES } from "../src/lib/labels/label.template";
+import { TEMPLATES, DEFAULT_TEMPLATE } from "../src/lib/labels/label.template";
 import { graphicDots } from "../src/lib/labels/gf-graphic";
 import { intersectan } from "../src/lib/labels/label-solapes";
 import type { LabelTemplate, LabelZone } from "../src/lib/labels/label.template";
-import { planForZone, barcodeZoneOf } from "../src/lib/labels/zpl.builder";
+import { planForZone, barcodeZoneOf, problemaDeMedio, buildZpl } from "../src/lib/labels/zpl.builder";
 import type { BarcodeImprimible } from "../src/lib/labels/barcode-plan";
 
 interface Caja {
@@ -353,6 +353,98 @@ for (const template of TEMPLATES) {
   }
   console.log(`  (nombre de 50 caracteres, que es el peor caso del catalogo)`);
   console.log(`  ${NOMBRES.length} nombres x ${template.zones.length} zonas`);
+}
+
+// ------------------------------------------------------------------ el medio y el diseño
+
+// ESTO ES LO QUE MAS CARO SALIA Y NO AVISABA.
+//
+// `^PW` no escala: recorta. Con un rollo de 50 mm y una etiqueta de 59, `^PW400` recorta todo
+// lo que pase de 400 dots. El ZPL sigue siendo valido, la impresora no protesta, el trabajo
+// sale de la cola como entregado, y la etiqueta llega con el lado derecho comido. Ni la
+// previsualizacion ni el ZPL lo enseñan: la previsualizacion dibuja el diseño, y el ZPL no
+// dice "he recortado", dice los numeros que le han dado.
+console.log("El medio tiene que admitir el diseño");
+{
+  const diseno = DEFAULT_TEMPLATE.widthDots;
+  const mmDeDiseno = DEFAULT_TEMPLATE.widthMm;
+  const data = {
+    productName: "BADIA JALAPENO 2 OZ",
+    barcode: "033844007522",
+    price: 5.68,
+    reference: "RETAIL",
+    businessName: "PA PICAR",
+  };
+
+  // Igual que el diseño: el caso de serie, y el que sale si nadie ha tocado nada.
+  pruebas++;
+  if (problemaDeMedio(DEFAULT_TEMPLATE, diseno) !== null) {
+    fallos++;
+    problemas.push("medio-igual: el medio igual al diseño se toma por problema");
+  }
+
+  // Más ancho: sale entero, con blanco de más. No es un problema.
+  pruebas++;
+  if (problemaDeMedio(DEFAULT_TEMPLATE, diseno + 24) !== null) {
+    fallos++;
+    problemas.push("medio-mayor: un rollo más ancho que la etiqueta se toma por problema");
+  }
+
+  // Más estrecho: esto es lo que tiene que salir, y con los dos números en el texto, que es
+  // lo que la persona necesita para saber qué cambiar.
+  pruebas++;
+  const corto = problemaDeMedio(DEFAULT_TEMPLATE, 400);
+  if (corto === null) {
+    fallos++;
+    problemas.push("medio-menor: con 50 mm de rollo y 59 de etiqueta no se dice nada");
+  } else {
+    pruebas++;
+    if (!corto.includes("50.00") || !corto.includes(`${mmDeDiseno.toFixed(2)}`)) {
+      fallos++;
+      problemas.push(`medio-menor: el motivo no trae los dos números: ${corto}`);
+    }
+  }
+
+  // Y que el ZPL que sale lleva el ancho del MEDIO, no el del diseño. Con un rollo de 62 mm,
+  // `^PW` tiene que ser 496 aunque la plantilla mida 472.
+  const zpl = buildZpl(DEFAULT_TEMPLATE, data, { mediaWidthDots: 496 });
+  pruebas++;
+  if (!zpl.includes("^PW496")) {
+    fallos++;
+    problemas.push(`^PW: con medio de 62 mm sale ${zpl.match(/\^PW\d+/)?.[0]}, se esperaba ^PW496`);
+  }
+
+  // Sin opciones, `^PW` es el del diseño: es lo que necesitan el editor y estas pruebas, que
+  // dibujan la etiqueta y no el rollo.
+  pruebas++;
+  if (!buildZpl(DEFAULT_TEMPLATE, data).includes(`^PW${diseno}`)) {
+    fallos++;
+    problemas.push("^PW: sin opciones no sale el ancho del diseño");
+  }
+
+  // `^LL` es SIEMPRE el alto del diseño, aunque el rollo sea más largo. Es cuanto avanza el
+  // papel entre etiquetas, y el rollo se corta a mano: ponerlo al alto del rollo haria que
+  // la impresora gastara un rectangulo entero de papel por cada etiqueta.
+  pruebas++;
+  const ll = zpl.match(/\^LL(\d+)/)?.[1];
+  if (ll !== String(DEFAULT_TEMPLATE.heightDots)) {
+    fallos++;
+    problemas.push(`^LL: sale ${ll} y deberia ser el alto del diseño, ${DEFAULT_TEMPLATE.heightDots}`);
+  }
+
+  // Un rollo de 0, o un valor que venga en blanco desde el formulario, tienen que Contar como
+  // problema y no colarse: `^PW0` recorta la etiqueta entera y sale un rollo de papel en
+  // blanco, que es el peor resultado posible y el mas silencioso de todos.
+  pruebas++;
+  if (problemaDeMedio(DEFAULT_TEMPLATE, 0) === null) {
+    fallos++;
+    problemas.push("medio-cero: un ancho de 0 se acepta, y recorta la etiqueta entera");
+  }
+  pruebas++;
+  if (problemaDeMedio(DEFAULT_TEMPLATE, Number.NaN) === null) {
+    fallos++;
+    problemas.push("medio-NaN: se acepta, y dejaria ^PW como NaN");
+  }
 }
 
 if (problemas.length) {

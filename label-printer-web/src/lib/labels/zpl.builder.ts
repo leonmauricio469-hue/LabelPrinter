@@ -182,10 +182,61 @@ function textFor(zone: TextZone, data: LabelData, plan: BarcodePlan): string {
   return `${zone.prefix ?? ""}${foldField(raw)}`;
 }
 
-function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan: BarcodePlan): string {
+/**
+ * Que el medio admita el diseño, o por que no.
+ *
+ * ESTE ES EL FALLO QUE MAS CARO SALIA, Y NO AVISABA
+ *
+ * `^PW` no escala: recorta. Si el rollo es de 50 mm y la etiqueta de 59, `^PW400` recorta
+ * todo lo que pase de 400 dots, el ZPL sigue siendo valido, la impresora no
+ * protesta, el trabajo sale de la cola como bien entregado, y lo que sale por el otro lado es
+ * una etiqueta a la que le falta un trozo por la derecha. Sin barras, sin el precio entero, o
+ * con el marco cortado.
+ *
+ * Un recorte asi no se ve en la previsualizacion, porque la previsualizacion dibuja el
+ * diseño, no el medio. Y no se ve en el ZPL, porque el ZPL no dice "he recortado": dice los
+ * numeros que le han dado. Solo se ve en el papel, que es donde no se puede mirar antes de
+ * gastar.
+ *
+ * Asi que se comprueba aqui, en el sitio que decide `^PW`, y se devuelve un texto para poder
+ * negarse. Devolver el motivo y no un booleano es a proposito: el que se niega tiene que
+ * poder enseñarle a la persona el numero que hay que cambiar.
+ *
+ * Cuando el medio es MAYOR que el diseño no dice nada. Sale entero, que es lo que importa, y
+ * el sobrante se queda en blanco a la derecha porque el diseño va anclado a la izquierda.
+ */
+export function problemaDeMedio(
+  template: LabelTemplate,
+  mediaWidthDots: number,
+): string | null {
+  if (mediaWidthDots >= template.widthDots) return null;
+  const mm = (dots: number) => (dots / DOTS_POR_MM).toFixed(2);
+  return (
+    `el medio cargado mide ${mm(mediaWidthDots)} mm y la etiqueta mide ` +
+    `${mm(template.widthDots)} mm. Con un medio mas estrecho que la etiqueta, ^PW recorta y no ` +
+    `escala: la etiqueta saldria cortada por la derecha, en silencio. O se pone un rollo de ` +
+    `${template.widthMm} mm o mas, o la etiqueta se hace mas estrecha.`
+  );
+}
+
+/** Dots por mm a 203 dpi, que es lo que usa `label.template.ts`. */
+const DOTS_POR_MM = 8;
+
+function emit(
+  template: LabelTemplate,
+  zones: LabelZone[],
+  data: LabelData,
+  plan: BarcodePlan,
+  mediaWidthDots: number,
+): string {
   const commands: string[] = [
     "^XA",
-    `^PW${template.widthDots}`,
+    // `^PW` es el medio, no el diseño. Ver `problemaDeMedio()`, que explica por que esto no es
+    // intercambiable y por que el error sale sin avisar.
+    `^PW${mediaWidthDots}`,
+    // `^LL` es la longitud de etiqueta, que es una medida del diseno: es cuanto avanza el
+    // papel entre etiquetas, y tiene que ser el alto de la etiqueta aunque el rollo sea mas
+    // largo, porque el rollo se corta a mano.
     `^LL${template.heightDots}`,
     "^LH0,0",
   ];
@@ -235,9 +286,25 @@ function emit(template: LabelTemplate, zones: LabelZone[], data: LabelData, plan
   return commands.join("\n");
 }
 
-export function buildZpl(template: LabelTemplate, data: LabelData): string {
+/**
+ * Opciones de construccion del ZPL.
+ *
+ * `mediaWidthDots` es el ancho del rollo en dots, y sale de `/settings`. Si no se pasa, vale el
+ * ancho del diseño, que es lo que quieren el editor y las pruebas: ambas dibujan la etiqueta,
+ * no el medio.
+ */
+export interface BuildOpciones {
+  /** Ancho del medio en dots. Por defecto, el ancho del diseño. */
+  mediaWidthDots?: number;
+}
+
+export function buildZpl(
+  template: LabelTemplate,
+  data: LabelData,
+  opts: BuildOpciones = {},
+): string {
   const { zones, plan } = resolveLabel(template, data);
-  return emit(template, zones, data, plan);
+  return emit(template, zones, data, plan, opts.mediaWidthDots ?? template.widthDots);
 }
 
 /**
@@ -249,9 +316,14 @@ export function buildZpl(template: LabelTemplate, data: LabelData): string {
  * Se manda todo junto en vez de N jobs por dos razones: una sola ida y vuelta al
  * spooler, y una impresion atomica (si algo falla, no sale la mitad del lote).
  */
-export function buildZplBatch(template: LabelTemplate, data: LabelData, qty: number): string {
+export function buildZplBatch(
+  template: LabelTemplate,
+  data: LabelData,
+  qty: number,
+  opts: BuildOpciones = {},
+): string {
   const copies = Math.max(1, Math.floor(qty));
-  if (copies === 1) return buildZpl(template, data);
-  const one = buildZpl(template, data);
+  if (copies === 1) return buildZpl(template, data, opts);
+  const one = buildZpl(template, data, opts);
   return one.repeat(copies);
 }

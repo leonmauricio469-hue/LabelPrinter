@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
 import { templateForPrint } from "@/lib/labels/label-override.store";
-import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
+import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots, problemaDeMedio } from "@/lib/labels/zpl.builder";
+import { dotsFromMm } from "@/lib/labels/label.template";
 import { QUIET_FACTOR } from "@/lib/labels/barcode-plan";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
@@ -69,6 +70,31 @@ export async function POST(req: Request) {
   // impresora sin recompilar. Ver `label-override.store.ts`.
   const template = await templateForPrint(settings.label.templateId);
 
+  // El medio tiene que admitir el diseño, y esto se comprueba ANTES de construir el ZPL.
+  //
+  // Se podría comprobar despues, mirando el ZPL, y no se comprueba asi a proposito: el ZPL
+  // no dice que ha recortado. `^PW` lleva el numero del medio y el resto de comandos llevan
+  // coordenadas del diseño, y que los dos no cuadren es cosa de quien los lee, no de la
+  // impresora. La impresora no protesta, el trabajo sale de la cola como entregado, y la
+  // etiqueta llega al papel con el lado derecho cortado.
+  //
+  // Un 422 con el numero que hay que cambiar es la unica forma de que esto se entere antes de
+  // gastar papel. Ver `problemaDeMedio()`.
+  const mediaWidthDots = dotsFromMm(settings.printer.mediaWidthMm);
+  const problemaMedio = problemaDeMedio(template, mediaWidthDots);
+  if (problemaMedio) {
+    return NextResponse.json(
+      {
+        error: `No se imprime: ${problemaMedio}`,
+        medio: {
+          mediaWidthMm: settings.printer.mediaWidthMm,
+          disenoWidthMm: template.widthMm,
+        },
+      },
+      { status: 422 },
+    );
+  }
+
   const data: LabelData = {
     productName: product.name,
     barcode: product.barcode,
@@ -115,7 +141,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const zpl = buildZplBatch(template, data, input.qty);
+  const zpl = buildZplBatch(template, data, input.qty, { mediaWidthDots });
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(zpl);
 

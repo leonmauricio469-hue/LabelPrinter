@@ -71,6 +71,20 @@ export const updateSettingsSchema = z.object({
     host: z.string().min(1),
     port: z.number().int().positive().max(65535),
     printerName: z.string().min(1),
+    /**
+     * El ancho del medio va con rango, no solo positivo.
+     *
+     * Por un lado hay un minimo: a 4 dots la zona quieta del EAN-13 no cabe ni de lejos y
+     * `planBarcode()` lo dira, pero mejor que el numero no llegue ahi.
+     *
+     * Y por otro hay un maximo de 170 mm, que es el ancho maximo de medio de la GK420t. Con
+     * 59 mm de diseno no aporta nada, y un numero enorme aqui es casi siempre un error de
+     * tecleo que nadie va a ver hasta que salga una tira de papel en blanco.
+     */
+    mediaWidthMm: z
+      .number()
+      .min(20, "un medio de menos de 20 mm no puede llevar esta etiqueta")
+      .max(170, "la GK420t no acepta medios de mas de 170 mm de ancho"),
   }),
   label: z.object({
     widthMm: z.number().positive(),

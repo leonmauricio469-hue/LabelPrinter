@@ -1,14 +1,15 @@
-{
-  "printer": {
-    "transport": "usb",
-    "host": "127.0.0.1",
-    "port": 9100,
-    "printerName": "ZDesigner GX420t"
-  },
-  "label": {
-    "widthMm": 59,
-    "heightMm": 35,
-    "businessName": "PA PICAR",
-    "templateId": "papicar-59x35"
-  }
+﻿{
+    "printer":  {
+                    "transport":  "usb",
+                    "host":  "127.0.0.1",
+                    "port":  9100,
+                    "printerName":  "ZDesigner GX420t",
+                    "mediaWidthMm":  59
+                },
+    "label":  {
+                  "widthMm":  59,
+                  "heightMm":  35,
+                  "businessName":  "PA PICAR",
+                  "templateId":  "papicar-59x35"
+              }
 }
