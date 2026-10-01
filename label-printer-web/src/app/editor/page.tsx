@@ -1,0 +1,742 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_TEMPLATE, MM_TO_DOTS, dotsFromMm } from "@/lib/labels/label.template";
+import type { LabelZone } from "@/lib/labels/label.template";
+
+/**
+ * Editor visual de la plantilla.
+ *
+ * QUE ES Y QUE NO ES
+ *
+ * Es para decidir la geometria mirando, no para editar el codigo. El boton de abajo saca un
+ * bloque de TypeScript con los valores finales, que es lo que se pega en `label.template.ts`.
+ * Deliberadamente NO escribe el fichero desde el navegador: un POST que reescribe codigo
+ * fuente es la clase de cosa que un dia se come una plantilla sin avisar.
+ *
+ * POR QUE EL DIBUJO VIENE DEL SERVIDOR
+ *
+ * El PNG lo pinta `renderLabel()`, que dibuja el ZPL de `buildZpl()`, que es el mismo que
+ * va a la impresora. Dibujando en el navegador el editor ensenaria una geometria y la
+ * impresora sacaria otra.
+ */
+
+type AnyZone = Record<string, unknown> & { kind: string };
+
+interface Caja {
+  etiqueta: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  texto?: string;
+  alto?: number;
+  anchoUsado?: number;
+}
+
+interface Preview {
+  png: string;
+  cajas: Caja[];
+  resueltos: { indice: number; texto: string | null; alto: number; ancho: number }[];
+  informe: string[];
+  symbology: string | null;
+  datosImpresos: string | null;
+  anchoSimbolo: number;
+  zonaQuieta: number;
+}
+
+const MM = (dots: number) => dots / MM_TO_DOTS;
+const DOTS = (mm: number) => Math.round(mm * MM_TO_DOTS);
+
+/** Las zonas que se pueden tocar. El marco y el logo no: son fijos. */
+const EDITABLES = new Set(["text", "barcode"]);
+
+const TITULOS: Record<string, string> = {
+  productName: "descripcion",
+  price: "precio",
+  referenceLabel: "REF:",
+  reference: "referencia",
+  barcode: "codigo de barras",
+};
+
+/** Los identificadores de las zonas fijas, para que la lista no diga "zona 0". */
+const FIJAS: Record<string, string> = {
+  shape: "marco",
+  graphic: "logo",
+};
+
+function etiquetaDe(z: AnyZone, i: number): string {
+  if (z.kind === "barcode") return "codigo de barras";
+  if (FIJAS[z.kind]) return FIJAS[z.kind];
+  const src = String(z.source ?? "");
+  return TITULOS[src] ?? `zona ${i}`;
+}
+
+/** La primera zona que se puede tocar: arrancar editando el marco no lleva a nada. */
+function primeraEditable(zonas: AnyZone[]): number {
+  const i = zonas.findIndex((z) => EDITABLES.has(z.kind));
+  return i < 0 ? 0 : i;
+}
+
+/**
+ * Que zona de la plantilla corresponde a cada caja dibujada.
+ *
+ * NO es el mismo indice. `label.render.ts` saca las cajas del ZPL, asi que van en el orden en
+ * que `emit()` las escribe, y ese orden no coincide con el del array `zones` (las zonas fijas
+ * no se dibujan y el logo va el primero aunque sea la tercera zona).
+ *
+ * Por eso se empareja por contenido: el texto plegado de cada zona, que el servidor ya
+ * devuelve en `resueltos`, contra el texto que salio en `^FD`. Las barras son la unica zona de
+ * tipo `barcode` y el logo la unica de tipo `graphic`, asi que esos dos van directos.
+ *
+ * Devuelve `-1` en las cajas que no corresponden a ninguna zona editable, que es como se sabe
+ * que ese elemento no se debe mover.
+ */
+function mapearCajas(
+  cajas: Caja[],
+  zones: AnyZone[],
+  resueltos: { indice: number; texto: string | null }[],
+): number[] {
+  const usados = new Set<number>();
+  const map: number[] = cajas.map(() => -1);
+
+  cajas.forEach((c, i) => {
+    if (c.etiqueta === "barras") {
+      const j = zones.findIndex((z) => z.kind === "barcode");
+      map[i] = j;
+      usados.add(i);
+      return;
+    }
+    if (c.etiqueta === "logo") {
+      map[i] = zones.findIndex((z) => z.kind === "graphic");
+      usados.add(i);
+      return;
+    }
+    if (!c.texto) return;
+    // Primer uso de cada texto: dos zonas con el mismo texto no se emparejan con la misma caja.
+    const j = resueltos.find((r) => !usados.has(r.indice) && r.texto === c.texto)?.indice ?? -1;
+    map[i] = j;
+    usados.add(i);
+  });
+
+  return map;
+}
+
+export default function EditorPage() {
+  const [zones, setZones] = useState<AnyZone[]>(
+    structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[],
+  );
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState<number>(() =>
+    primeraEditable(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]),
+  );
+  const [nombre, setNombre] = useState("BADIA JALAPEÑO 2 OZ");
+  const [barcode, setBarcode] = useState("033844007522");
+  const [precio, setPrecio] = useState(5.68);
+  const [zoom, setZoom] = useState(3);
+  const [mostrarCajas, setMostrarCajas] = useState(true);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pedir = useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/editor/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          zones,
+          data: {
+            productName: nombre,
+            barcode,
+            price: precio,
+            reference: "RETAIL",
+            businessName: "PA PICAR",
+          },
+          scale: zoom,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "fallo desconocido");
+        return;
+      }
+      setPreview(j);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [zones, nombre, barcode, precio, zoom]);
+
+  // Cada cambio agenda una peticion. El retardo agrupa el tecleo rapido en una sola llamada.
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(pedir, 180);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [pedir]);
+
+  function editar(i: number, cambio: Record<string, unknown>) {
+    setZones((prev) => prev.map((z, j) => (j === i ? { ...z, ...cambio } : z)));
+  }
+
+  function editarAutoFit(i: number, cambio: Record<string, number>) {
+    setZones((prev) => prev.map((z, j) => (j === i ? conAutoFit(z, cambio) : z)));
+  }
+
+  function editarFuente(i: number, mm: number) {
+    setZones((prev) => prev.map((z, j) => (j === i ? conAltoDeFuente(z, mm) : z)));
+  }
+
+  function editarFuenteAncho(i: number, mm: number) {
+    setZones((prev) => prev.map((z, j) => (j === i ? conAnchoDeFuente(z, mm) : z)));
+  }
+
+  const zona = zones[sel];
+
+  /**
+   * Lo que se imprime de verdad en la zona seleccionada, con el nombre de prueba actual.
+   *
+   * El campo de arriba ("alto letra") es el techo del `autoFit` cuando la zona lo tiene. Este
+   * es el alto que ha salido de ajustar ese nombre al ancho de caja. Con un nombre corto
+   * coinciden; con uno de 50 caracteres el ajuste baja la letra y los dos numeros ya no son
+   * el mismo, que es justo lo que hay que ver para decidir el techo.
+   */
+  const resuelto = preview?.resueltos.find((r) => r.indice === sel) ?? null;
+
+  const pegables = useMemo(
+    () => (preview ? mapearCajas(preview.cajas, zones, preview.resueltos) : []),
+    [preview, zones],
+  );
+
+  // Arrastre: se guarda de donde se cogio (en dots) y el punto de origen de la zona, para que
+  // el elemento no salte bajo el cursor.
+  //
+  // Va en un REF y no en estado a proposito. El manejador de `mousemove` esta registrado en la
+  // ventana desde el principio, asi que no depende de que React haya pintado nada: en un
+  // arrastre real el `mousemove` siguiente llega a veces en el mismo tick que el `mousedown`,
+  // y con estado ese movimiento se perdia. Ademas el arrastre no necesita re-renderizar nada:
+  // el PNG llega por el preview de todos modos.
+  const lienzoRef = useRef<HTMLDivElement | null>(null);
+  const arrastre = useRef<{
+    indice: number;
+    tomaX: number;
+    tomaY: number;
+    origenX: number;
+    origenY: number;
+  } | null>(null);
+
+  /** Posicion del puntero sobre la etiqueta, en dots. */
+  const dotsDelPuntero = useCallback(
+    (e: { clientX: number; clientY: number }) => {
+      const el = lienzoRef.current;
+      if (!el) return { dx: 0, dy: 0 };
+      const r = el.getBoundingClientRect();
+      // El `p-2` del contenedor son 8 px de marco que hay que restar antes de dividir.
+      return {
+        dx: (e.clientX - r.left - 8) / zoom,
+        dy: (e.clientY - r.top - 8) / zoom,
+      };
+    },
+    [zoom],
+  );
+
+  const empezarArrastre = useCallback(
+    (e: React.MouseEvent) => {
+      const caja = (e.target as HTMLElement).closest<HTMLElement>("[data-caja]");
+      if (!caja) return;
+      const i = Number(caja.dataset.caja);
+      const indice = pegables[i];
+      if (indice < 0 || indice !== sel) return;
+      e.preventDefault();
+      const { dx, dy } = dotsDelPuntero(e);
+      arrastre.current = {
+        indice,
+        tomaX: dx,
+        tomaY: dy,
+        origenX: Number(zones[indice]?.x ?? 0),
+        origenY: Number(zones[indice]?.y ?? 0),
+      };
+    },
+    [pegables, sel, zones, dotsDelPuntero],
+  );
+
+  useEffect(() => {
+    const mover = (e: MouseEvent) => {
+      const a = arrastre.current;
+      if (!a) return;
+      const { dx, dy } = dotsDelPuntero(e);
+      // El desplazamiento se mide en dots y se redondea al dot entero mas cercano: es la
+      // unidad que entiende la impresora, y dejar fracciones solo produciria ruido.
+      const x = Math.max(0, Math.round(a.origenX + (dx - a.tomaX)));
+      const y = Math.max(0, Math.round(a.origenY + (dy - a.tomaY)));
+      setZones((prev) =>
+        prev.map((z, i) => (i === a.indice ? { ...z, x, y } : z)),
+      );
+    };
+    const soltar = () => {
+      arrastre.current = null;
+    };
+    window.addEventListener("mousemove", mover);
+    window.addEventListener("mouseup", soltar);
+    return () => {
+      window.removeEventListener("mousemove", mover);
+      window.removeEventListener("mouseup", soltar);
+    };
+  }, [dotsDelPuntero]);
+
+  const codigo = useMemo(() => {
+    if (!zona) return "";
+    const l: string[] = [];
+    l.push(`    // ${etiquetaDe(zona, sel)}`);
+    if (zona.kind === "barcode") {
+      l.push(`    { kind: "barcode", x: ${zona.x}, y: ${zona.y}, heightDots: ${zona.heightDots},`);
+      l.push(`      interpretationLine: true, source: "barcode", center: true,`);
+      l.push(`      moduleWidth: ${zona.moduleWidth}, hriHeightDots: ${zona.hriHeightDots ?? 14} },`);
+    } else {
+      const af = zona.autoFit as Record<string, number> | undefined;
+      const partes = [`kind: "text"`, `x: ${zona.x}`, `y: ${zona.y}`, `format: "${zona.format}"`];
+      if (af) partes.push(`autoFit: { maxHeight: ${af.maxHeight}, minHeight: ${af.minHeight}, widthRatio: ${af.widthRatio} }`);
+      else partes.push(`format: "^A0N${String(zona.format).slice(4)}"`);
+      partes.push(`source: "${zona.source}"`);
+      l.push(`    { ${partes.join(", ")},`);
+      if (zona.prefix) l.push(`      prefix: "${zona.prefix}",`);
+      if (zona.maxWidthDots !== undefined) l.push(`      maxWidthDots: ${zona.maxWidthDots},`);
+      if (zona.maxLines !== undefined) l.push(`      maxLines: ${zona.maxLines},`);
+      if (zona.justify) l.push(`      justify: "${zona.justify}",`);
+      l[l.length - 1] = l[l.length - 1].replace(/,$/, " },");
+      l[l.length - 1] = l[l.length - 1].replace(/,\s*},$/, " },");
+    }
+    return l.join("\n");
+  }, [zona, sel]);
+
+  const solapes = useMemo(() => {
+    if (!preview) return [];
+    const c = preview.cajas;
+    const fuera: string[] = [];
+    for (const a of c) {
+      if (a.x0 < 0 || a.y0 < 0 || a.x1 > DEFAULT_TEMPLATE.widthDots || a.y1 > DEFAULT_TEMPLATE.heightDots) {
+        fuera.push(`"${a.texto ?? a.etiqueta}" se sale del rollo (${a.x1} > ${DEFAULT_TEMPLATE.widthDots})`);
+      }
+    }
+    for (let i = 0; i < c.length; i++) {
+      for (let j = i + 1; j < c.length; j++) {
+        if (c[i].x1 > c[j].x0 && c[j].x1 > c[i].x0 && c[i].y1 > c[j].y0 && c[j].y1 > c[i].y0) {
+          fuera.push(`"${c[i].texto ?? c[i].etiqueta}" pisa a "${c[j].texto ?? c[j].etiqueta}"`);
+        }
+      }
+    }
+    return fuera;
+  }, [preview]);
+
+  return (
+    <main className="flex flex-col gap-6">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-neutral-900">Editor de plantilla</h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
+          se imprime. Al final copias el bloque de TypeScript en{" "}
+          <code>src/lib/labels/label.template.ts</code>.
+        </p>
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+        {/* ------------------------------------------------------------- controles */}
+        <section className="flex flex-col gap-4">
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-2 text-sm font-semibold text-neutral-900">Zonas</h3>
+            <div className="flex flex-col gap-1">
+              {zones.map((z, i) => {
+                const activa = i === sel;
+                const editable = EDITABLES.has(z.kind);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    disabled={!editable}
+                    onClick={() => setSel(i)}
+                    className={`rounded px-2 py-1.5 text-left text-sm ${
+                      activa
+                        ? "bg-neutral-900 text-white"
+                        : editable
+                          ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
+                          : "bg-neutral-50 text-neutral-400"
+                    }`}
+                  >
+                    {etiquetaDe(z, i)}
+                    {!editable && <span className="ml-1 text-xs">(fija)</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {zona && EDITABLES.has(zona.kind) && (
+            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-neutral-900">
+                {etiquetaDe(zona, sel)}
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Num
+                  label="X (mm)"
+                  value={MM(Number(zona.x))}
+                  onChange={(v) => editar(sel, { x: DOTS(v) })}
+                />
+                <Num
+                  label="Y (mm)"
+                  value={MM(Number(zona.y))}
+                  onChange={(v) => editar(sel, { y: DOTS(v) })}
+                />
+              </div>
+
+              {zona.kind === "barcode" ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="alto barra (mm)"
+                      step={0.5}
+                      value={MM(Number(zona.heightDots))}
+                      onChange={(v) => editar(sel, { heightDots: DOTS(v) })}
+                    />
+                    <Num
+                      label="linea bajo (mm)"
+                      step={0.25}
+                      value={MM(Number(zona.hriHeightDots ?? 14))}
+                      onChange={(v) => editar(sel, { hriHeightDots: DOTS(v) })}
+                    />
+                  </div>
+                  <Num
+                    label="ancho de modulo (dots)"
+                    step={1}
+                    value={Number(zona.moduleWidth)}
+                    onChange={(v) => editar(sel, { moduleWidth: v })}
+                  />
+                  <p className="mt-2 text-xs text-neutral-500">
+                    El minimo de ISO/IEC 15420 son 0,264 mm: 3 dots son 0,375 mm y 2 dots son
+                    0,250 mm, por debajo. Con 2 hay que leer en fisico antes de dejarlo.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="alto letra (mm)"
+                      step={0.25}
+                      value={altoDeFuente(zona)}
+                      onChange={(v) => editarFuente(sel, v)}
+                    />
+                    <Num
+                      label="ancho letra (mm)"
+                      step={0.25}
+                      value={anchoDeFuente(zona)}
+                      onChange={(v) => editarFuenteAncho(sel, v)}
+                    />
+                  </div>
+                  {zona.autoFit ? (
+                    <>
+                      {resuelto && resuelto.texto !== null && (
+                        <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
+                          <p className="text-xs font-semibold text-emerald-900">
+                            Con este nombre sale asi
+                          </p>
+                          <p className="mt-0.5 font-mono text-xs text-emerald-800">
+                            {resuelto.texto}
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-900">
+                            alto {MM(resuelto.alto).toFixed(2)} mm ({resuelto.alto} dots), ancho
+                            de letra {MM(resuelto.ancho).toFixed(2)} mm ({resuelto.ancho} dots)
+                          </p>
+                          {resuelto.alto < (zona.autoFit as Record<string, number>).maxHeight && (
+                            <p className="mt-1 text-xs text-emerald-700">
+                              Bajado del techo: el nombre no cabe a{" "}
+                              {MM((zona.autoFit as Record<string, number>).maxHeight).toFixed(2)} mm
+                              de alto dentro de la caja.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <Num
+                          label="alto maximo (mm)"
+                          step={0.25}
+                          value={MM((zona.autoFit as Record<string, number>).maxHeight)}
+                          onChange={(v) => editarAutoFit(sel, { maxHeight: DOTS(v) })}
+                        />
+                      <Num
+                          label="alto minimo (mm)"
+                          step={0.25}
+                          value={MM((zona.autoFit as Record<string, number>).minHeight)}
+                          onChange={(v) => editarAutoFit(sel, { minHeight: DOTS(v) })}
+                        />
+                      <Num
+                          label="condensado (widthRatio)"
+                          step={0.01}
+                          value={(zona.autoFit as Record<string, number>).widthRatio}
+                          onChange={(v) => editarAutoFit(sel, { widthRatio: v })}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Esta zona no tiene autoFit: el alto de letra es el que pongas, fijo.
+                    </p>
+                  )}
+                  <Num
+                    label="ancho de caja (mm)"
+                    step={0.5}
+                    value={zona.maxWidthDots === undefined ? 0 : MM(Number(zona.maxWidthDots))}
+                    onChange={(v) =>
+                      editar(sel, { maxWidthDots: v > 0 ? DOTS(v) : undefined })
+                    }
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ------------------------------------------------------ datos de prueba */}
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-neutral-900">Datos de prueba</h3>
+            <label className="mb-1 block text-xs text-neutral-600">Nombre</label>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            />
+            <label className="mb-1 mt-2 block text-xs text-neutral-600">Codigo de barras</label>
+            <input
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            />
+            <label className="mb-1 mt-2 block text-xs text-neutral-600">Precio</label>
+            <input
+              type="number"
+              step="0.01"
+              value={precio}
+              onChange={(e) => setPrecio(Number(e.target.value))}
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            />
+            <p className="mt-2 text-xs text-neutral-500">
+              Prueba con un nombre corto y con uno de 50 caracteres. El alto de letra sale
+              distinto en cada caso: esa es la gracia del autoFit.
+            </p>
+          </div>
+
+          {/* ------------------------------------------------------------ salida */}
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-2 text-sm font-semibold text-neutral-900">
+              Valor para label.template.ts
+            </h3>
+            <textarea
+              readOnly
+              value={codigo}
+              rows={8}
+              className="w-full rounded border border-neutral-300 bg-neutral-50 p-2 font-mono text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(codigo)}
+              className="mt-2 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
+            >
+              Copiar
+            </button>
+            <p className="mt-2 text-xs text-neutral-500">
+              Pega esto en el <code>zones</code> de <code>label.template.ts</code>, en el
+              lugar de la zona que estes moviendo.
+            </p>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------------- dibujo */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-4 rounded-lg border border-neutral-200 bg-white px-4 py-2 shadow-sm">
+            <label className="text-xs text-neutral-600">
+              Zoom
+              <input
+                type="range"
+                min={1}
+                max={6}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="ml-2"
+              />
+              <span className="ml-1">{zoom}x</span>
+            </label>
+            <label className="text-xs text-neutral-600">
+              <input
+                type="checkbox"
+                checked={mostrarCajas}
+                onChange={(e) => setMostrarCajas(e.target.checked)}
+                className="mr-1"
+              />
+              ver cajas
+            </label>
+            <span className="text-xs text-neutral-500">
+              Elige una zona y arrastra su caja para moverla. El marco y el logo son fijos.
+            </span>
+            <span className="text-xs text-neutral-500">
+              {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
+              {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots
+            </span>
+            {busy && <span className="text-xs text-blue-600">calculando...</span>}
+          </div>
+
+          {error && (
+            <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          {solapes.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+              <p className="text-sm font-semibold text-amber-900">
+                Con estos valores la etiqueta se imprime encima de si misma
+              </p>
+              <ul className="mt-1 list-disc pl-5 text-xs text-amber-800">
+                {solapes.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {preview && (
+            <div
+              ref={lienzoRef}
+              className="relative inline-block select-none rounded-lg border border-neutral-300 bg-white p-2 shadow-sm"
+              onMouseDown={empezarArrastre}
+            >
+              <img
+                src={`data:image/png;base64,${preview.png}`}
+                width={DEFAULT_TEMPLATE.widthDots * zoom}
+                height={DEFAULT_TEMPLATE.heightDots * zoom}
+                alt="Previsualizacion de la etiqueta"
+                draggable={false}
+              />
+              {mostrarCajas &&
+                preview.cajas.map((c, i) => {
+                  // Solo se puede arrastrar la caja que corresponde a la zona seleccionada, y
+                  // solo si esa zona es editable: el marco y el logo son fijos por diseno.
+                  const pegable = pegables[i] === sel;
+                  return (
+                    <div
+                      key={i}
+                      data-caja={i}
+                      className={
+                        pegable
+                          ? "absolute cursor-move border-2 border-dashed border-blue-600"
+                          : "pointer-events-none absolute border border-dashed border-blue-500"
+                      }
+                      style={{
+                        left: `${c.x0 * zoom + 8}px`,
+                        top: `${c.y0 * zoom + 8}px`,
+                        width: `${(c.x1 - c.x0) * zoom}px`,
+                        height: `${(c.y1 - c.y0) * zoom}px`,
+                      }}
+                    >
+                      <span
+                        className={`absolute -top-4 left-0 whitespace-nowrap px-1 text-[10px] text-white ${
+                          pegable ? "bg-blue-700" : "bg-blue-500"
+                        }`}
+                      >
+                        {c.texto ?? c.etiqueta} · x{c.x0}-{c.x1} y{c.y0}-{c.y1}
+                        {pegable && " · arrastra"}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {preview && (
+            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-2 text-sm font-semibold text-neutral-900">Informe</h3>
+              <pre className="whitespace-pre-wrap font-mono text-xs text-neutral-700">
+                {[
+                  `symbologia: ${preview.symbology ?? "-"}`,
+                  `datos impresos: ${preview.datosImpresos ?? "-"}`,
+                  `ancho del simbolo: ${preview.anchoSimbolo} dots (${MM(preview.anchoSimbolo).toFixed(1)} mm)`,
+                  `zona quieta: ${preview.zonaQuieta} dots`,
+                  "",
+                  ...preview.informe,
+                ].join("\n")}
+              </pre>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function altoDeFuente(z: AnyZone): number {
+  if (z.autoFit) return MM((z.autoFit as Record<string, number>).maxHeight);
+  const m = String(z.format ?? "").match(/\^A0N,(\d+),/);
+  return m ? MM(Number(m[1])) : 0;
+}
+
+function anchoDeFuente(z: AnyZone): number {
+  if (z.autoFit) return MM(Math.round(altoDeFuente(z) * MM_TO_DOTS * Number((z.autoFit as Record<string, number>).widthRatio)));
+  const m = String(z.format ?? "").match(/\^A0N,(\d+),(\d+)/);
+  return m ? MM(Number(m[2])) : 0;
+}
+
+/** Cambia el alto de fuente. Con `autoFit` manda sobre `format`; sin el, cambia `format`. */
+function conAltoDeFuente(z: AnyZone, mm: number): AnyZone {
+  const alto = DOTS(mm);
+  if (z.autoFit) {
+    const af = z.autoFit as Record<string, number>;
+    const ancho = Math.max(1, Math.round(alto * af.widthRatio));
+    return { ...z, autoFit: { ...af, maxHeight: alto }, format: `^A0N,${alto},${ancho}` };
+  }
+  const actualAncho = Number(String(z.format ?? "").match(/\^A0N,(\d+),(\d+)/)?.[2] ?? 1);
+  const actualAlto = Number(String(z.format ?? "").match(/\^A0N,(\d+),/)?.[1] ?? 1);
+  // El ancho de caracter sigue la misma proporcion que el alto, para no deformar la letra.
+  const ancho = Math.max(1, Math.round((actualAncho * alto) / Math.max(1, actualAlto)));
+  return { ...z, format: `^A0N,${alto},${ancho}` };
+}
+
+/** Cambia solo el ancho de caracter, dejando el alto como estaba. */
+function conAnchoDeFuente(z: AnyZone, mm: number): AnyZone {
+  const ancho = DOTS(mm);
+  const alto = Number(String(z.format ?? "").match(/\^A0N,(\d+),/)?.[1] ?? 14);
+  return { ...z, format: `^A0N,${alto},${ancho}` };
+}
+
+function conAutoFit(z: AnyZone, cambio: Record<string, number>): AnyZone {
+  const af = (z.autoFit ?? { maxHeight: 32, minHeight: 13, widthRatio: 0.5 }) as Record<
+    string,
+    number
+  >;
+  return { ...z, autoFit: { ...af, ...cambio } };
+}
+
+function Num({
+  label,
+  value,
+  onChange,
+  step = 0.25,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
+  return (
+    <div className="mt-2">
+      <label className="mb-1 block text-xs text-neutral-600">{label}</label>
+      <input
+        type="number"
+        step={step}
+        value={Number.isFinite(value) ? Number(value.toFixed(3)) : 0}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+      />
+    </div>
+  );
+}

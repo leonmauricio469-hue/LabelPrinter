@@ -235,32 +235,48 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     },
     // 3. Nombre: una sola linea, centrada, que baja la fuente hasta que quepa. Ver el
     //    reparto real de anchuras en el comentario de `autoFit` mas abajo.
+    //
+    //    `maxHeight: 54` es el TECHO de lo que cabe, no un numero elegido. Se llego a el
+    //    moviendo el nombre a y=92 (el logo acaba en 87), bajando las barras a y=150,
+    //    bajando su alto de 72 a 64 dots y su linea de interpretacion a 12. Reparto:
+    //
+    //      y  20.. 87  logo                        (fijo)
+    //      y  92..146  nombre, hasta 54 dots de alto   <-- lo que se agranda
+    //      y 150..214  barras, 64 dots = 8 mm
+    //      y 214..226  linea de interpretacion, 12 dots
+    //      y 230..260  REF: y el precio
+    //      y 271       borde interior
+    //
+    //    Con 72 dots de barras (9 mm) el techo era 44. Los 64 dots de ahora son 8 mm, por
+    //    encima del minimo practico de 6,64 mm; con 6 mm las barras no las leian los
+    //    escaneres, que fue el primer bug de legibilidad.
     {
       kind: "text",
       x: dotsFromMm(8),
-      y: dotsFromMm(11.5),
+      y: 92,
       format: "^A0N,32,16",
       source: "productName",
       maxWidthDots: dotsFromMm(43),
       maxLines: 1,
       justify: "C",
-      autoFit: { maxHeight: 32, minHeight: 13, widthRatio: 0.5 },
+      autoFit: { maxHeight: 54, minHeight: 13, widthRatio: 0.5 },
     },
-    // 4. Codigo de barras. 17,5 mm de alto de barra, 72 dots, con la linea de
-    //    interpretacion a 14 dots (dicho a mano: si no, ^BY la pone a 30 y pisa REF).
+    // 4. Codigo de barras. 8 mm de alto de barra, 64 dots, con la linea de
+    //    interpretacion a 12 dots (dicho a mano: si no, ^BY la pone a la altura de la
+    //    fuente vigente y se come a REF).
     //    El numero de abajo lo dibuja la propia impresora desde `plan.data`, que ya lleva
     //    el 0 delante de los UPC-A y el digito de control corregido, asi que no puede
     //    desincronizarse del simbolo.
     {
       kind: "barcode",
       x: 0,
-      y: dotsFromMm(17.5),
-      heightDots: 72,
+      y: 150,
+      heightDots: 64,
       interpretationLine: true,
       source: "barcode",
       center: true,
       moduleWidth: 3,
-      hriHeightDots: 14,
+      hriHeightDots: 12,
     },
     // 5. Referencia: "REF:" pequeno e independiente del valor, para poder agrandar el
     //    numero sin arrastrar la palabra.

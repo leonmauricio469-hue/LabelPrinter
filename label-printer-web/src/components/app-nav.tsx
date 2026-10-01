@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Modo Normal" },
   { href: "/fast", label: "Modo Rapido" },
   { href: "/history", label: "Historial" },
+  { href: "/editor", label: "Editor" },
   { href: "/settings", label: "Configuracion" },
 ] as const;
 

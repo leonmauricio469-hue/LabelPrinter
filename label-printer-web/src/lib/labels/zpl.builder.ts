@@ -130,6 +130,41 @@ function resolveAutoFit(zone: TextZone, text: string): string | null {
   return `^A0N,${alto},${Math.max(1, Math.round(alto * widthRatio))}`;
 }
 
+/**
+ * Texto y fuente que realmente salen de una zona de texto, con unos datos concretos.
+ *
+ * Es lo mismo que hace `emit()`, pero sin emitir: devuelve el `format` que se acabaria
+ * mandando a la impresora y el texto ya plegado. Lo usa el editor de `/editor` para ensenar
+ * el alto RESUELTO y no el techo.
+ *
+ * Esa distincion importa. Con `autoFit`, `format` es el valor por defecto y no se imprime si
+ * el texto no cabe: `resolveAutoFit()` busca un alto menor. Enseñar `format` como si fuera
+ * el alto real daria un numero que nunca sale en el papel.
+ *
+ * Devuelve `null` si la zona no imprime nada con esos datos (texto vacio), que es lo mismo
+ * que hace `emit()` al saltarsela.
+ */
+export function resolveZoneText(
+  template: LabelTemplate,
+  zone: TextZone,
+  data: LabelData,
+): { text: string; format: string; alto: number; ancho: number } | null {
+  const bz = barcodeZoneOf(template);
+  const plan: BarcodePlan = bz
+    ? planForZone(template, bz, data.barcode)
+    : { printable: false, reason: "vacio", detail: "la plantilla no tiene zona de codigo" };
+  const text = textFor(zone, data, plan);
+  if (text === "") return null;
+  const format = resolveAutoFit(zone, text) ?? zone.format;
+  const m = format.match(/\^A0N,(\d+),(\d+)/);
+  return {
+    text,
+    format,
+    alto: m ? Number.parseInt(m[1], 10) : 0,
+    ancho: m ? Number.parseInt(m[2], 10) : 0,
+  };
+}
+
 function textFor(zone: TextZone, data: LabelData, plan: BarcodePlan): string {
   const raw =
     zone.source === "header"
