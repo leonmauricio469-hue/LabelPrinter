@@ -3,12 +3,37 @@
 import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
+import {
+  buttonGhost,
+  buttonPrimary,
+  card,
+  h2,
+  hint,
+  input,
+  label as labelClass,
+} from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
 import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
 
-const inputClass =
-  "mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none";
-const labelClass = "text-sm font-medium text-neutral-700";
+/**
+ * Cajones de aviso dentro de la configuracion.
+ *
+ * Son tres y no uno porque el peso del mensaje no es el mismo: `danger` dice "no se va a
+ * poder imprimir", `warn` dice "sale, pero miralo", e `info` es documentacion que conviene
+ * tener a mano mientras se rellena el campo. Pintar los tres del mismo ambar obligaria al
+ * operador a leerlos todos para saber cual le impide trabajar.
+ */
+const callout = {
+  danger: "border border-danger-line bg-danger-soft px-3 py-2.5 text-xs leading-relaxed text-danger",
+  warn: "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn",
+  info: "border border-line bg-surface-sunken px-3 py-2.5 text-xs leading-relaxed text-ink-soft",
+} as const;
+
+/** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
+const note = "rounded-md border border-line bg-surface-sunken px-3 py-3 text-xs leading-relaxed text-ink-soft";
+
+/** `input` compartido con el separacion respecto de la etiqueta de arriba. */
+const inputClass = `mt-1.5 ${input}`;
 
 /** Configuracion de impresora y etiqueta. Escribe `settings.json`. */
 export default function SettingsPage() {
@@ -131,7 +156,12 @@ export default function SettingsPage() {
   }, []);
 
   if (!settings) {
-    return <p className="py-10 text-center text-neutral-500">Cargando configuracion...</p>;
+    return (
+      <main className="flex flex-col items-center gap-3 py-16 text-ink-mute">
+        <span aria-hidden className="size-6 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+        <p className="text-sm">Cargando configuracion...</p>
+      </main>
+    );
   }
 
   const isUsb = settings.printer.transport === "usb";
@@ -154,9 +184,9 @@ export default function SettingsPage() {
   const idObsoleto = plantillaActiva ? null : settings.label.templateId;
 
   return (
-    <main className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Impresora</h2>
+    <main className="flex flex-col gap-5">
+      <section className={card + " flex flex-col gap-4 p-5"}>
+        <h2 className={h2}>Impresora</h2>
 
         {/* Aqui si se ven las banderas crudas: es la pagina donde se diagnostica, y todavia
             no esta verificado que el driver de la Zebra rellene todas. El numero en crudo es
@@ -207,10 +237,10 @@ export default function SettingsPage() {
                 placeholder="ZDesigner GX420t"
               />
             )}
-            <p className="mt-1 text-xs text-neutral-500">
-              El nombre debe coincidir exactamente con la cola de Windows. Se puede ver
-              en PowerShell con <code>Get-Printer</code>. El estado de arriba usa el nombre
-              <strong> guardado</strong>: si se cambia aqui, hay que guardar antes de que
+            <p className={hint}>
+              El nombre debe coincidir exactamente con la cola de Windows. Se puede ver en
+              PowerShell con <code>Get-Printer</code>. El estado de arriba usa el nombre{" "}
+              <strong>guardado</strong>: si se cambia aqui, hay que guardar antes de que
               cambie.
             </p>
           </div>
@@ -247,9 +277,9 @@ export default function SettingsPage() {
             Va aqui y no en la seccion de "Etiqueta" porque es una medida de la impresora: lo
             pone la persona, en la impresora, y de aqui solo sale el `^PW` que le dice a la
             impresora cuanto papel hay. */}
-        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-3">
+        <div className={note}>
           <div className="flex items-end gap-4">
-            <div className="w-40">
+            <div className="w-40 shrink-0">
               <label htmlFor="mediaWidthMm" className={labelClass}>
                 Ancho del rollo (mm)
               </label>
@@ -261,16 +291,16 @@ export default function SettingsPage() {
                 max={170}
                 value={settings.printer.mediaWidthMm}
                 onChange={(e) => patchPrinter({ mediaWidthMm: Number(e.target.value) })}
-                className={inputClass}
+                className={`${inputClass} bg-surface`}
               />
             </div>
-            <div className="flex-1 text-xs text-neutral-600">
+            <div className="flex-1 text-xs leading-relaxed text-ink-soft">
               <p>
                 Lo que mide el <strong>rollo que hay puesto</strong>, no lo que mide la
                 etiqueta. Sale de aqui el <code>^PW</code>, que es el ancho de la zona de
                 impresion.
               </p>
-              <p className="mt-1">
+              <p className="mt-1.5">
                 No es el ancho de la etiqueta, que son {DEFAULT_TEMPLATE.widthMm} mm, ni lo que
                 pone <code>settings.json</code> en sus campos de ancho. Si no sabes cuanto mide
                 el rollo, se mide en la impresora (el panel, o el menu de medios) antes de
@@ -281,7 +311,7 @@ export default function SettingsPage() {
           </div>
 
           {mediaMenorQueDiseno ? (
-            <p className="mt-3 rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-900">
+            <p className={`mt-3 ${callout.danger}`}>
               <strong>No se va a poder imprimir.</strong> Con {settings.printer.mediaWidthMm} mm
               de rollo y {DEFAULT_TEMPLATE.widthMm} mm de etiqueta, <code>^PW</code> recorta y
               no escala: la etiqueta saldria cortada por la derecha, con el ZPL perfectamente
@@ -289,7 +319,7 @@ export default function SettingsPage() {
               rollo sea mas estrecho que la etiqueta.
             </p>
           ) : mediaMayorQueDiseno ? (
-            <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+            <p className={`mt-3 ${callout.warn}`}>
               Sale entero, con{" "}
               {((settings.printer.mediaWidthMm - DEFAULT_TEMPLATE.widthMm) / 2).toFixed(1)} mm
               de papel de mas a cada lado. El diseno va pegado a la izquierda, asi que el
@@ -299,50 +329,48 @@ export default function SettingsPage() {
           ) : null}
         </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={test}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
-          >
+        {/*
+          Guardar va al final y es el unico primario de la pantalla. Antes estaba pegado a
+          "Probar conexion" con el mismo peso visual, y las dos acciones no son equivalentes:
+          una escribe en disco y la otra solo consulta. Un operador que quiere salvar una
+          configuracion valida tenia que elegir entre dos botones del mismo tamano.
+        */}
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+          <button type="button" onClick={test} className={buttonGhost}>
             Probar conexion
           </button>
-          <button
-            type="button"
-            onClick={save}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-          >
+          <button type="button" onClick={save} className={buttonPrimary}>
             Guardar
           </button>
         </div>
       </section>
 
-      <section className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Etiqueta</h2>
+      <section className={card + " flex flex-col gap-4 p-5"}>
+        <h2 className={h2}>Etiqueta</h2>
 
-        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+        <div className={note}>
           <p>
             Plantilla: <strong>{DEFAULT_TEMPLATE.name}</strong> ={" "}
             {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
             {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots a 203 dpi.
           </p>
           {idObsoleto && (
-            <p className="mt-1">
+            <p className="mt-1.5">
               Guardada la <code>{idObsoleto}</code>, que ya no existe en el codigo. Se va a
-              imprimir con la de 59 x 35 mm de todos modos. Pulsa Guardar para dejar el
-              <code> settings.json</code> limpio.
+              imprimir con la de 59 x 35 mm de todos modos. Pulsa Guardar para dejar el{" "}
+              <code>settings.json</code> limpio.
             </p>
           )}
-          <p className="mt-1">
+          <p className="mt-1.5">
             Los campos de ancho y alto de abajo ya no mandan: la medida sale de la plantilla. Se
             conservan para no romper el <code>settings.json</code> guardado.
           </p>
           {override?.activo && (
-            <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+            <p className={`mt-3 ${callout.warn}`}>
               <strong>Se esta imprimiendo con una geometria guardada desde el editor</strong> (
               {override.savedAt}), no con los numeros del codigo. Se guarda en{" "}
               <code>data/plantilla-override.json</code>. En{" "}
-              <a href="/editor" className="underline">
+              <a href="/editor" className="underline underline-offset-2">
                 /editor
               </a>{" "}
               hay un boton para descartarla y volver a la del codigo.
@@ -350,13 +378,13 @@ export default function SettingsPage() {
           )}
         </div>
 
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <p className={callout.warn}>
           <strong>El rollo hay que cambiarlo en la impresora, no aqui.</strong> El ancho del
           rollo de arriba sale del <code>^PW</code>, pero el medio de verdad lo pone la
-          impresora. Si el <code>^PW</code> no coincide con el rollo, lo que se ve{" "}
-          <code>^PW</code> hace es <strong>recortar</strong>: no escala, no centra y no avisa.
-          Con el rollo de 50 mm y la etiqueta de {DEFAULT_TEMPLATE.widthMm} mm, la etiqueta
-          saldria cortada por la derecha sin que nada proteste.
+          impresora. Si el <code>^PW</code> no coincide con el rollo, lo que hace{" "}
+          <code>^PW</code> es <strong>recortar</strong>: no escala, no centra y no avisa. Con el
+          rollo de 50 mm y la etiqueta de {DEFAULT_TEMPLATE.widthMm} mm, la etiqueta saldria
+          cortada por la derecha sin que nada proteste.
         </p>
 
         <div className="grid grid-cols-2 gap-4">
@@ -397,6 +425,10 @@ export default function SettingsPage() {
             onChange={(e) => patchLabel({ businessName: e.target.value })}
             className={inputClass}
           />
+          <p className={hint}>
+            Aparece impresa en la etiqueta. Cambiarla aqui no reimprime nada: toma efecto en la
+            proxima tirada.
+          </p>
         </div>
       </section>
 

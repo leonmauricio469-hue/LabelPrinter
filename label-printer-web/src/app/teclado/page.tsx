@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buttonGhost, card } from "@/components/ui";
+
+/**
+ * El recuadro de instrucciones.
+ *
+ * En ambar y no en rojo: esta pagina no esta rota, esta desconectada de la impresion. Es
+ * una herramienta que alguien abre a proposito, y pintarla de rojo haria parecer que algo
+ * fallo justo cuando lo que se esta haciendo es diagnosticar.
+ */
+const calloutWarn =
+  "rounded-lg border border-warn-line bg-warn-soft p-5 text-warn";
 
 /**
  * Pagina de diagnostico del escaner ([[Escaner USB]]).
@@ -123,28 +134,35 @@ export default function TecladoPage() {
 
   return (
     <main className="flex flex-1 flex-col gap-4">
-      <section className="rounded-lg border border-amber-400 bg-amber-50 p-5">
-        <h2 className="text-lg font-bold">Diagnostico del escaner — no imprime nada</h2>
-        <ol className="mt-2 list-decimal space-y-1 text-sm text-neutral-800">
+      {/*
+        Aviso en ambar y no en rojo: esta pagina no esta rota, esta desconectada de la
+        impresion. Pintarla de rojo haria parecer que algo fallo cuando en realidad es una
+        herramienta que abre alguien a proposito.
+      */}
+      <section className={calloutWarn}>
+        <h2 className="text-base font-bold text-warn">
+          Diagnostico del escaner — no imprime nada
+        </h2>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-warn">
           <li>
             Deja esta ventana de Chrome <strong>en primer plano</strong> (no toques el
             teclado con la mano).
           </li>
           <li>Escanea un barcode.</li>
           <li>
-            Si <code className="rounded bg-white px-1">EVENTOS: 0</code>, el problema
+            Si <code className="rounded bg-surface px-1">EVENTOS: 0</code>, el problema
             es que la ventana no tiene el foco. Pasa el mouse sobre esta pagina y vuelve
             a escanear.
           </li>
           <li>
-            Si hay eventos pero el <code className="rounded bg-white px-1">BUFFER</code>{" "}
-            queda vacio, el escaner manda un caracter de control antes del codigo.
+            Si hay eventos pero el{" "}
+            <code className="rounded bg-surface px-1">BUFFER</code> queda vacio, el escaner
+            manda un caracter de control antes del codigo.
           </li>
           <li>
-            Si el buffer se llena pero no hay fila <code className="rounded bg-white px-1">
-              TERM
-            </code>
-            , el escaner no manda Enter: hay que configurar su sufijo.
+            Si el buffer se llena pero no hay fila{" "}
+            <code className="rounded bg-surface px-1">TERM</code>, el escaner no manda
+            Enter: hay que configurar su sufijo.
           </li>
         </ol>
       </section>
@@ -156,72 +174,67 @@ export default function TecladoPage() {
           value={focused === null ? "?" : focused ? "SI" : "NO"}
           ok={focused === true}
         />
-        <Stat label="ELEMENTO ACTIVO" value={active} ok />
-        <Stat label="ULTIMO SUFIJO" value={terminatorSeen(rows) ?? "—"} ok />
+        <Stat label="ACTIVO" value={active} ok />
+        <Stat label="SUFIJO" value={terminatorSeen(rows) ?? "—"} ok />
       </section>
 
-      <section className="rounded-lg border border-neutral-300 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-neutral-700">
-            BUFFER (caracteres accumulation)
+      <section className={card + " p-5"}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-ink-soft">
+            BUFFER{" "}
+            <span className="font-normal text-ink-mute">(caracteres acumulados)</span>
           </span>
-          <button
-            type="button"
-            onClick={clear}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
-          >
+          <button type="button" onClick={clear} className={buttonGhost}>
             Limpiar
           </button>
         </div>
-        <p className="mt-2 break-all font-mono text-2xl font-bold tracking-widest">
-          {buffer === "" ? (
-            <span className="text-neutral-300">(vacio)</span>
-          ) : (
-            buffer
-          )}
+        <p className="mt-3 min-h-[2.5rem] break-all font-mono text-2xl font-bold tracking-widest text-ink">
+          {buffer === "" ? <span className="text-line-strong">(vacio)</span> : buffer}
         </p>
       </section>
 
-      <section className="rounded-lg border border-neutral-300 bg-white">
+      <section className={card + " overflow-x-auto"}>
         <table className="w-full text-left text-xs">
-          <thead className="border-b border-neutral-200 text-neutral-500">
+          <thead className="border-b border-line bg-surface-sunken text-ink-mute">
             <tr>
-              <th className="px-3 py-2">#</th>
-              <th className="px-3 py-2">+ms</th>
-              <th className="px-3 py-2">tipo</th>
-              <th className="px-3 py-2">key</th>
-              <th className="px-3 py-2">code</th>
-              <th className="px-3 py-2">mod</th>
-              <th className="px-3 py-2">target</th>
+              <th className="px-3 py-2 font-medium">#</th>
+              <th className="px-3 py-2 font-medium">+ms</th>
+              <th className="px-3 py-2 font-medium">tipo</th>
+              <th className="px-3 py-2 font-medium">key</th>
+              <th className="px-3 py-2 font-medium">code</th>
+              <th className="px-3 py-2 font-medium">mod</th>
+              <th className="px-3 py-2 font-medium">target</th>
             </tr>
           </thead>
           <tbody className="font-mono">
             {rows.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-center font-sans text-neutral-400" colSpan={7}>
+                <td className="px-3 py-8 text-center font-sans text-ink-mute" colSpan={7}>
                   Todavia no ha llegado ninguna tecla.
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.n} className="border-t border-neutral-100">
-                  <td className="px-3 py-1 text-neutral-400">{r.n}</td>
-                  <td className="px-3 py-1 text-neutral-400">{r.deltaMs ?? "-"}</td>
+                <tr key={r.n} className="border-t border-line">
+                  <td className="px-3 py-1 text-ink-mute">{r.n}</td>
+                  {/* El `+ms` es el dato que importa: a mano se ve de un vistazo si los
+                      caracteres llegan a velocidad de escaner o de teclado. */}
+                  <td className="px-3 py-1 tabular-nums text-ink-mute">{r.deltaMs ?? "-"}</td>
                   <td
                     className={
                       r.type === "TERM"
-                        ? "px-3 py-1 font-bold text-green-700"
+                        ? "px-3 py-1 font-bold text-ok"
                         : r.type === "CTRL"
-                          ? "px-3 py-1 font-bold text-red-600"
-                          : "px-3 py-1 text-neutral-700"
+                          ? "px-3 py-1 font-bold text-danger"
+                          : "px-3 py-1 text-ink-soft"
                     }
                   >
                     {r.type}
                   </td>
                   <td className="px-3 py-1">{JSON.stringify(r.key)}</td>
-                  <td className="px-3 py-1 text-neutral-500">{r.code}</td>
-                  <td className="px-3 py-1 text-neutral-500">{r.mods}</td>
-                  <td className="px-3 py-1 text-neutral-500">{r.target}</td>
+                  <td className="px-3 py-1 text-ink-mute">{r.code}</td>
+                  <td className="px-3 py-1 text-ink-mute">{r.mods}</td>
+                  <td className="px-3 py-1 text-ink-mute">{r.target}</td>
                 </tr>
               ))
             )}
@@ -237,6 +250,14 @@ function terminatorSeen(rows: Row[]): string | null {
   return t ? JSON.stringify(t.key) : null;
 }
 
+/**
+ * Cifra de diagnostico.
+ *
+ * `ok` pinta de verde o de rojo, y esa es la unica codificacion por color de la pagina:
+ * cada stat responde "si" o "no" a una pregunta concreta. El valor va en `font-mono` y
+ * con `truncate` porque el elemento activo puede ser un `<select>` largo y no debe empujar
+ * la rejilla.
+ */
 function Stat({
   label,
   value,
@@ -249,13 +270,13 @@ function Stat({
   return (
     <div
       className={`rounded-lg border p-3 ${
-        ok ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"
+        ok ? "border-ok-line bg-ok-soft" : "border-danger-line bg-danger-soft"
       }`}
     >
-      <span className="block text-[11px] font-semibold tracking-wide text-neutral-600">
+      <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
         {label}
       </span>
-      <span className="block truncate font-mono text-lg font-bold text-neutral-900">
+      <span className="block truncate font-mono text-lg font-bold text-ink" title={String(value)}>
         {value}
       </span>
     </div>
