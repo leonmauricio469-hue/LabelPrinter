@@ -762,7 +762,10 @@ export default function EditorPage() {
             ` widthRatio: ${af.widthRatio}` +
             `${af.maxBlockDots !== undefined ? `, maxBlockDots: ${af.maxBlockDots}` : ""} }`,
         );
-      } else partes.push(`format: "^A0N${String(zona.format).slice(4)}"`);
+      }
+      // Sin `else`: `format` ya esta en `partes` desde arriba. Añadirlo otra vez aqui
+      // producia un objeto literal con la clave dos veces, y TypeScript lo rechaza (TS1117)
+      // al pegar el bloque en `label.template.ts`.
       partes.push(`source: "${zona.source}"`);
       l.push(`    { ${partes.join(", ")},`);
       if (zona.prefix) l.push(`      prefix: "${zona.prefix}",`);
