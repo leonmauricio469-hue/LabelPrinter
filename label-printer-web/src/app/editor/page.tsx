@@ -427,6 +427,73 @@ export default function EditorPage() {
    */
   const resuelto = preview?.resueltos.find((r) => r.indice === sel) ?? null;
 
+  /**
+   * Por que se ha bajado la letra del techo, en una frase.
+   *
+   * Antes de v1.8 solo habia una razon posible: el texto no cabia en UNA linea del ancho de
+   * caja. Ahora hay dos, y se confunden: con `maxLines: 2` y `maxBlockDots`, un nombre puede
+   * caber de sobra en una linea y estar bajadísimo porque el hueco que le queda hasta las
+   * barras no da para dos lineas grandes. Decirle al usuario "no cabe a 56 dots" cuando lo
+   * que pasa es que no cabe en 88 de bloque lo manda a subir `maxHeight`, que no es el
+   * mando que sirve, y a bajar `minHeight`, que empeora el resultado.
+   *
+   * Se decide mirando la RAMA que `resolveAutoFit()` eligió de verdad, no una hipotesis. El
+   * algoritmo prueba primero "cabe en una linea" bajando el alto, y solo si eso no sale por
+   * abajo prueba a repartir en varias. Asi que un nombre que sale en UNA linea a 55 dots esta
+   * limitado por el ancho y nada mas, aunque a 56 dots el hueco tampoco dejaria entrar el bloque
+   * de dos lineas: ese segundo limite nunca llego a mandar porque el algoritmo
+   * ya habia encontrado la solucion de una linea. Decir "el tope lo pone el hueco" ahi
+   * manda a mover el hueco cuando el ancho es lo unico que aprieta.
+   */
+  const porQueSeBajo = useMemo((): string | null => {
+    const af = zona?.autoFit as Record<string, number> | undefined;
+    if (!af || !resuelto || resuelto.alto >= af.maxHeight || !zona || zona.kind !== "text") {
+      return null;
+    }
+    // `caja`, `maxLineas` y `anchoTecho` salen de la zona con `as number`: `zona` es la union
+    // de todas las zonas editables y `maxWidthDots` solo existe en las de texto, asi que el
+    // tipo del union no lo afina solo. Ya se ha comprobado antes que `zona.kind === "text"`.
+    const chars = resuelto.texto?.length ?? 0;
+    const caja = (zona.maxWidthDots as number | undefined) ?? 0;
+    const maxLineas = (zona.maxLines as number | undefined) ?? 1;
+    const anchoTecho = Math.max(1, Math.round(af.maxHeight * af.widthRatio));
+    const salidaEnUnaLinea = chars * resuelto.ancho <= caja;
+    const topeBloque = af.maxBlockDots as number | undefined;
+
+    const razones: string[] = [];
+    if (salidaEnUnaLinea) {
+      // Rama de una linea: el unico tope posible es el ancho, y solo si a la altura elegida el
+      // bloque de una linea ya no cupiera (o sea, un `maxBlockDots` menor que el alto).
+      razones.push(
+        `no caben ${chars} caracteres en una linea de ${caja} dots a ${anchoTecho} de celda`,
+      );
+      if (topeBloque !== undefined && resuelto.alto > topeBloque) {
+        razones.push(`una sola linea de ${resuelto.alto} ya no cabe en el hueco de ${topeBloque}`);
+      }
+      return (
+        `Bajado del techo a ${resuelto.alto} dots: ${razones.join("; ")}. ` +
+        `Cabe en una sola linea, asi que para mas alto hay que ensanchar la caja.`
+      );
+    }
+
+    // Rama de varias lineas: aqui el ancho no es el problema (si lo fuera, no habria salida) y
+    // el limite que manda es el alto total del bloque, que es lo que impide dos lineas grandes.
+    const lineas = Math.min(
+      Math.ceil(chars / Math.max(1, Math.floor(caja / Math.max(1, resuelto.ancho)))),
+      maxLineas,
+    );
+    razones.push(`sale en ${lineas} ${lineas === 1 ? "linea" : "lineas"} de ${resuelto.alto} dots`);
+    if (topeBloque !== undefined) {
+      const bloque = (2 * lineas - 1) * af.maxHeight;
+      razones.push(
+        `y a ${af.maxHeight} dots de alto el bloque ocuparia ${bloque}, con un hueco de ${topeBloque}`,
+      );
+      return `Bajado del techo a ${resuelto.alto} dots: ${razones.join("; ")}. ` +
+        `Subir el alto no ayuda: el tope lo pone el hueco hasta las barras, no el ancho.`;
+    }
+    return `Bajado del techo a ${resuelto.alto} dots: ${razones.join("; ")}.`;
+  }, [zona, resuelto]);
+
   const pegables = useMemo(
     () => (preview ? mapearCajas(preview.cajas, zones, preview.resueltos) : []),
     [preview, zones],
@@ -595,11 +662,23 @@ export default function EditorPage() {
     } else {
       const af = zona.autoFit as Record<string, number> | undefined;
       const partes = [`kind: "text"`, `x: ${zona.x}`, `y: ${zona.y}`, `format: "${zona.format}"`];
-      if (af) partes.push(`autoFit: { maxHeight: ${af.maxHeight}, minHeight: ${af.minHeight}, widthRatio: ${af.widthRatio} }`);
-      else partes.push(`format: "^A0N${String(zona.format).slice(4)}"`);
+      if (af) {
+        // `maxBlockDots` se emite solo si esta, y no siempre. Es opcional a proposito: lo que
+        // falta es que se EMITA, porque el boton de aplicar escribe este codigo entero en
+        // `label.template.ts`. Si el generador se come un campo, mover una zona en el editor
+        // borra ese campo de la plantilla sin que nadie lo note: el nombre volveria a
+        // minusculas y perderia el tope de alto del bloque, y el codigo seguiria compilando y
+        // la etiqueta seguiria imprimiendose, solo que distinta.
+        partes.push(
+          `autoFit: { maxHeight: ${af.maxHeight}, minHeight: ${af.minHeight},` +
+            ` widthRatio: ${af.widthRatio}` +
+            `${af.maxBlockDots !== undefined ? `, maxBlockDots: ${af.maxBlockDots}` : ""} }`,
+        );
+      } else partes.push(`format: "^A0N${String(zona.format).slice(4)}"`);
       partes.push(`source: "${zona.source}"`);
       l.push(`    { ${partes.join(", ")},`);
       if (zona.prefix) l.push(`      prefix: "${zona.prefix}",`);
+      if (zona.uppercase) l.push(`      uppercase: true,`);
       if (zona.maxWidthDots !== undefined) l.push(`      maxWidthDots: ${zona.maxWidthDots},`);
       if (zona.maxLines !== undefined) l.push(`      maxLines: ${zona.maxLines},`);
       if (zona.justify) l.push(`      justify: "${zona.justify}",`);
@@ -784,12 +863,8 @@ export default function EditorPage() {
                             alto {MM(resuelto.alto).toFixed(2)} mm ({resuelto.alto} dots), ancho
                             de letra {MM(resuelto.ancho).toFixed(2)} mm ({resuelto.ancho} dots)
                           </p>
-                          {resuelto.alto < (zona.autoFit as Record<string, number>).maxHeight && (
-                            <p className="mt-1 text-xs text-emerald-700">
-                              Bajado del techo: el nombre no cabe a{" "}
-                              {MM((zona.autoFit as Record<string, number>).maxHeight).toFixed(2)} mm
-                              de alto dentro de la caja.
-                            </p>
+                          {porQueSeBajo && (
+                            <p className="mt-1 text-xs text-emerald-700">{porQueSeBajo}</p>
                           )}
                         </div>
                       )}
@@ -813,6 +888,14 @@ export default function EditorPage() {
                           onChange={(v) => editarAutoFit(sel, { widthRatio: v })}
                         />
                       </div>
+                      {(zona.autoFit as Record<string, number>).maxBlockDots !== undefined && (
+                        <Num
+                          label="alto del bloque (mm)"
+                          step={0.25}
+                          value={MM((zona.autoFit as Record<string, number>).maxBlockDots!)}
+                          onChange={(v) => editarAutoFit(sel, { maxBlockDots: DOTS(v) })}
+                        />
+                      )}
                     </>
                   ) : (
                     <p className="mt-2 text-xs text-amber-700">
@@ -1033,7 +1116,10 @@ export default function EditorPage() {
                   const nota = pegable && zona ? ejesRedimensionables(zona as unknown as LabelZone) : null;
                   // Las asas de un eje que la zona no admite no se dibujan. Un tirador que no
                   // hace nada parece un fallo del editor, y para el codigo de barras hay una
-                  // razon de peso: el simbolo va centrado y su ancho es un multiplo de 95 dots.
+                  // razon de peso: el ancho del simbolo lo fijan los modulos de la
+                  // simbologia (95 en EAN-13) por el ancho de modulo, que es un numero entero,
+                  // asi que un tirador de ancho solo podria ofrecer 190 o 285 dots y nada en
+                  // medio.
                   const asas: Asider[] = !nota
                     ? []
                     : ASIDERES.filter((a) => {
