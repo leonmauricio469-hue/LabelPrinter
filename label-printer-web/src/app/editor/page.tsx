@@ -11,6 +11,7 @@ import {
 } from "@/lib/labels/label.resize";
 import { graphicDots, scaleGraphic } from "@/lib/labels/gf-graphic";
 import { buscarProblemas } from "@/lib/labels/label-solapes";
+import { buttonGhost, buttonPrimary, buttonQuiet, card, h2, h3, input } from "@/components/ui";
 import type { LabelZone } from "@/lib/labels/label.template";
 
 /**
@@ -714,9 +715,9 @@ export default function EditorPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Editor de plantilla</h2>
-        <p className="mt-1 text-sm text-neutral-600">
+      <section className={card + " p-5"}>
+        <h2 className={h2}>Editor de plantilla</h2>
+        <p className="mt-1 text-sm text-ink-soft">
           El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
           se imprime. Todo se mueve y se redimensiona arrastrando. Con el boton de{" "}
           <strong>Aplicar cambios</strong> el cambio vale para imprimir al instante; el bloque de
@@ -727,8 +728,8 @@ export default function EditorPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
         {/* ------------------------------------------------------------- controles */}
         <section className="flex flex-col gap-4">
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-2 text-sm font-semibold text-neutral-900">Zonas</h3>
+          <div className={card + " p-4"}>
+            <h3 className={`mb-2 ${h3}`}>Zonas</h3>
             <div className="flex flex-col gap-1">
               {zones.map((z, i) => {
                 const activa = i === sel;
@@ -741,10 +742,10 @@ export default function EditorPage() {
                     onClick={() => setSel(i)}
                     className={`rounded px-2 py-1.5 text-left text-sm ${
                       activa
-                        ? "bg-neutral-900 text-white"
+                        ? "bg-brand text-white"
                         : editable
-                          ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
-                          : "bg-neutral-50 text-neutral-400"
+                          ? "bg-surface-sunken text-ink hover:bg-line"
+                          : "bg-surface text-ink-mute"
                     }`}
                   >
                     {etiquetaDe(z, i)}
@@ -755,8 +756,8 @@ export default function EditorPage() {
           </div>
 
           {zona && EDITABLES.has(zona.kind) && (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold text-neutral-900">
+            <div className={card + " p-4"}>
+              <h3 className={`mb-3 ${h3}`}>
                 {etiquetaDe(zona, sel)}
               </h3>
               <div className="grid grid-cols-2 gap-3">
@@ -796,7 +797,7 @@ export default function EditorPage() {
                       </div>
                     );
                   })()}
-                  <p className="mt-2 text-xs text-neutral-500">
+                  <p className="mt-2 text-xs leading-relaxed text-ink-mute">
                     El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
                     aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
                     dots. Al cambiarlo se reescala manteniendo la proporcion, con vecino mas
@@ -828,7 +829,7 @@ export default function EditorPage() {
                     value={Number(zona.moduleWidth)}
                     onChange={(v) => editar(sel, { moduleWidth: v })}
                   />
-                  <p className="mt-2 text-xs text-neutral-500">
+                  <p className="mt-2 text-xs leading-relaxed text-ink-mute">
                     El minimo de ISO/IEC 15420 son 0,264 mm: 3 dots son 0,375 mm y 2 dots son
                     0,250 mm, por debajo. Con 2 hay que leer en fisico antes de dejarlo.
                   </p>
@@ -852,19 +853,19 @@ export default function EditorPage() {
                   {zona.autoFit ? (
                     <>
                       {resuelto && resuelto.texto !== null && (
-                        <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
-                          <p className="text-xs font-semibold text-emerald-900">
+                        <div className="mt-3 rounded-md border border-ok-line bg-ok-soft px-3 py-2">
+                          <p className="text-xs font-semibold text-ok">
                             Con este nombre sale asi
                           </p>
-                          <p className="mt-0.5 font-mono text-xs text-emerald-800">
+                          <p className="mt-0.5 font-mono text-xs text-ok">
                             {resuelto.texto}
                           </p>
-                          <p className="mt-1 text-xs text-emerald-900">
+                          <p className="mt-1 text-xs text-ok">
                             alto {MM(resuelto.alto).toFixed(2)} mm ({resuelto.alto} dots), ancho
                             de letra {MM(resuelto.ancho).toFixed(2)} mm ({resuelto.ancho} dots)
                           </p>
                           {porQueSeBajo && (
-                            <p className="mt-1 text-xs text-emerald-700">{porQueSeBajo}</p>
+                            <p className="mt-1 text-xs text-ok">{porQueSeBajo}</p>
                           )}
                         </div>
                       )}
@@ -898,7 +899,7 @@ export default function EditorPage() {
                       )}
                     </>
                   ) : (
-                    <p className="mt-2 text-xs text-amber-700">
+                    <p className="mt-2 text-xs text-warn">
                       Esta zona no tiene autoFit: el alto de letra es el que pongas, fijo.
                     </p>
                   )}
@@ -917,7 +918,7 @@ export default function EditorPage() {
                   que no pase nada parece un fallo del editor, y en el codigo de barras y en el
                   logo es justo lo que pasa a proposito. */}
               {zonaEjes?.nota && (
-                <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                <p className="mt-3 rounded-md border border-warn-line bg-warn-soft px-2 py-1.5 text-[11px] text-warn">
                   {zonaEjes.nota}
                 </p>
               )}
@@ -925,38 +926,38 @@ export default function EditorPage() {
           )}
 
           {/* ------------------------------------------------------ datos de prueba */}
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-neutral-900">Datos de prueba</h3>
-            <label className="mb-1 block text-xs text-neutral-600">Nombre</label>
+          <div className={card + " p-4"}>
+            <h3 className={`mb-3 ${h3}`}>Datos de prueba</h3>
+            <label className="mb-1 block text-xs text-ink-soft">Nombre</label>
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+              className={input}
             />
-            <label className="mb-1 mt-2 block text-xs text-neutral-600">Codigo de barras</label>
+            <label className="mb-1 mt-2 block text-xs text-ink-soft">Codigo de barras</label>
             <input
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+              className={input}
             />
-            <label className="mb-1 mt-2 block text-xs text-neutral-600">Precio</label>
+            <label className="mb-1 mt-2 block text-xs text-ink-soft">Precio</label>
             <input
               type="number"
               step="0.01"
               value={precio}
               onChange={(e) => setPrecio(Number(e.target.value))}
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+              className={input}
             />
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs leading-relaxed text-ink-mute">
               Prueba con un nombre corto y con uno de 50 caracteres. El alto de letra sale
               distinto en cada caso: esa es la gracia del autoFit.
             </p>
           </div>
 
           {/* ------------------------------------------------------------ aplicar */}
-          <div className="rounded-lg border-2 border-neutral-300 bg-white p-4 shadow-sm">
-            <h3 className="mb-2 text-sm font-semibold text-neutral-900">Aplicar</h3>
-            <p className="mb-3 text-xs text-neutral-600">
+          <div className={card + " border-2 border-brand-ink/20 p-4"}>
+            <h3 className={`mb-2 ${h3}`}>Aplicar</h3>
+            <p className="mb-3 text-xs leading-relaxed text-ink-soft">
               Guarda estos valores y a partir de ya imprimen. No toca{" "}
               <code>label.template.ts</code>: se guardan en{" "}
               <code>data/plantilla-override.json</code>, que se aplica encima de la plantilla del
@@ -964,20 +965,20 @@ export default function EditorPage() {
             </p>
 
             {aplicado && (
-              <div className="mb-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
-                <p className="text-xs font-semibold text-emerald-900">{aplicado}</p>
+              <div className="mb-3 rounded-md border border-ok-line bg-ok-soft px-3 py-2">
+                <p className="text-xs font-semibold text-ok">{aplicado}</p>
                 {guardado && (
-                  <p className="mt-0.5 font-mono text-[11px] text-emerald-800">
+                  <p className="mt-0.5 font-mono text-[11px] text-ok">
                     data/plantilla-override.json · {guardado.savedAt}
                   </p>
                 )}
               </div>
             )}
             {rechazo && (
-              <div className="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2">
-                <p className="text-xs font-semibold text-red-800">{rechazo}</p>
+              <div className="mb-3 rounded-md border border-danger-line bg-danger-soft px-3 py-2">
+                <p className="text-xs font-semibold text-danger">{rechazo}</p>
                 {rechazoDetalle.length > 0 && (
-                  <ul className="mt-1 list-disc pl-4 text-[11px] text-red-700">
+                  <ul className="mt-1 list-disc pl-4 text-[11px] text-danger">
                     {rechazoDetalle.map((d, i) => (
                       <li key={i}>{d}</li>
                     ))}
@@ -990,7 +991,7 @@ export default function EditorPage() {
               type="button"
               onClick={aplicar}
               disabled={aplicando}
-              className="w-full rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:bg-neutral-300"
+              className={`${buttonPrimary} w-full`}
             >
               {aplicando ? "guardando..." : "Aplicar cambios"}
             </button>
@@ -1000,14 +1001,14 @@ export default function EditorPage() {
                 type="button"
                 onClick={descartar}
                 disabled={aplicando}
-                className="mt-2 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:bg-neutral-100"
+                className={`${buttonQuiet} mt-2 w-full`}
               >
                 Descartar y volver al codigo
               </button>
             )}
 
             {hayOverride && !aplicado && (
-              <p className="mt-2 text-[11px] text-amber-700">
+              <p className="mt-2 text-[11px] text-warn">
                 Hay cambios guardados que todavia no has aplicado en pantalla. Si aplicas ahora,
                 se reemplazan.
               </p>
@@ -1015,24 +1016,24 @@ export default function EditorPage() {
           </div>
 
           {/* ------------------------------------------------------------ salida */}
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-2 text-sm font-semibold text-neutral-900">
+          <div className={card + " p-4"}>
+            <h3 className={`mb-2 ${h3}`}>
               Valor para label.template.ts
             </h3>
             <textarea
               readOnly
               value={codigo}
               rows={8}
-              className="w-full rounded border border-neutral-300 bg-neutral-50 p-2 font-mono text-xs"
+              className="w-full rounded-md border border-line bg-surface-sunken p-2 font-mono text-xs"
             />
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(codigo)}
-              className="mt-2 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
+              className={`${buttonGhost} mt-2 w-full`}
             >
               Copiar
             </button>
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs leading-relaxed text-ink-mute">
               Pega esto en el <code>zones</code> de <code>label.template.ts</code>, en el
               lugar de la zona que estes moviendo.
             </p>
@@ -1041,8 +1042,8 @@ export default function EditorPage() {
 
         {/* --------------------------------------------------------------- dibujo */}
         <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-4 rounded-lg border border-neutral-200 bg-white px-4 py-2 shadow-sm">
-            <label className="text-xs text-neutral-600">
+          <div className={card + " flex items-center gap-4 px-4 py-2"}>
+            <label className="text-xs text-ink-soft">
               Zoom
               <input
                 type="range"
@@ -1054,7 +1055,7 @@ export default function EditorPage() {
               />
               <span className="ml-1">{zoom}x</span>
             </label>
-            <label className="text-xs text-neutral-600">
+            <label className="text-xs text-ink-soft">
               <input
                 type="checkbox"
                 checked={mostrarCajas}
@@ -1063,31 +1064,31 @@ export default function EditorPage() {
               />
               ver cajas
             </label>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-ink-mute">
               Elige una zona, arrastra su caja para moverla y tira de los puntos blancos de las
               esquinas o los bordes para cambiarle el tamano. Vale para el logo, los textos y
               las barras. <strong>El marco no</strong>: es el margen del papel y se calcula
               solo desde el ancho de la etiqueta.
             </span>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-ink-mute">
               {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
               {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots
             </span>
-            {busy && <span className="text-xs text-blue-600">calculando...</span>}
+            {busy && <span className="text-xs text-brand">calculando...</span>}
           </div>
 
           {error && (
-            <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
 
           {solapes.length > 0 && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
-              <p className="text-sm font-semibold text-amber-900">
+            <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2">
+              <p className="text-sm font-semibold text-warn">
                 Con estos valores algo se pisa o se sale de la etiqueta
               </p>
-              <ul className="mt-1 list-disc pl-5 text-xs text-amber-800">
+              <ul className="mt-1 list-disc pl-5 text-xs text-warn">
                 {solapes.map((s, i) => (
                   <li key={i}>{s.mensaje}</li>
                 ))}
@@ -1098,7 +1099,7 @@ export default function EditorPage() {
           {preview && (
             <div
               ref={lienzoRef}
-              className="relative inline-block select-none rounded-lg border border-neutral-300 bg-white p-2 shadow-sm"
+              className="relative inline-block select-none rounded-lg border border-line-strong bg-white p-2 shadow-card"
               onMouseDown={empezarArrastre}
             >
               <img
@@ -1137,8 +1138,8 @@ export default function EditorPage() {
                       data-caja={i}
                       className={
                         pegable
-                          ? "absolute cursor-move border-2 border-dashed border-blue-600"
-                          : "pointer-events-none absolute border border-dashed border-blue-500"
+                          ? "absolute cursor-move border-2 border-dashed border-brand"
+                          : "pointer-events-none absolute border border-dashed border-brand/55"
                       }
                       style={{
                         left: `${c.x0 * zoom + 8}px`,
@@ -1149,7 +1150,7 @@ export default function EditorPage() {
                     >
                       <span
                         className={`absolute -top-4 left-0 whitespace-nowrap px-1 text-[10px] text-white ${
-                          pegable ? "bg-blue-700" : "bg-blue-500"
+                          pegable ? "bg-brand" : "bg-brand/70"
                         }`}
                       >
                         {c.texto ?? c.etiqueta} · x{c.x0}-{c.x1} y{c.y0}-{c.y1}
@@ -1160,7 +1161,7 @@ export default function EditorPage() {
                           key={a}
                           data-asidera={a}
                           title={TITULO_ASIDERA[a]}
-                          className={`absolute h-3 w-3 rounded-sm border border-blue-700 bg-white ${
+                          className={`absolute h-3 w-3 rounded-sm border border-brand bg-white ${
                             CURSA_ASIDERA[a]
                           }`}
                           style={{
@@ -1180,8 +1181,8 @@ export default function EditorPage() {
           )}
 
           {preview && (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-              <h3 className="mb-2 text-sm font-semibold text-neutral-900">Informe</h3>
+            <div className={card + " p-4"}>
+              <h3 className={`mb-2 ${h3}`}>Informe</h3>
 
               {/* Fallos de dibujado, arriba y en grande.
                   Lo que dice "NO" o "EN BLANCO" significa que hay algo que NO se ha pintado en
@@ -1189,14 +1190,14 @@ export default function EditorPage() {
                   `<pre>`, esa linea se leeria como un dato mas entre otros, y justo estos son
                   los que no se pueden perder de vista. */}
               {avisos.length > 0 && (
-                <ul className="mb-3 list-disc space-y-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 pl-6 text-xs text-red-800">
+                <ul className="mb-3 list-disc space-y-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 pl-6 text-xs text-danger">
                   {avisos.map((a, i) => (
                     <li key={i}>{a}</li>
                   ))}
                 </ul>
               )}
 
-              <pre className="whitespace-pre-wrap font-mono text-xs text-neutral-700">
+              <pre className="whitespace-pre-wrap font-mono text-xs text-ink-soft">
                 {[
                   `symbologia: ${preview.symbology ?? "-"}`,
                   `datos impresos: ${preview.datosImpresos ?? "-"}`,
@@ -1269,13 +1270,13 @@ function Num({
 }) {
   return (
     <div className="mt-2">
-      <label className="mb-1 block text-xs text-neutral-600">{label}</label>
+      <label className="mb-1 block text-xs text-ink-soft">{label}</label>
       <input
         type="number"
         step={step}
         value={Number.isFinite(value) ? Number(value.toFixed(3)) : 0}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+        className={input}
       />
     </div>
   );
