@@ -31,8 +31,6 @@ next-env.d.ts
 
 # temporal de la escritura atomica de data/plantilla-override.json
 # (ver label-override.store.ts): solo existe mientras se renombra el archivo bueno.
-# temporal de la escritura atomica de data/plantilla-override.json
-# (ver label-override.store.ts): solo existe mientras se renombra el archivo bueno.
 *.tmp
 
 # La geometria que se esta usando ahora mismo, por maquina. No se sigue a proposito, y no por
