@@ -40,6 +40,8 @@ interface Caja {
   x1: number;
   y1: number;
   texto?: string;
+  /** Texto completo del `^FD` del que viene esta caja. Ver `RenderedZone.origen`. */
+  origen?: string;
   alto?: number;
   anchoUsado?: number;
 }
@@ -162,9 +164,14 @@ function primeraEditable(zonas: AnyZone[]): number {
  * que `emit()` las escribe, y ese orden no coincide con el del array `zones` (las zonas fijas
  * no se dibujan y el logo va el primero aunque sea la tercera zona).
  *
- * Por eso se empareja por contenido: el texto plegado de cada zona, que el servidor ya
- * devuelve en `resueltos`, contra el texto que salio en `^FD`. Las barras son la unica zona de
- * tipo `barcode` y el logo la unica de tipo `graphic`, asi que esos dos van directos.
+ * El emparejamiento va por el texto del `^FD` completo (`origen`), no por el trozo de la
+ * linea: un nombre plegado en dos lineas sale en dos cajas con dos trozos distintos, y
+ * emparejar por trozo devolvia `-1` y dejaba la zona sin caja arrastrable. Con `origen` las
+ * cajas de un mismo plegado apuntan todas a su zona, y una zona de una sola linea sigue
+ * emparejando por su texto entero, que es el mismo que su `origen`.
+ *
+ * Las barras son la unica zona de tipo `barcode` y el logo la unica de tipo `graphic`, asi
+ * que esos dos van directos.
  *
  * Devuelve `-1` en las cajas que no corresponden a ninguna zona editable, que es como se sabe
  * que ese elemento no se debe mover.
@@ -176,32 +183,53 @@ function mapearCajas(
 ): number[] {
   const usados = new Set<number>();
   const map: number[] = cajas.map(() => -1);
+  // Zona de la caja de texto anterior: decide si el siguiente trozo CONTINUA el mismo
+  // plegado o empieza la caja de otra zona.
+  let anterior = -1;
 
   cajas.forEach((c, i) => {
-    if (c.etiqueta === "barras") {
-      const j = zones.findIndex((z) => z.kind === "barcode");
+    // El marco no tiene texto, asi que sin emparejarlo por tipo se quedaba sin caja
+    // asociada: era la razon de que no se pudiera mover. Por tipo funciona porque solo hay
+    // una zona de cada uno de estos tres tipos.
+    if (c.etiqueta === "barras" || c.etiqueta === "logo" || c.etiqueta === "marco") {
+      const kind =
+        c.etiqueta === "barras" ? "barcode" : c.etiqueta === "logo" ? "graphic" : "shape";
+      const j = zones.findIndex((z) => z.kind === kind);
       map[i] = j;
-      usados.add(i);
-      return;
-    }
-    if (c.etiqueta === "logo") {
-      map[i] = zones.findIndex((z) => z.kind === "graphic");
-      usados.add(i);
-      return;
-    }
-    // El marco no tiene texto, asi que antes caia en el `return` de abajo y se quedaba sin
-    // emparejar: era la razon de que no se pudiera mover. Ahora se empareja por tipo, que es
-    // directo porque solo hay una zona de cada tipo.
-    if (c.etiqueta === "marco") {
-      map[i] = zones.findIndex((z) => z.kind === "shape");
-      usados.add(i);
+      // Se guarda el INDICE DE ZONA, porque `usados` se compara contra `resueltos`, que va
+      // por zona. Guardar el indice de caja ahi hacia que dos numeros distintos se
+      // compararan como si fueran el mismo, y tumbaba el emparejamiento de las siguientes
+      // cajas de texto.
+      if (j >= 0) usados.add(j);
+      anterior = -1;
       return;
     }
     if (!c.texto) return;
-    // Primer uso de cada texto: dos zonas con el mismo texto no se emparejan con la misma caja.
-    const j = resueltos.find((r) => !usados.has(r.indice) && r.texto === c.texto)?.indice ?? -1;
+    const origen = c.origen ?? c.texto;
+
+    // Continuidad de linea: mismo `^FD` que la caja anterior y texto de zona mas largo que
+    // el trozo (la zona esta plegada). Solo asi se reutiliza una zona ya usada. Si el texto
+    // de la zona fuera igual al trozo, seria una zona de una sola linea robando las cajas de
+    // otra con el mismo texto, y ahi manda el `usados` de abajo.
+    if (anterior >= 0) {
+      const r = resueltos[anterior];
+      if (r && r.texto === origen && r.texto !== c.texto) {
+        map[i] = anterior;
+        return;
+      }
+    }
+
+    // Primero una zona sin usar, para que dos zonas con el mismo texto no acaben las dos
+    // colgando de la primera; si no queda ninguna, se reutiliza la que tenga ese texto
+    // (es la identidad exacta del `^FD`, asi que o es una linea mas del plegado o hay dos
+    // zonas con texto identico y no hay ninguna senal que las desdiferencie).
+    const j =
+      resueltos.find((r) => r.texto === origen && !usados.has(r.indice))?.indice ??
+      resueltos.find((r) => r.texto === origen)?.indice ??
+      -1;
     map[i] = j;
-    usados.add(i);
+    if (j >= 0) usados.add(j);
+    anterior = j;
   });
 
   return map;

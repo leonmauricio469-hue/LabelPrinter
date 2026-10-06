@@ -42,6 +42,16 @@ export interface RenderedZone {
   y1: number;
   /** Texto tal y como sale en `^FD`, ya plegado a ASCII. */
   texto?: string;
+  /**
+   * Texto COMPLETO del `^FD` del que viene esta caja.
+   *
+   * Un nombre plegado en dos lineas sale en dos cajas con dos trozos distintos en `texto`, y
+   * emparejar por trozo no encuentra la zona. `origen` es el `^FD` entero de la que salieron:
+   * las cajas de un mismo plegado comparten el mismo `origen`, de modo que varias cajas
+   * pueden apuntar a una sola zona. El `^FD` lo escribe `textFor()` y `resolveZoneText()`
+   * devuelve ese mismo texto, asi que `origen` iguala con `resueltos[i].texto` exactamente.
+   */
+  origen?: string;
   /** Alto de fuente resuelto (el de `autoFit` si la zona lo tiene, si no el de `format`). */
   alto?: number;
   anchoUsado?: number;
@@ -520,7 +530,7 @@ export function renderLabel(
         const y = curY + i * (fontH + separacion);
         const used = drawText(x, y, fontH, fontW, trozo, TEXT);
         const b = textBox(trozo, x, y, fontH, fontW);
-        cajas.push({ etiqueta: "texto", texto: trozo, alto: fontH, anchoUsado: used, ...b });
+        cajas.push({ etiqueta: "texto", texto: trozo, origen: text, alto: fontH, anchoUsado: used, ...b });
         if (x + used > widthDots) {
           informe.push(`"${trozo}" SE PASA POR LA DERECHA (${x + used} > ${widthDots})`);
         }
