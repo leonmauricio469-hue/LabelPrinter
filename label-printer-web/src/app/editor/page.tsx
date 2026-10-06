@@ -240,6 +240,18 @@ export default function EditorPage() {
     structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[],
   );
   const [preview, setPreview] = useState<Preview | null>(null);
+  /**
+   * Las zonas con las que el servidor dibujo `preview`.
+   *
+   * La diferencia entre estas y `zones` es lo que desplaza la caja seleccionada mientras no
+   * contesta el servidor: si la ultima respuesta se dibujo con la zona en (x, y) y ahora la
+   * zona esta en (x + 10, y), el render la va a pintar 10 dots mas a la derecha, y la caja
+   * puede anticiparse a eso sin inventar geometria. Cuando la respuesta llega, la diferencia
+   * se hace cero y la caja queda donde la pinto el servidor.
+   */
+  const [previewZones, setPreviewZones] = useState<AnyZone[] | null>(null);
+  /** Señal de que el tirador activo es un asa de redimensionado, no un movimiento. */
+  const [redimensionando, setRedimensionando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sel, setSel] = useState<number>(() =>
@@ -353,14 +365,27 @@ export default function EditorPage() {
     }
   }
 
+  // Solo vale la ultima peticion. Sin abortar, un arrastre rapido dejaba varias respuestas
+  // en vuelo, y una respuesta lenta de ATRAS llegaba despues que la nueva y devolvia las
+  // cajas a posiciones que ya no eran las buenas: el dibujo se movia solo para atras.
+  const ctrlPeticion = useRef<AbortController | null>(null);
+
   const pedir = useCallback(async () => {
+    ctrlPeticion.current?.abort();
+    const mia = new AbortController();
+    ctrlPeticion.current = mia;
     setBusy(true);
     try {
+      // El snapshot de las zonas pedidas. `pedir` se recrea con cada cambio de `zones`, asi
+      // que la `zones` del cierre es exactamente la que manda el cuerpo: si la respuesta
+      // llega, es la respuesta para ESTE estado y `previewZones` queda alineado con
+      // `preview`.
+      const pedidas = zones;
       const res = await fetch("/api/editor/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          zones,
+          zones: pedidas,
           data: {
             productName: nombre,
             barcode,
@@ -370,6 +395,7 @@ export default function EditorPage() {
           },
           scale: zoom,
         }),
+        signal: mia.signal,
       });
       const j = await res.json();
       if (!res.ok) {
@@ -377,11 +403,16 @@ export default function EditorPage() {
         return;
       }
       setPreview(j);
+      setPreviewZones(pedidas);
       setError(null);
     } catch (e) {
+      // Una peticion abortada no es un error: es la senal de que ya no importa.
+      if ((e as Error).name === "AbortError") return;
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      // El `busy` solo lo suelta quien sigue siendo la ultima: si no, una abortada dejaria
+      // el "calculando..." encima mientras la buena sigue dibujando.
+      if (ctrlPeticion.current === mia) setBusy(false);
     }
   }, [zones, nombre, barcode, precio, zoom]);
 
@@ -439,6 +470,31 @@ export default function EditorPage() {
   }
 
   const zona = zones[sel];
+
+  /**
+   * Cuanto anticipar la caja seleccionada mientras el servidor no contesta.
+   *
+   * La caja la dibuja el servidor con las `previewZones`; mientras `zones` se aleja de esas,
+   * la caja se queda atras y el arrastre se ve congelado. Este es el desplazamiento exacto
+   * entre una y otra posicion en x/y: el movimiento se pinta al instante sin inventar nada
+   * mas (el tamano sigue siendo cosa del servidor), y cuando la respuesta llega la
+   * diferencia se hace cero y no hay ningun salto.
+   *
+   * En un redimensionado no se aplica: ahi la x/y nueva viene con un tamano que todavia no
+   * se dibuja, y trasladar la caja vieja dejaria el borde equivocado pegado al cursor. Ese lo
+   * resuelve el render, que es quien sabe medirlo.
+   */
+  const desplazamiento = useMemo(() => {
+    const vista = previewZones?.[sel];
+    if (!zona || !vista || redimensionando) return { dx: 0, dy: 0 };
+    const dx = Number(zona.x) - Number(vista.x);
+    const dy = Number(zona.y) - Number(vista.y);
+    if (!dx && !dy) return { dx: 0, dy: 0 };
+    // Con `center` la impresora centra el simbolo y la `x` de la zona no coloca nada (ver
+    // `barcodeX()`): desplazar la caja ahi prometeria un movimiento que el render no haria.
+    const ejeX = zona.kind === "barcode" && zona.center ? 0 : dx;
+    return { dx: ejeX, dy };
+  }, [zona, previewZones, sel, redimensionando]);
 
   /** Que ejes se pueden estirar en la zona seleccionada, y el aviso de lo que no se puede. */
   const zonaEjes = useMemo(
@@ -576,6 +632,7 @@ export default function EditorPage() {
         e.preventDefault();
         e.stopPropagation();
         const { dx, dy } = dotsDelPuntero(e);
+        setRedimensionando(true);
         arrastre.current = {
           indice,
           asidera: asa.dataset.asidera as Asider,
@@ -593,6 +650,7 @@ export default function EditorPage() {
       if (indice < 0 || indice !== sel) return;
       e.preventDefault();
       const { dx, dy } = dotsDelPuntero(e);
+      setRedimensionando(false);
       arrastre.current = {
         indice,
         asidera: null,
@@ -647,6 +705,7 @@ export default function EditorPage() {
     };
     const soltar = () => {
       arrastre.current = null;
+      setRedimensionando(false);
     };
     window.addEventListener("mousemove", mover);
     window.addEventListener("mouseup", soltar);
@@ -1142,6 +1201,10 @@ export default function EditorPage() {
                   // Solo se puede arrastrar la caja que corresponde a la zona seleccionada, y
                   // solo si esa zona es editable.
                   const pegable = pegables[i] === sel;
+                  // La seleccionada se adelanta al cursor con el offset de `zones` contra
+                  // `previewZones`; las demas se quedan donde las dibujo el servidor.
+                  const ox = pegable ? desplazamiento.dx : 0;
+                  const oy = pegable ? desplazamiento.dy : 0;
                   const nota = pegable && zona ? ejesRedimensionables(zona as unknown as LabelZone) : null;
                   // Las asas de un eje que la zona no admite no se dibujan. Un tirador que no
                   // hace nada parece un fallo del editor, y para el codigo de barras hay una
@@ -1170,8 +1233,8 @@ export default function EditorPage() {
                           : "pointer-events-none absolute border border-dashed border-brand/55"
                       }
                       style={{
-                        left: `${c.x0 * zoom + 8}px`,
-                        top: `${c.y0 * zoom + 8}px`,
+                        left: `${(c.x0 + ox) * zoom + 8}px`,
+                        top: `${(c.y0 + oy) * zoom + 8}px`,
                         width: `${(c.x1 - c.x0) * zoom}px`,
                         height: `${(c.y1 - c.y0) * zoom}px`,
                       }}
@@ -1181,7 +1244,7 @@ export default function EditorPage() {
                           pegable ? "bg-brand" : "bg-brand/70"
                         }`}
                       >
-                        {c.texto ?? c.etiqueta} · x{c.x0}-{c.x1} y{c.y0}-{c.y1}
+                        {c.texto ?? c.etiqueta} · x{c.x0 + ox}-{c.x1 + ox} y{c.y0 + oy}-{c.y1 + oy}
                         {pegable && (asas.length > 0 ? " · arrastra o estira" : " · arrastra")}
                       </span>
                       {asas.map((a) => (
