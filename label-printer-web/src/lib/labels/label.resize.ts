@@ -53,8 +53,15 @@ export const TITULO_ASIDERA: Record<Asider, string> = {
   w: "arrastrar borde izquierdo",
 };
 
-/** Medidas minimas, en dots. Por debajo de esto ya no es un elemento, es un error. */
-const MIN = {
+/**
+ * Medidas minimas, en dots. Por debajo de esto ya no es un elemento, es un error.
+ *
+ * Exportadas porque el marco de seleccion (`label.marco.ts`) tiene que recortar el arrastre con
+ * EXACTAMENTE los mismos numeros que `redimensionar()`: si cada uno tuviera su propio minimo,
+ * el marco podria estirarse hasta 6 dots y la zona quedarse en 8, y al soltar el marco saltaria
+ * sin que nadie hubiera hecho nada para merecerlo.
+ */
+export const MIN_DOTS = {
   ancho: 8,
   alto: 4,
   altoBarra: 10,
@@ -83,8 +90,8 @@ export interface ContextoResize {
   anchoCajaTexto?: number;
 }
 
-/** Cual de los cuatro lados se mueve con cada asa. */
-function lados(a: Asider): { izq: boolean; arr: boolean; der: boolean; aba: boolean } {
+/** Cual de los cuatro lados se mueve con cada asa. Compartido con `label.marco.ts`. */
+export function lados(a: Asider): { izq: boolean; arr: boolean; der: boolean; aba: boolean } {
   return {
     izq: a === "w" || a === "nw" || a === "sw",
     arr: a === "n" || a === "nw" || a === "ne",
@@ -149,8 +156,8 @@ export function redimensionar(
       ...zona,
       x: noNegativo(zona.x + d.l),
       y: noNegativo(zona.y + d.t),
-      widthDots: Math.max(MIN.ancho, entero(zona.widthDots + dAncho)),
-      heightDots: Math.max(MIN.alto, entero(zona.heightDots + dAlto)),
+      widthDots: Math.max(MIN_DOTS.ancho, entero(zona.widthDots + dAncho)),
+      heightDots: Math.max(MIN_DOTS.alto, entero(zona.heightDots + dAlto)),
     };
   }
 
@@ -168,7 +175,7 @@ export function redimensionar(
     // ANTES de que el ajuste lo empeorara. Ajustando aqui, el error que queda es de un solo
     // paso de cuantizacion en vez de los dos sumados.
     const wPedido = multiploDe8(w0 + dAncho);
-    const hPedido = Math.max(MIN.alto, entero(h0 + dAlto));
+    const hPedido = Math.max(MIN_DOTS.alto, entero(h0 + dAlto));
 
     // Proporcion del dibujo, con un caso especial que importa: cuando solo se tira de UN eje,
     // ese eje manda y el otro le sigue. Si se aplicara siempre el minimo de los dos, tirar del
@@ -188,7 +195,7 @@ export function redimensionar(
     const r = scaleGraphic(
       zona.gf,
       multiploDe8(w0 * factor),
-      Math.max(MIN.alto, Math.round(h0 * factor)),
+      Math.max(MIN_DOTS.alto, Math.round(h0 * factor)),
     );
     if ("error" in r) return zona;
 
@@ -207,7 +214,7 @@ export function redimensionar(
     const nuevo: LabelZone = {
       ...zona,
       y: noNegativo(zona.y + d.t),
-      heightDots: Math.max(MIN.altoBarra, entero(zona.heightDots + dAlto)),
+      heightDots: Math.max(MIN_DOTS.altoBarra, entero(zona.heightDots + dAlto)),
     };
     if (!zona.center) {
       (nuevo as { x: number }).x = noNegativo(zona.x + d.l);
@@ -228,7 +235,7 @@ export function redimensionar(
   }
 
   // `text`: vertical es alto de letra, horizontal es ancho de caja.
-  const altoNuevo = Math.max(MIN.alto, entero(altoDeFuente(zona) + dAlto));
+  const altoNuevo = Math.max(MIN_DOTS.alto, entero(altoDeFuente(zona) + dAlto));
 
   // El ancho de caja solo se puede cambiar si hay uno conocido. Sin `maxWidthDots` y sin la
   // medida del render no hay base, y subir y bajar el tirador haria cambiar el alto de letra
@@ -237,7 +244,7 @@ export function redimensionar(
   const anchoCaja =
     baseCaja === undefined
       ? zona.maxWidthDots
-      : Math.max(MIN.ancho, entero(baseCaja + dAncho));
+      : Math.max(MIN_DOTS.ancho, entero(baseCaja + dAncho));
 
   return {
     ...zona,
@@ -272,7 +279,7 @@ export function anchoDeFuente(z: LabelZone): number {
  */
 function conAltoDeFuente(z: LabelZone, alto: number): Record<string, unknown> {
   if (z.kind !== "text") return {};
-  const h = Math.max(MIN.alto, entero(alto));
+  const h = Math.max(MIN_DOTS.alto, entero(alto));
   if (z.autoFit) {
     const ancho = Math.max(1, Math.round(h * z.autoFit.widthRatio));
     return { autoFit: { ...z.autoFit, maxHeight: h }, format: `^A0N,${h},${ancho}` };
@@ -293,13 +300,21 @@ export function ejesRedimensionables(z: LabelZone): { x: boolean; y: boolean; no
     return { x: true, y: true, nota: "Se reescala el dibujo manteniendo la proporcion." };
   }
   if (z.kind === "barcode") {
+    // `center` no es un detalle: decide si la x de la zona coloca algo. Con `center: true`,
+    // `barcodeX()` recentra el simbolo y esa x se ignora; sin el, la x es donde empieza el
+    // simbolo y si manda. La nota se mira en la ZONA, no en la plantilla actual: una plantilla
+    // con `center: false` leyendo "su x no se usa" llevaria al usuario a mover un numero que no
+    // imprime nada, que es lo contrario de ayuda.
+    const centrado = z.center !== false;
     return {
       x: false,
       y: true,
       nota:
         "En horizontal no se puede: un EAN-13 mide 95 modulos fijos. Lo que se negocia es el " +
-        "ancho de cada modulo, con el campo de abajo. Y como el simbolo va centrado, su x no se " +
-        "usa: se recentra solo.",
+        "ancho de cada modulo, con el campo de abajo. " +
+        (centrado
+          ? "Y como el simbolo va centrado, su x no se usa: se recentra solo."
+          : "La x si manda: situa el principio del simbolo."),
     };
   }
   return {
