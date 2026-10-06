@@ -126,10 +126,12 @@ export function textBox(text: string, xDot: number, yDot: number, hDot: number, 
  * la etiqueta, y el nombre de un producto de 68 caracteres es justo el caso que motivo todo
  * el cambio de layout.
  *
- * El limite de lineas es el `maxLines` del `^FB`. Lo que no cabe en ese numero de lineas se
- * DIBUJA IGUAL, en una linea mas larga, en vez de recortarse: aqui no se imprime, es una
- * previsualizacion, y callarse un texto que en el papel se recorta enseña una etiqueta
- * distinta de la real. El aviso de "se pasa" lo pone el llamante por cada linea.
+ * El limite de lineas es el `maxLines` del `^FB`, y manda igual aqui que en papel: lo que no
+ * cabe en ese numero de lineas no se devuelve. La impresora tira lo que sobra sin avisar
+ * (`^FB` recorta), y enseñar en la previa un texto mas largo que el que va a salir seria
+ * mentirle al operador: si aqui lo ve entero, no hay forma de que se entere de que su nombre
+ * acaba a media frase. Que algo se ha cortado no queda en silencio: quien llama compara las
+ * lineas completas con las dibujadas y lo avisa en el informe con "NO SALE ENTERO".
  */
 export function partirLineas(text: string, wDot: number, caja: number, maxLineas: number): string[] {
   if (caja <= 0 || wDot <= 0) return [text];
@@ -161,10 +163,11 @@ export function partirLineas(text: string, wDot: number, caja: number, maxLineas
   }
   if (actual !== "") salida.push(actual);
 
-  // Se recorta al numero de lineas que permite el `^FB`; lo que sobra se mantiene pegado a
-  // la ultima, que es lo que se ve en el papel, y el llamante avisa por el ancho.
+  // Se corta en el numero de lineas que permite el `^FB`, igual que en papel: lo que sobra no
+  // se dibuja. Pegarlo a la ultima linea (que era lo de antes) hacia que una caja estrecha
+  // dibujase un texto de miles de dots cruzando la etiqueta entera, que en papel no sale.
   if (salida.length <= maxLineas) return salida;
-  return [...salida.slice(0, maxLineas - 1), salida.slice(maxLineas - 1).join(" ")];
+  return salida.slice(0, maxLineas);
 }
 
 /** Trocea una palabra en trozos de `porLinea` caracteres. */
@@ -514,6 +517,19 @@ export function renderLabel(
       // repartiria la impresora: por palabras, y partiendo la palabra si ella sola no cabe.
       const lineas = fb ? partirLineas(text, fontW, fb.w, fb.lineas) : [text];
       const separacion = fb ? (fb.separacion > 0 ? fb.separacion : fontH) : 0;
+
+      // Si el texto pide mas lineas de las que el `^FB` imprime, la impresora se queda con las
+      // primeras y tira el resto. Aqui se dibujan esas primeras —lo que ves es lo que sale—,
+      // pero el corte no puede quedar invisible: el informe lo dice con "NO", que es lo que
+      // saca el bloque de avisos del editor antes de que nadie gaste papel en descubrirlo.
+      if (fb) {
+        const todas = partirLineas(text, fontW, fb.w, Number.MAX_SAFE_INTEGER);
+        if (todas.length > lineas.length) {
+          informe.push(
+            `"${text}" NO SALE ENTERO: pide ${todas.length} lineas y solo caben ${fb.lineas}; lo que sobra no se imprime`,
+          );
+        }
+      }
 
       lineas.forEach((trozo, i) => {
         const anchoTrozo = trozo.length * fontW;

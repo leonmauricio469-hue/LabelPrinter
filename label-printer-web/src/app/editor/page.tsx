@@ -1007,12 +1007,12 @@ export default function EditorPage() {
   );
 
   /**
-   * Lineas del informe que describen algo que NO se ha dibujado.
+   * Lineas del informe que describen algo que NO se ha dibujado entero.
    *
-   * El render puede salir bien y aun asi no haber pintado una zona: un `^GFA` que no llega al
-   * ZPL, un bitmap vacio, una medida que no se puede leer. La etiqueta se ve medio en blanco y
-   * el informe lo dice en una linea de texto pequeno, que es justo el sitio donde no se lee
-   * nada. Por eso se sacan aparte.
+   * El render puede salir bien y aun asi faltar cosa: un `^GFA` que no llega al ZPL, un bitmap
+   * vacio, una medida que no se puede leer, un nombre al que el `^FB` le corta el final. La
+   * etiqueta sale incompleta y el informe lo dice en una linea de texto pequeno, que es justo
+   * el sitio donde no se lee nada. Por eso se sacan aparte.
    */
   const avisos = useMemo(() => {
     if (!preview) return [];
@@ -1509,10 +1509,10 @@ export default function EditorPage() {
               <h3 className={`mb-2 ${h3}`}>Informe</h3>
 
               {/* Fallos de dibujado, arriba y en grande.
-                  Lo que dice "NO" o "EN BLANCO" significa que hay algo que NO se ha pintado en
-                  la pantalla, y por lo tanto esta differente de lo que va a salir. Abajo, en el
-                  `<pre>`, esa linea se leeria como un dato mas entre otros, y justo estos son
-                  los que no se pueden perder de vista. */}
+                  Lo que dice "NO" o "EN BLANCO" es algo que falta: una zona que no se ha
+                  pintado o un texto que la impresora corta. Abajo, en el `<pre>`, esa linea
+                  se leeria como un dato mas entre otros, y justo estos son los que no se
+                  pueden perder de vista. */}
               {avisos.length > 0 && (
                 <ul className="mb-3 list-disc space-y-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 pl-6 text-xs text-danger">
                   {avisos.map((a, i) => (

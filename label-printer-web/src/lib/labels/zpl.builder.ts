@@ -228,8 +228,8 @@ function resolveAutoFit(zone: TextZone, text: string): string | null {
 
   // 3. Ni una linea ni varias: se entrega el minHeight y avisa quien mida. Aqui NO se recorta
   //    el texto, porque `^FD` lleva el nombre entero y el recorte lo hace la impresora, que
-  //    es donde se ha de ver el problema. El render enseña la caja entera, saliendose, y
-  //    `buscarProblemas()` la marca por salirse del marco.
+  //    es donde se ha de ver el problema. El render dibuja las lineas que caben —las mismas
+  //    que imprime— y el sobrante lo anuncia en el informe con "NO SALE ENTERO".
   return `^A0N,${minHeight},${anchoCelda(minHeight, widthRatio)}`;
 }
 

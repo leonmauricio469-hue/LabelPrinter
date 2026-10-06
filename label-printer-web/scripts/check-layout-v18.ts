@@ -323,6 +323,68 @@ seccion("partirLineas(): la parte que decide como se rompe un nombre");
       realista.join(" ").split(/\s+/).join("") === "BOMBONESDECHOCOLATESURTIDOSSTMORITZ",
     realista.map((l) => `${l}(${l.length})`).join(" + "),
   );
+
+  // Lo que no cabe en las `maxLineas` se CORTA, como corta `^FB` en papel, y no se pega a la
+  // ultima linea: pegado, un nombre en una caja estrecha salia como una linea de cientos de
+  // dots cruzando la etiqueta entera, que en papel no existe. La invariant es que NINGUNA
+  // linea devuelta se pase de la caja, ni por cantidad de lineas ni por ancho.
+  const cortado = partirLineas("X".repeat(68), 7, 120, 2);
+  ok(
+    "el texto largo se corta en las lineas permitidas",
+    cortado.length === 2,
+    `${cortado.length} lineas`,
+  );
+  ok(
+    "y cada linea devuelta cabe en la caja",
+    cortado.every((l) => l.length * 7 <= 120),
+    cortado.map((l) => `${l.length * 7} dots`).join(", "),
+  );
+}
+
+// ===================================================================================
+seccion("Un nombre que no cabe en su caja: se corta como en papel y lo dice el informe");
+// ===================================================================================
+{
+  // La caja del nombre, estrechada a mano: es el caso que vive el usuario cuando ensancha o
+  // encoge la zona en el editor y el nombre deja de caber en dos lineas. autoFit baja hasta
+  // el minHeight y aun asi sobra texto —el caso 3 de resolveAutoFit()—.
+  const nombre = zona("productName") as TZ;
+  const estrecha = {
+    ...T,
+    zones: T.zones.map((z) => (z === nombre ? { ...nombre, maxWidthDots: 120 } : z)),
+  };
+  const texto = "X".repeat(68);
+
+  const r = renderLabel(estrecha, datos({ productName: texto }));
+  const cajasNombre = r.cajas.filter((c) => c.etiqueta === "texto" && c.texto?.startsWith("X"));
+  ok(
+    "el corte se avisa en el informe con NO",
+    r.informe.some((i) => i.includes("NO SALE ENTERO")),
+    r.informe.join(" | "),
+  );
+  ok(
+    "solo se dibujan las lineas que caben",
+    cajasNombre.length <= (nombre.maxLines ?? 1),
+    `${cajasNombre.length} cajas`,
+  );
+  ok(
+    "ninguna linea se sale de la caja",
+    cajasNombre.every((c) => c.x1 <= nombre.x + 120 + 1),
+    cajasNombre.map((c) => `${c.x0}..${c.x1}`).join(", "),
+  );
+  ok(
+    "y nada se sale del rollo",
+    !r.informe.some((i) => i.includes("SE PASA")),
+    r.informe.filter((i) => i.includes("SE PASA")).join(" | "),
+  );
+
+  // Control: con la caja de verdad, ese mismo nombre cabe en dos lineas y no se corta.
+  const r2 = renderLabel(T, datos({ productName: texto }));
+  ok(
+    "con la caja normal no se avisa de corte",
+    !r2.informe.some((i) => i.includes("NO SALE ENTERO")),
+    r2.informe.join(" | "),
+  );
 }
 
 // ===================================================================================
