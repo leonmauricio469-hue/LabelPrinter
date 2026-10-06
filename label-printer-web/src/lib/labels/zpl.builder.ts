@@ -1,4 +1,5 @@
 import type { LabelData } from "./label.types";
+import { DEFAULT_TEMPLATE } from "./label.template";
 import type {
   LabelTemplate,
   BarcodeZone,
@@ -17,13 +18,38 @@ import { foldField } from "./ascii.fold";
  * quien construye el ZPL no tenga que acordarse del ancho de modulo ni del factor de zona
  * quieta. Toda la decision vive en `barcode-plan.ts`.
  */
+/**
+ * Como mide `planBarcode()` el sitio del que dispone el codigo de barras.
+ *
+ * ANTES: `template.widthDots`, la etiqueta entera. Las barras iban centradas y ocupaban todo el
+ * ancho, asi que era lo mismo que la columna. Ahora NO es lo mismo: las barras van en la mitad
+ * izquierda y el precio en la derecha, asi que la columna son 345 dots y no 472.
+ *
+ * Que se mida contra la etiqueta entera daria verde a codigos que luego se imprimen encima del
+ * precio, que es justo lo que `planBarcode()` existe para impedir. Y `buscarProblemas()`
+ * (en `label-solapes.ts`) no lo cazaría: mide las cajas de tinta, y un codigo de Code 128
+ * largo con el precio encima es un solape de cajas que sí vería, pero el aviso llegaría tarde
+ * y desde otro sitio.
+ *
+ * Un cambio de layout tiene que cambiar esto, y no solo las coordenadas de las zonas. Es el
+ * mismo clase de fallo que el del `LOGO_DOTS_W`: una medida duplicada en dos sitios que solo
+ * cuadra mientras nadie cambie ninguna de las dos.
+ *
+ * Cuando `center` esta activo la columna no se usa para colocar el simbolo, pero SI para
+ * decidir si cabe, y por eso se pide igual. Con `center: false` la `x` de la zona manda y la
+ * columna se usa solo para la decision de cabida.
+ */
+function anchoDisponible(template: LabelTemplate, zone: BarcodeZone): number {
+  return zone.center ? template.widthDots : COLUMNA_BARRAS_DOTS;
+}
+
 export function planForZone(
   template: LabelTemplate,
   zone: BarcodeZone,
   barcode: string,
 ): BarcodePlan {
   return planBarcode(barcode, {
-    labelWidthDots: template.widthDots,
+    labelWidthDots: anchoDisponible(template, zone),
     moduleWidthDots: zone.moduleWidth,
     quietFactor: QUIET_FACTOR,
   });
@@ -106,16 +132,46 @@ function shapeCommands(zone: ShapeZone): string[] {
 }
 
 /**
+ * Ancho de celda de un caracter, en dots, para un alto dado.
+ *
+ * En `^A0N,alto,ancho` el ancho es el avance de la celda, no el del glifo: cada caracter ocupa
+ * exactamente `ancho` dots. Lo usan por igual `resolveAutoFit()`, que elige el alto, y
+ * `partirLineas()` en el render, que reparte el texto en lineas, y tienen que usar la misma
+ * cuenta o el alto elegido no cuadraria con las lineas dibujadas.
+ */
+function anchoCelda(alto: number, widthRatio: number): number {
+  return Math.max(1, Math.round(alto * widthRatio));
+}
+
+/** Cuantas lineas de `anchoCelda` dots necesita `chars` caracteres en una caja. */
+function lineasQueNecesita(chars: number, ancho: number, caja: number): number {
+  return Math.ceil(chars / Math.max(1, Math.floor(caja / ancho)));
+}
+
+/**
  * Resuelve el alto de fuente de una zona con `autoFit`.
  *
- * Busca el mayor alto, del `maxHeight` hacia abajo, con el que el texto entra en UNA linea de
- * `maxWidthDots`. Si ni al `minHeight` cabe, devuelve `minHeight` y el texto se sale un poco
- * por el lado, que es preferible a hacerlo mas pequeno todavia: por debajo de 1,6 mm de alto
- * de letra los escaneres de mano ya empiezan a fallar.
+ * Busca el mayor alto, del `maxHeight` hacia abajo, con el que el texto entre. "Entra" quiere
+ * decir dos cosas distintas segun el caso, y esa distincion es la que evita que un nombre
+ * largo salga cortado de la etiqueta:
  *
- * El texto va plegado a ASCII antes de medir, porque `foldAscii()` puede acortar un nombre
- * (un acento suelto se convierte en nada). Medir la cadena original y mandar la plegada
- * daria una anchura equivocada.
+ * 1. UNA LINEA, que es lo que se busca. El nombre de un producto cabe en una linea casi
+ *    siempre, y en una linea se lee de un vistazo. Se baja la fuente lo que haga falta para
+ *    que quepa, con el suelo en `minHeight`.
+ *
+ * 2. Si ni al `minHeight` cabe en una linea, HACE FALLO y no se rinde. Con `maxLines: 1` el
+ *    texto se dibuja en una sola linea que se sale de la caja, y en el papel la impresora la
+ *    CORTA: el nombre del producto mas largo del catalogo (68 caracteres) llegaba a 476 dots
+ *    en una caja de 446, y se perdian los ultimos cinco caracteres. Perder el nombre a la
+ *    fuerza es peor que partirlo en dos lineas, asi que en ese caso se admiten `maxLines`
+ *    lineas y se busca el alto que mas grande las deja.
+ *
+ * Ese segundo paso es tambien el que evita que la altura elegida y el reparto en lineas que
+ * hace el render sean cosas distintas: los dos usan `lineasQueNecesita()`.
+ *
+ * El texto llega ya plegado a ASCII y en mayusculas (`textFor()`), porque `foldField()` puede
+ * acortar un nombre y `toUpperCase()` no cambia la longitud. Medir la cadena original y
+ * mandar la plegada daria una anchura equivocada.
  */
 function resolveAutoFit(zone: TextZone, text: string): string | null {
   if (!zone.autoFit || zone.maxWidthDots === undefined) return null;
@@ -123,11 +179,58 @@ function resolveAutoFit(zone: TextZone, text: string): string | null {
   if (text.length === 0) return null;
 
   const chars = text.length;
+  const caja = zone.maxWidthDots;
+  const { maxBlockDots } = zone.autoFit;
+
+  /**
+   * Alto que ocupa un bloque de `lineas` lineas de alto `a`.
+   *
+   * NO es `lineas * a`. `^FB` separa las lineas con una separacion IGUAL al alto de la fuente
+   * cuando el campo de separacion va a 0, que es lo que emite `emit()`. De ahi el `2 * lineas - 1`:
+   * una linea ocupa `a`, dos ocupan `2a + a`, tres ocupan `3a + 2a`.
+   *
+   * Este error hacia que un nombre de 65 caracteres en dos lineas de 32 dots llegara a y=168,
+   * justo donde empiezan las barras, con el bloqueContando 64 dots y ocupando 96. Dos cajas que
+   * se tocan no se solapan, asi que el detector de solapes no lo veia.
+   */
+  const altoBloque = (a: number, lineas: number) => (2 * lineas - 1) * a;
+
+  /** ¿Cabe el texto con este alto, en una linea? */
+  const cabeEnUna = (a: number) => {
+    if (chars * anchoCelda(a, widthRatio) > caja) return false;
+    return maxBlockDots === undefined || altoBloque(a, 1) <= maxBlockDots;
+  };
+
+  /** ¿Cabe repartido en `lineas` lineas de alto `a`? */
+  const cabeEn = (a: number, lineas: number) => {
+    if (lineasQueNecesita(chars, anchoCelda(a, widthRatio), caja) > lineas) return false;
+    return maxBlockDots === undefined || altoBloque(a, lineas) <= maxBlockDots;
+  };
+
+  // 1. El mayor alto que cabe en una linea.
   let alto = maxHeight;
-  while (alto > minHeight && chars * Math.max(1, Math.round(alto * widthRatio)) > zone.maxWidthDots) {
-    alto -= 1;
+  while (alto > minHeight && !cabeEnUna(alto)) alto -= 1;
+  if (cabeEnUna(alto)) {
+    return `^A0N,${alto},${anchoCelda(alto, widthRatio)}`;
   }
-  return `^A0N,${alto},${Math.max(1, Math.round(alto * widthRatio))}`;
+
+  // 2. No cabe en una linea ni al minimo: se reparte en varias, si la zona las permite.
+  //    Se prueba de mas a menos lineas para no partir un nombre que cabe en dos cuando
+  //    cabria en tres: partir menos, con la letra mas grande, se lee mejor.
+  const maxLineas = Math.max(1, zone.maxLines ?? 1);
+  for (let lineas = 2; lineas <= maxLineas; lineas += 1) {
+    alto = maxHeight;
+    while (alto > minHeight && !cabeEn(alto, lineas)) alto -= 1;
+    if (cabeEn(alto, lineas)) {
+      return `^A0N,${alto},${anchoCelda(alto, widthRatio)}`;
+    }
+  }
+
+  // 3. Ni una linea ni varias: se entrega el minHeight y avisa quien mida. Aqui NO se recorta
+  //    el texto, porque `^FD` lleva el nombre entero y el recorte lo hace la impresora, que
+  //    es donde se ha de ver el problema. El render enseña la caja entera, saliendose, y
+  //    `buscarProblemas()` la marca por salirse del marco.
+  return `^A0N,${minHeight},${anchoCelda(minHeight, widthRatio)}`;
 }
 
 /**
@@ -179,7 +282,16 @@ function textFor(zone: TextZone, data: LabelData, plan: BarcodePlan): string {
 
   // El plegado va aqui y no en la zona: cualquier texto que llegue a `^FD` pasa por aqui,
   // este o no el que la plantilla quiera.
-  return `${zone.prefix ?? ""}${foldField(raw)}`;
+  //
+  // Las mayusculas van DESPUES del plegado, no antes. Ver `TextZone.uppercase`: al reves,
+  // `normalize("NFD")` separaria la tilde de la letra, el plegado la borraria, y de "JALAPEÑO"
+  // saldria "JALAPENO" en vez de "JALAPENO" con la N correcta. Que las dos rutas den lo mismo
+  // no es casualidad, es el orden correcto.
+  //
+  // Y va dentro de `textFor()`, no en `emit()`, para que `resolveAutoFit()` mida exactamente
+  // lo que se va a imprimir.
+  const plegado = foldField(raw);
+  return `${zone.prefix ?? ""}${zone.uppercase ? plegado.toUpperCase() : plegado}`;
 }
 
 /**
@@ -306,6 +418,42 @@ export function buildZpl(
   const { zones, plan } = resolveLabel(template, data);
   return emit(template, zones, data, plan, opts.mediaWidthDots ?? template.widthDots);
 }
+
+/**
+ * Donde se corta el ancho de la etiqueta en dos columnas, para el codigo y para el precio.
+ *
+ * ESTA FUNCION ES LA QUE SOSTIENE EL LAYOUT NUEVO, Y HAY QUE LEERLA ANTES DE CAMBIAR UN NUMERO.
+ *
+ * El codigo de barras y el precio se reparten el ancho a lo largo: codigo a la izquierda,
+ * precio a la derecha. El reparto son 345 dots para las barras (el simbolo de 285 a modulo 3,
+ * mas las dos zonas quietas de 10X = 30 dots cada una) y el resto para el precio.
+ *
+ * Por que 345 y no 220-250 como se pidio: EAN-13 son 95 modulos FIJOS y el ancho de modulo
+ * de ZPL es un entero, asi que el simbolo mide 190 o 285 dots, nunca nada entre medias. Entre
+ * 220 y 250 haria falta un modulo de 2,32 a 2,63, que no existe. A 3 dots (0,375 mm) el
+ * simbolo cumple el minimo de 0,264 mm de ISO/IEC 15420; a 2 dots (0,250 mm) queda por debajo.
+ *
+ * O sea: hay dos anchos posibles y ninguno es el pedido. Se eligio el de 3 dots porque el
+ * de 2 deja las barras por debajo de la norma, y porque el ancho de una barra no se negocia
+ * con la impresora: o el lector la acepta o no la acepta, y no hay forma de saberlo sin
+ * probarla con el lector fisico. Ver [[Prueba Legibilidad Barcode]].
+ *
+ * El ancho de la columna se mide CON las zonas quietas dentro, porque son ellas las que la
+ * norma pide y las que se comen el sitio. Una columna de 285 dots con las barras centradas
+ * dentro tendria 60 dots de zona quieta, y el codigo se leeria bien; pero `planBarcode()`
+ * mide el margen necesario para decidir si cabe, y si le dijeramos 285 cuando el sitio real
+ * son 345, el codigo pasaria a imprimirse pegado al precio.
+ */
+export const COLUMNA_BARRAS_DOTS = 345;
+
+/**
+ * El ancho que se queda el precio: el de la etiqueta menos la columna de las barras.
+ *
+ * Sale de `DEFAULT_TEMPLATE.widthDots` y no de un 472 escrito a mano, por el mismo motivo que
+ * el marco: si el ancho de la etiqueta cambia y este numero se queda, el precio se sale de la
+ * etiqueta sin que nada se entere.
+ */
+export const ANCHO_PRECIO_DOTS = DEFAULT_TEMPLATE.widthDots - COLUMNA_BARRAS_DOTS;
 
 /**
  * Genera N copias de la misma etiqueta en un unico trabajo de impresion.

@@ -16,6 +16,8 @@ import { intersectan } from "../src/lib/labels/label-solapes";
 import type { LabelTemplate, LabelZone } from "../src/lib/labels/label.template";
 import { planForZone, barcodeZoneOf, problemaDeMedio, buildZpl } from "../src/lib/labels/zpl.builder";
 import type { BarcodeImprimible } from "../src/lib/labels/barcode-plan";
+import { zoneSchema } from "../src/lib/labels/label-zones.schema";
+import { readFileSync } from "node:fs";
 
 interface Caja {
   etiqueta: string;
@@ -444,6 +446,110 @@ console.log("El medio tiene que admitir el diseño");
   if (problemaDeMedio(DEFAULT_TEMPLATE, Number.NaN) === null) {
     fallos++;
     problemas.push("medio-NaN: se acepta, y dejaria ^PW como NaN");
+  }
+}
+
+// ===================================================================================
+// El esquema de la API tiene que saber TODOS los campos de la zona.
+// ===================================================================================
+//
+// Este bloque no va de solapes: va de que el editor y la impresora digan lo mismo.
+//
+// `z.object` no se queja cuando le llega una clave que no ha declarado: la tira. Y el tipado
+// `z.ZodType<LabelZone>` tampoco lo avisa, porque que el esquema ACEPTE un tipo no es lo mismo
+// que lo CONSERVA entero. Asi que añadir un campo a `TextZone` y no añadirlo aqui no da error
+// de compilacion, no da error en el servidor y no da error en la pantalla: el navegador manda
+// la zona con el campo, el servidor dibuja sin el, y el preview enseña un layout que no es el
+// de la plantilla. Pasaba con `uppercase` y con `autoFit.maxBlockDots`: el nombre se veia
+// pegado a las barras en el editor y con aire en `ver-layout`, y el unico sitio donde se
+// la unica que era correcta era el volcado.
+//
+// La comprobacion es de ida y de vuelta, y por los dos lados:
+//   - de la plantilla al esquema: si un campo que la plantilla usa no lo declara el esquema,
+//     mandandola por la API se pierde;
+//   - del esquema a la plantilla: si el esquema declara algo que `TextZone` no tiene, el
+//     campo sobra y es codigo muerto que no se limpia nunca.
+{
+  const camposDe = (v: object): string[] => Object.keys(v).sort();
+
+  for (const plantilla of TEMPLATES) {
+    const zonas = [...plantilla.zones, ...(plantilla.zonesWithoutBarcode ?? [])];
+
+    // Ida: la zona de la plantilla, tal cual, tiene que salir del esquema igual que entro.
+    const ida = zoneSchema.safeParse(zonas[0]);
+    pruebas++;
+    if (!ida.success) {
+      fallos++;
+      problemas.push(
+        `esquema: la primera zona de ${plantilla.id} no valida: ${ida.error.message}`,
+      );
+    }
+
+    for (const zona of zonas) {
+      const vuelta = zoneSchema.safeParse(zona);
+      pruebas++;
+      if (!vuelta.success) continue;
+
+      if (zona.kind !== "text") continue;
+      const original = zona as unknown as Record<string, unknown>;
+      const parseado = vuelta.data as unknown as Record<string, unknown>;
+
+      for (const campo of camposDe(original)) {
+        if (campo === "autoFit") continue;
+        pruebas++;
+        if (!(campo in parseado)) {
+          fallos++;
+          problemas.push(
+            `esquema: ${plantilla.id} manda el campo "${campo}" y el esquema lo descarta. ` +
+              `Anadelo a label-zones.schema.ts.`,
+          );
+        }
+      }
+
+      if (original.autoFit && typeof original.autoFit === "object") {
+        const afOrig = original.autoFit as Record<string, unknown>;
+        const afParseado =
+          typeof parseado.autoFit === "object" && parseado.autoFit !== null
+            ? (parseado.autoFit as Record<string, unknown>)
+            : {};
+        for (const campo of camposDe(afOrig)) {
+          pruebas++;
+          if (!(campo in afParseado)) {
+            fallos++;
+            problemas.push(
+              `esquema: ${plantilla.id} manda "autoFit.${campo}" y el esquema lo descarta. ` +
+                `Anadelo a label-zones.schema.ts.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // Vuelta: ningun campo del esquema que la plantilla no conozca. Se comparan las claves
+  // declaradas en el `.ts` contra las de la plantilla, leyéndolas del fichero, porque en
+  // tiempo de ejecucion Zod ya no dice quais ha declarado.
+  const ruta = "src/lib/labels/label-zones.schema.ts";
+  const texto = readFileSync(ruta, "utf8");
+  const bloque = texto.slice(texto.indexOf('kind: z.literal("text")'), texto.indexOf('kind: z.literal("barcode")'));
+  const declarados = new Set<string>();
+  for (const m of bloque.matchAll(/^\s{6}([a-zA-Z][a-zA-Z0-9]*):/gm)) declarados.add(m[1]);
+  const delAutoFit = bloque.slice(bloque.indexOf("autoFit"));
+  for (const m of delAutoFit.matchAll(/^\s{10}([a-zA-Z][a-zA-Z0-9]*):/gm)) declarados.add(m[1]);
+
+  const conosidos = new Set([
+    "kind", "x", "y", "format", "source", "prefix", "uppercase", "maxWidthDots",
+    "maxLines", "justify", "autoFit", "maxHeight", "minHeight", "widthRatio", "maxBlockDots",
+  ]);
+  for (const campo of declarados) {
+    pruebas++;
+    if (!conosidos.has(campo)) {
+      fallos++;
+      problemas.push(
+        `esquema: "${campo}" esta en ${ruta} pero no existe en TextZone. ` +
+          `O es un campo nuevo que hay que anadir a la plantilla, o sobra y hay que quitarlo.`,
+      );
+    }
   }
 }
 

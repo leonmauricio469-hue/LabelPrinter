@@ -11,6 +11,20 @@ import type { LabelZone } from "./label.template";
  *
  * `z.lazy` es necesario porque `LabelZone` es una union discriminada por `kind` y se citan a
  * si mismos en `zones` y `zonesWithoutBarcode`, que son arreglos.
+ *
+ * ESTE ESQUEMA TIENE QUE LLEGAR AL FINAL A TODOS LOS CAMPOS DE LA ZONA, Y NO ES COSA QUE SE
+ * RECUERDE: `z.object` NO DA ERROR cuando le llega una clave que no ha declarado, la descarta
+ * en silencio. El tipo `z.ZodType<LabelZone>` de abajo no lo avisa, porque comprobar que el
+ * esquema ACEPTA todos los campos es distinto de comprobar que los CONSERVA.
+ *
+ * Lo que pasaba sin `uppercase` y sin `autoFit.maxBlockDots`: el navegador los mandaba bien, el
+ * servidor los tiraba, y el preview se dibujaba con un layout que no era el de la plantilla. El
+ * nombre salia pegado a las barras porque el tope de alto del bloque no llegaba, y el nombre
+ * aparecia en el papel tal cual lo define la plantilla pero en la pantalla como si fuera otro.
+ * Sin ningun error en ninguna parte: el 200 era correcto y el dibujo era el que el servidor
+ * creia que le habian pedido.
+ *
+ * `check-zonas.ts` vigila que el esquema y la plantilla no se separen.
  */
 export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
   z.discriminatedUnion("kind", [
@@ -21,6 +35,7 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
       format: z.string().min(1).max(64),
       source: z.string().min(1).max(64),
       prefix: z.string().max(16).optional(),
+      uppercase: z.boolean().optional(),
       maxWidthDots: z.number().int().min(0).max(8000).optional(),
       maxLines: z.number().int().min(1).max(12).optional(),
       justify: z.enum(["L", "C", "R"]).optional(),
@@ -29,6 +44,7 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
           maxHeight: z.number().int().min(4).max(400),
           minHeight: z.number().int().min(4).max(400),
           widthRatio: z.number().min(0.1).max(2),
+          maxBlockDots: z.number().int().min(4).max(4000).optional(),
         })
         .optional(),
     }),

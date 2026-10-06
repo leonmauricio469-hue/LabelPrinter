@@ -57,6 +57,15 @@ export interface RenderedZone {
 
 export interface RenderResult {
   png: Buffer;
+  /**
+   * El lienzo en crudo, un byte por dot: 0 si hay tinta, 255 si no. Sin comprimir y a escala 1.
+   *
+   * Va aparte del `png` porque `png` es un PNG comprimido, y de un PNG no se leen pixeles sin
+   * descomprimirlo. Es lo que permite mirar la etiqueta en texto (`ver-ascii.ts`) y lo que
+   * haria falta para cualquier medida sobre la tinta, tipo "cuantos dots negros hay en el
+   * logo". Tamano `widthDots * heightDots`.
+   */
+  puntos: Buffer;
   /** Cajas de todo lo dibujado, en dots. Es lo que usa la UI para colocar los campos. */
   cajas: RenderedZone[];
   /** Linea de la consola de `render-label`, por si el editor la quiere teach. */
@@ -91,6 +100,69 @@ export interface RenderResult {
 export function textBox(text: string, xDot: number, yDot: number, hDot: number, wDot: number) {
   const used = text.length * wDot;
   return { x0: xDot, y0: yDot, x1: xDot + used, y1: yDot + hDot };
+}
+
+/**
+ * Reparte un texto en las lineas que draw dentro de la caja del `^FB`.
+ *
+ * Es la contraparte de `resolveAutoFit()` y tiene que medir con la misma regla que el, porque
+ * de eso depende que el alto que se elige y las lineas que se dibujan sean el mismo hecho:
+ * `^A0N,alto,ancho` hace que CADA CARACTER ocupe `ancho` dots, asi que una linea admite
+ * `floor(caja / ancho)` caracteres.
+ *
+ * Parte por PALABRAS, que es lo que hace la impresora, y parte la palabra en mitad si ella
+ * sola no cabe, que tambien. Sin esa segunda parte, un nombre de una palabra larguisima
+ * ("SUPERCALIFRAGILISTICOEXPIALIDOCIOUS") se dibujaria entero en una linea y se saldria de
+ * la etiqueta, y el nombre de un producto de 68 caracteres es justo el caso que motivo todo
+ * el cambio de layout.
+ *
+ * El limite de lineas es el `maxLines` del `^FB`. Lo que no cabe en ese numero de lineas se
+ * DIBUJA IGUAL, en una linea mas larga, en vez de recortarse: aqui no se imprime, es una
+ * previsualizacion, y callarse un texto que en el papel se recorta enseña una etiqueta
+ * distinta de la real. El aviso de "se pasa" lo pone el llamante por cada linea.
+ */
+export function partirLineas(text: string, wDot: number, caja: number, maxLineas: number): string[] {
+  if (caja <= 0 || wDot <= 0) return [text];
+  const porLinea = Math.max(1, Math.floor(caja / wDot));
+  if (text.length <= porLinea) return [text];
+
+  const salida: string[] = [];
+  let actual = "";
+  for (const palabra of text.split(" ")) {
+    // Una palabra mas ancha que la caja no se puede colocar entera: se parte en trozos del
+    // ancho justo, como hace la impresora, y el trozo que sobra empieza la linea siguiente.
+    for (const trozo of trocear(palabra, porLinea)) {
+      // Un trozo de una palabra larga NO lleva espacio delante aunque no sea el primero: son
+      // trozos de la MISMA palabra y un espacio los separaria en papel. Con el espacio de mas,
+      // un nombre de una palabra de 100 caracteres salia en trozos de 20,20,20,41: el
+      // ultimo se pasaba de la caja y ademas aparecia un hueco en medio de la palabra.
+      //
+      // El caso de "MITAD DE" se resolvia solo: la palabra MIDAD ocupa 5, luego un espacio
+      // lleva a 6, y 6+DE=8 no cabe, asi que la linea se cierra en 5 con su espacio. La
+      // condicion de arriba no cambia ese camino, solo quita el espacio entre trozos.
+      const conEspacio = actual === "" || actual.endsWith(" ") ? trozo : `${actual} ${trozo}`;
+      if (conEspacio.length <= porLinea) {
+        actual = conEspacio;
+        continue;
+      }
+      if (actual !== "") salida.push(actual);
+      actual = trozo;
+    }
+  }
+  if (actual !== "") salida.push(actual);
+
+  // Se recorta al numero de lineas que permite el `^FB`; lo que sobra se mantiene pegado a
+  // la ultima, que es lo que se ve en el papel, y el llamante avisa por el ancho.
+  if (salida.length <= maxLineas) return salida;
+  return [...salida.slice(0, maxLineas - 1), salida.slice(maxLineas - 1).join(" ")];
+}
+
+/** Trocea una palabra en trozos de `porLinea` caracteres. */
+function trocear(palabra: string, porLinea: number): string[] {
+  if (palabra.length <= porLinea) return [palabra];
+  const trozos: string[] = [];
+  for (let i = 0; i < palabra.length; i += porLinea) trozos.push(palabra.slice(i, i + porLinea));
+  return trozos;
 }
 
 export function renderLabel(
@@ -340,6 +412,9 @@ export function renderLabel(
   let symbology: "ean13" | "code128" | null = null;
   let inBarcode = false;
   let datosImpresos: string | null = null;
+  // El `^FB` vigente. En ZPL no caduca con el campo: sigue mandando hasta que llegue otro
+  // `^FB`, asi que se guarda aqui igual que en la impresora y no se reinicia en cada `^FO`.
+  let fb: { w: number; lineas: number; separacion: number; justify: "L" | "C" | "R" } | null = null;
 
   for (const raw of zpl.split("\n")) {
     const line = raw.trim();
@@ -380,8 +455,21 @@ export function renderLabel(
       continue;
     }
     if (line.startsWith("^FB")) {
-      const fbW = Number.parseInt(line.slice(3).split(",")[0], 10);
-      vLine(curX + fbW, curY, curY + fontH, FB);
+      const p = line.slice(3).split(",");
+      const w = Number.parseInt(p[0] ?? "0", 10);
+      const lineas = Number.parseInt(p[1] ?? "1", 10);
+      const separacion = Number.parseInt(p[2] ?? "0", 10);
+      const j = p[3] ?? "L";
+      fb = {
+        w,
+        lineas: Math.max(1, lineas),
+        // ZPL usa el alto de la fuente como separacion entre lineas cuando el `^FB` lleva un 0
+        // en ese campo, que es lo que emite `emit()`. Sin esto, un nombre a dos lineas se
+        // dibujaria pegado a si mismo en la previsualizacion y separado en el papel.
+        separacion: separacion > 0 ? separacion : 0,
+        justify: j === "C" || j === "R" ? j : "L",
+      };
+      vLine(curX + w, curY, curY + fontH, FB);
       continue;
     }
     if (line.startsWith("^BY")) {
@@ -403,11 +491,43 @@ export function renderLabel(
         inBarcode = false;
         continue;
       }
-      const used = drawText(curX, curY, fontH, fontW, text, TEXT);
-      const b = textBox(text, curX, curY, fontH, fontW);
-      cajas.push({ etiqueta: "texto", texto: text, alto: fontH, anchoUsado: used, ...b });
-      if (curX + used > widthDots) informe.push(`"${text}" SE PASA POR LA DERECHA (${curX + used} > ${widthDots})`);
-      if (curY + fontH > heightDots) informe.push(`"${text}" SE PASA POR ABAJO (${curY + fontH} > ${heightDots})`);
+      // El `^FB` manda sobre como se coloca el texto DENTRO de la caja. Antes se ignoraba y
+      // todo se dibujaba en el borde izquierdo de la caja, que es un fallo de fondo del
+      // render, no de la plantilla: en el papel la impresora centra y alinea a la derecha, y
+      // aqui no. Con el layout de dos columnas eso hacia que la previa no cuadrase con el ZPL
+      // justo en las dos zonas de las que mas depende el aspecto final, el nombre centrado y
+      // el precio a la derecha.
+      //
+      // Y no es solo el `x`: el `^FB` tambien reparte el texto en varias lineas, asi que un
+      // nombre que se parte en dos sale en dos lineas en el papel y aqui salia en una sola
+      // con el ancho de las dos, rebasando la caja y el marco. Se reparte igual que lo
+      // repartiria la impresora: por palabras, y partiendo la palabra si ella sola no cabe.
+      const lineas = fb ? partirLineas(text, fontW, fb.w, fb.lineas) : [text];
+      const separacion = fb ? (fb.separacion > 0 ? fb.separacion : fontH) : 0;
+
+      lineas.forEach((trozo, i) => {
+        const anchoTrozo = trozo.length * fontW;
+        // Sin `^FB` no hay caja: el texto arranca donde dice el `^FO`.
+        const cajaW = fb ? fb.w : anchoTrozo;
+        const dx = fb
+          ? fb.justify === "C"
+            ? Math.round((cajaW - anchoTrozo) / 2)
+            : fb.justify === "R"
+              ? cajaW - anchoTrozo
+              : 0
+          : 0;
+        const x = curX + dx;
+        const y = curY + i * (fontH + separacion);
+        const used = drawText(x, y, fontH, fontW, trozo, TEXT);
+        const b = textBox(trozo, x, y, fontH, fontW);
+        cajas.push({ etiqueta: "texto", texto: trozo, alto: fontH, anchoUsado: used, ...b });
+        if (x + used > widthDots) {
+          informe.push(`"${trozo}" SE PASA POR LA DERECHA (${x + used} > ${widthDots})`);
+        }
+        if (y + fontH > heightDots) {
+          informe.push(`"${trozo}" SE PASA POR ABAJO (${y + fontH} > ${heightDots})`);
+        }
+      });
       continue;
     }
   }
@@ -420,6 +540,7 @@ export function renderLabel(
 
   return {
     png: encodePng(px, W, H),
+    puntos: aPuntos(px, W, H, widthDots, heightDots),
     cajas,
     informe,
     symbology,
@@ -428,6 +549,31 @@ export function renderLabel(
     zonaQuieta,
     pixelesLogo,
   };
+}
+
+/**
+ * El lienzo RGB a un byte por dot: 0 con tinta, 255 sin ella.
+ *
+ * Baja de escala tomando el pixel mas oscuro de cada dot, no el promedio. El promedio
+ * difuminaria justo lo que mas importa mirar: las barras de un codigo, que son de 1 a 3 dots,
+ * se vuelven gris claro con un promedio y desaparecen en un dibujo de texto. El mas oscuro
+ * mantiene el borde de la barra, que es lo que dice cuanto mide de verdad.
+ */
+function aPuntos(px: Buffer, W: number, H: number, anchoDots: number, altoDots: number): Buffer {
+  const puntos = Buffer.alloc(anchoDots * altoDots, 255);
+  const sx = W / anchoDots;
+  const sy = H / altoDots;
+  for (let y = 0; y < H; y++) {
+    const dy = Math.min(altoDots - 1, Math.floor(y / sy));
+    for (let x = 0; x < W; x++) {
+      const dx = Math.min(anchoDots - 1, Math.floor(x / sx));
+      const o = (y * W + x) * 3;
+      const gris = Math.round((px[o] + px[o + 1] + px[o + 2]) / 3);
+      const i = dy * anchoDots + dx;
+      if (gris < puntos[i]) puntos[i] = gris;
+    }
+  }
+  return puntos;
 }
 
 /** PNG RGB sin filtro, con la tabla CRC calculada una vez. */
