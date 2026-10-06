@@ -14,22 +14,32 @@ import type { QueueState, QueueStatus } from "@/lib/printing/queue.status.types"
  */
 const POLL_MS = 20000;
 
+/**
+ * Punto de estado y cajon de color.
+ *
+ * `ready` no es neutro sino verde explicito: que la impresora este lista ES un estado que
+ * conviene confirmar de un vistazo antes de arrancar la tirada, no un "no hay novedad".
+ * Antes era blanco con texto gris, indistinguible de "no se pudo consultar".
+ *
+ * El punto lleva un halo del mismo color en `shadow` para que se lea a distancia: en un
+ * banner de una linea el punto es de 10px y sin halo es un pixel sucio.
+ */
 const DOT: Record<QueueState, string> = {
-  ready: "bg-green-500",
-  busy: "bg-blue-500",
-  warning: "bg-amber-500",
-  blocked: "bg-red-600",
-  missing: "bg-red-600",
-  unknown: "bg-neutral-400",
+  ready: "bg-ok shadow-[0_0_0_3px_var(--color-ok-soft)]",
+  busy: "bg-busy shadow-[0_0_0_3px_var(--color-busy-soft)]",
+  warning: "bg-warn shadow-[0_0_0_3px_var(--color-warn-soft)]",
+  blocked: "bg-danger shadow-[0_0_0_3px_var(--color-danger-soft)]",
+  missing: "bg-danger shadow-[0_0_0_3px_var(--color-danger-soft)]",
+  unknown: "bg-ink-mute shadow-[0_0_0_3px_var(--color-surface-sunken)]",
 };
 
 const TONE: Record<QueueState, string> = {
-  ready: "border-neutral-200 bg-white text-neutral-600",
-  busy: "border-blue-200 bg-blue-50 text-blue-800",
-  warning: "border-amber-300 bg-amber-50 text-amber-900",
-  blocked: "border-red-300 bg-red-50 text-red-800",
-  missing: "border-red-300 bg-red-50 text-red-800",
-  unknown: "border-neutral-200 bg-neutral-50 text-neutral-500",
+  ready: "border-ok-line bg-ok-soft text-ok",
+  busy: "border-busy-line bg-busy-soft text-brand-ink",
+  warning: "border-warn-line bg-warn-soft text-warn",
+  blocked: "border-danger-line bg-danger-soft text-danger",
+  missing: "border-danger-line bg-danger-soft text-danger",
+  unknown: "border-line bg-surface text-ink-mute",
 };
 
 const EMPTY: QueueStatus = {
@@ -154,16 +164,19 @@ export function PrinterStatusBanner({
   const cola = status.jobCount > 0 ? ` · ${status.jobCount} en cola` : "";
 
   return (
-    <div className={`rounded-md border px-4 py-2.5 text-sm ${TONE[status.state]}`}>
+    <div
+      role={status.state === "blocked" || status.state === "missing" ? "alert" : "status"}
+      className={`rounded-lg border px-4 py-2.5 text-sm shadow-card ${TONE[status.state]}`}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="inline-flex items-center gap-2 font-semibold">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT[status.state]}`} />
+          <span className={`inline-block size-2.5 shrink-0 rounded-full ${DOT[status.state]}`} />
           {etiqueta}: {status.message || "..."}
           {cola}
         </span>
 
         {status.raw.found && status.raw.queue && (
-          <span className="text-xs opacity-70">
+          <span className="font-mono text-xs opacity-70">
             {status.raw.queue}
             {status.raw.port ? ` · ${status.raw.port}` : ""}
           </span>
@@ -173,7 +186,7 @@ export function PrinterStatusBanner({
           type="button"
           onClick={refresh}
           disabled={loading}
-          className="ml-auto rounded border border-current/30 px-2 py-0.5 text-xs font-medium opacity-80 hover:opacity-100 disabled:opacity-40"
+          className="ml-auto rounded-md border border-current/30 px-2.5 py-1 text-xs font-medium opacity-80 transition duration-150 hover:opacity-100 disabled:opacity-40"
         >
           {loading ? "Consultando..." : "Actualizar"}
         </button>

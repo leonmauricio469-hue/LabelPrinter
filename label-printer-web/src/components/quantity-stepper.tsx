@@ -40,11 +40,19 @@ export function QuantityStepper({
   const clamp = (n: number) => Math.min(MAX_QTY, Math.max(MIN_QTY, n));
   const step = (delta: number) => onChange((prev) => clamp(prev + delta));
 
-  const buttonClass =
-    "h-12 w-12 rounded-md border border-neutral-300 bg-white text-xl font-medium text-neutral-900 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40";
+  /**
+   * Clases del contador.
+   *
+   * Los tres controles miden lo mismo (48px) y comparten borde: es una sola pieza, no
+   * tres botones sueltos. El `tabular-nums` en el input es para que al pasar de 1 a 2 el
+   * ancho del numero no salte y el grupo no se ensanche una pila de pixels a la derecha.
+   */
+  const face =
+    "h-12 rounded-md border border-line-strong bg-surface text-ink transition duration-150";
+  const buttonClass = `${face} w-12 text-xl font-medium hover:bg-surface-sunken active:bg-line disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface`;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <button
         type="button"
         aria-label="Quitar una etiqueta"
@@ -68,7 +76,7 @@ export function QuantityStepper({
           // Campo vacio o basura -> vuelve al minimo en vez de NaN.
           onChange(Number.isFinite(parsed) ? clamp(parsed) : MIN_QTY);
         }}
-        className="h-12 w-24 rounded-md border border-neutral-300 text-center text-2xl font-semibold text-neutral-900 disabled:bg-neutral-50"
+        className={`${face} w-24 text-center text-2xl font-bold tabular-nums disabled:bg-surface-sunken`}
       />
 
       <button
@@ -80,6 +88,12 @@ export function QuantityStepper({
       >
         +
       </button>
+
+      {/* El tope no se esconde: sin esto, el operador que lleva 6 y pulsa `+` no sabe si
+          la app se colgo o si ya no puede mas. Es el unico texto que agrega el stepper. */}
+      {value >= MAX_QTY && !disabled && (
+        <span className="ml-1 text-xs font-medium text-warn">max.</span>
+      )}
     </div>
   );
 }
