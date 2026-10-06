@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_TEMPLATE, MM_TO_DOTS, dotsFromMm } from "@/lib/labels/label.template";
 import {
   ASIDERES,
+  MIN_DOTS,
   TITULO_ASIDERA,
   ejesRedimensionables,
   redimensionar,
   type Asider,
+  type ContextoResize,
 } from "@/lib/labels/label.resize";
+import { cajaEstimada, estirarMarco, type Marco } from "@/lib/labels/label.marco";
 import { graphicDots, scaleGraphic } from "@/lib/labels/gf-graphic";
 import { buscarProblemas } from "@/lib/labels/label-solapes";
 import { buttonGhost, buttonPrimary, buttonQuiet, card, h2, h3, input } from "@/components/ui";
@@ -249,9 +252,22 @@ export default function EditorPage() {
    * puede anticiparse a eso sin inventar geometria. Cuando la respuesta llega, la diferencia
    * se hace cero y la caja queda donde la pinto el servidor.
    */
-  const [previewZones, setPreviewZones] = useState<AnyZone[] | null>(null);
-  /** Señal de que el tirador activo es un asa de redimensionado, no un movimiento. */
-  const [redimensionando, setRedimensionando] = useState(false);
+  /**
+   * El estirado en curso, o el ultimo hasta que llegue el render nuevo.
+   *
+   * Mover NO necesita estado: la zona se actualiza con cada fotograma y `cajaEstimada()` de
+   * esa zona ya es el marco, asi que sigue al puntero solo. Estirar si, porque la zona
+   * cuantiza (modulos de 95 en 95, logo a multiplos de 8, letra en dots enteros) y el marco
+   * tiene que seguir al RATON mientras dure el gesto; al soltar, el render del servidor
+   * ajusta el marco a lo que de verdad se imprime.
+   */
+  const [estirando, setEstirando] = useState<{
+    indice: number;
+    asa: Asider;
+    base: Marco;
+    dx: number;
+    dy: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sel, setSel] = useState<number>(() =>
@@ -263,7 +279,7 @@ export default function EditorPage() {
   const [zoom, setZoom] = useState(3);
   const [mostrarCajas, setMostrarCajas] = useState(true);
   const [aplicando, setAplicando] = useState(false);
-  const [aplicado, setAplicado] = useState<string | null>(null);
+  const [aplicado, setAplicado] = useState<{ texto: string; clave: string } | null>(null);
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [rechazoDetalle, setRechazoDetalle] = useState<string[]>([]);
   const [hayOverride, setHayOverride] = useState(false);
@@ -291,10 +307,12 @@ export default function EditorPage() {
         const cargadas = structuredClone(j.zones) as unknown as AnyZone[];
         setZones(cargadas);
         setSel(primeraEditable(cargadas));
-        setAplicado(
-          `Cargado lo que hay guardado (${j.savedAt}). Estos son los valores con los que se ` +
+        setAplicado({
+          texto:
+            `Cargado lo que hay guardado (${j.savedAt}). Estos son los valores con los que se ` +
             `esta imprimiendo, no los del codigo.`,
-        );
+          clave: JSON.stringify(cargadas),
+        });
       } catch {
         // Si el estado guardado no se puede leer, la pantalla arranca con la del codigo. Es
         // mejor que quedarse en blanco: el preview se dibuja igual y se ve en que plantilla.
@@ -333,7 +351,7 @@ export default function EditorPage() {
         setRechazoDetalle(Array.isArray(j.detalles) ? j.detalles : []);
         return;
       }
-      setAplicado(j.aviso ?? "Guardado.");
+      setAplicado({ texto: j.aviso ?? "Guardado.", clave: JSON.stringify(zones) });
       setHayOverride(true);
       setGuardado({ savedAt: new Date().toISOString() });
     } catch (e) {
@@ -355,7 +373,10 @@ export default function EditorPage() {
       }
       setHayOverride(false);
       setGuardado(null);
-      setAplicado("Descartado. Se vuelve a la plantilla del codigo.");
+      setAplicado({
+        texto: "Descartado. Se vuelve a la plantilla del codigo.",
+        clave: JSON.stringify(DEFAULT_TEMPLATE.zones),
+      });
       setZones(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]);
       setSel(primeraEditable(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]));
     } catch (e) {
@@ -378,8 +399,7 @@ export default function EditorPage() {
     try {
       // El snapshot de las zonas pedidas. `pedir` se recrea con cada cambio de `zones`, asi
       // que la `zones` del cierre es exactamente la que manda el cuerpo: si la respuesta
-      // llega, es la respuesta para ESTE estado y `previewZones` queda alineado con
-      // `preview`.
+      // llega, es la respuesta para ESTE estado y el preview no se pinta con datos viejos.
       const pedidas = zones;
       const res = await fetch("/api/editor/preview", {
         method: "POST",
@@ -403,7 +423,6 @@ export default function EditorPage() {
         return;
       }
       setPreview(j);
-      setPreviewZones(pedidas);
       setError(null);
     } catch (e) {
       // Una peticion abortada no es un error: es la senal de que ya no importa.
@@ -472,29 +491,10 @@ export default function EditorPage() {
   const zona = zones[sel];
 
   /**
-   * Cuanto anticipar la caja seleccionada mientras el servidor no contesta.
-   *
-   * La caja la dibuja el servidor con las `previewZones`; mientras `zones` se aleja de esas,
-   * la caja se queda atras y el arrastre se ve congelado. Este es el desplazamiento exacto
-   * entre una y otra posicion en x/y: el movimiento se pinta al instante sin inventar nada
-   * mas (el tamano sigue siendo cosa del servidor), y cuando la respuesta llega la
-   * diferencia se hace cero y no hay ningun salto.
-   *
-   * En un redimensionado no se aplica: ahi la x/y nueva viene con un tamano que todavia no
-   * se dibuja, y trasladar la caja vieja dejaria el borde equivocado pegado al cursor. Ese lo
-   * resuelve el render, que es quien sabe medirlo.
+   * El marco de la seleccion ya no "anticipa" nada respecto al render: sale de la zona misma
+   * (`cajaEstimada()`), asi que no hay dos geometrias que reconciliar mientras el servidor no
+   * contesta. Ver el bloque de interaccion mas abajo.
    */
-  const desplazamiento = useMemo(() => {
-    const vista = previewZones?.[sel];
-    if (!zona || !vista || redimensionando) return { dx: 0, dy: 0 };
-    const dx = Number(zona.x) - Number(vista.x);
-    const dy = Number(zona.y) - Number(vista.y);
-    if (!dx && !dy) return { dx: 0, dy: 0 };
-    // Con `center` la impresora centra el simbolo y la `x` de la zona no coloca nada (ver
-    // `barcodeX()`): desplazar la caja ahi prometeria un movimiento que el render no haria.
-    const ejeX = zona.kind === "barcode" && zona.center ? 0 : dx;
-    return { dx: ejeX, dy };
-  }, [zona, previewZones, sel, redimensionando]);
 
   /** Que ejes se pueden estirar en la zona seleccionada, y el aviso de lo que no se puede. */
   const zonaEjes = useMemo(
@@ -584,83 +584,14 @@ export default function EditorPage() {
     [preview, zones],
   );
 
-  // Arrastre: se guarda de donde se cogio (en dots) y el punto de origen de la zona, para que
-  // el elemento no salte bajo el cursor.
-  //
-  // Va en un REF y no en estado a proposito. El manejador de `mousemove` esta registrado en la
-  // ventana desde el principio, asi que no depende de que React haya pintado nada: en un
-  // arrastre real el `mousemove` siguiente llega a veces en el mismo tick que el `mousedown`,
-  // y con estado ese movimiento se perdia. Ademas el arrastre no necesita re-renderizar nada:
-  // el PNG llega por el preview de todos modos.
-  const lienzoRef = useRef<HTMLDivElement | null>(null);
-  const arrastre = useRef<{
-    indice: number;
-    /** `null` = mover la zona entera. Con nombre = redimensionar por esa arista. */
-    asidera: Asider | null;
-    tomaX: number;
-    tomaY: number;
-    origen: LabelZone;
-  } | null>(null);
-
-  /** Posicion del puntero sobre la etiqueta, en dots. */
-  const dotsDelPuntero = useCallback(
-    (e: { clientX: number; clientY: number }) => {
-      const el = lienzoRef.current;
-      if (!el) return { dx: 0, dy: 0 };
-      const r = el.getBoundingClientRect();
-      // El `p-2` del contenedor son 8 px de marco que hay que restar antes de dividir.
-      return {
-        dx: (e.clientX - r.left - 8) / zoom,
-        dy: (e.clientY - r.top - 8) / zoom,
-      };
-    },
-    [zoom],
-  );
-
-  const empezarArrastre = useCallback(
-    (e: React.MouseEvent) => {
-      const objetivo = e.target as HTMLElement;
-      // El asa se mira ANTES que la caja: el asa esta DENTRO de la caja, asi que si se
-      // buscase la caja primero, tirar de una esquina moveria la zona en vez de estirarla.
-      const asa = objetivo.closest<HTMLElement>("[data-asidera]");
-      if (asa) {
-        const caja = asa.closest<HTMLElement>("[data-caja]");
-        if (!caja) return;
-        const i = Number(caja.dataset.caja);
-        const indice = pegables[i];
-        if (indice < 0 || indice !== sel) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const { dx, dy } = dotsDelPuntero(e);
-        setRedimensionando(true);
-        arrastre.current = {
-          indice,
-          asidera: asa.dataset.asidera as Asider,
-          tomaX: dx,
-          tomaY: dy,
-          origen: structuredClone(zones[indice]) as unknown as LabelZone,
-        };
-        return;
-      }
-
-      const caja = objetivo.closest<HTMLElement>("[data-caja]");
-      if (!caja) return;
-      const i = Number(caja.dataset.caja);
-      const indice = pegables[i];
-      if (indice < 0 || indice !== sel) return;
-      e.preventDefault();
-      const { dx, dy } = dotsDelPuntero(e);
-      setRedimensionando(false);
-      arrastre.current = {
-        indice,
-        asidera: null,
-        tomaX: dx,
-        tomaY: dy,
-        origen: structuredClone(zones[indice]) as unknown as LabelZone,
-      };
-    },
-    [pegables, sel, zones, dotsDelPuntero],
-  );
+  /**
+   * El aviso de "Guardado" o "Cargado" solo es cierto mientras las zonas siguen siendo las
+   * que se guardaron: en cuanto se toca algo, la pantalla ya muestra cambios que la
+   * impresora no tiene, y dejar el aviso ahi era mentir. La clave es el propio JSON de las
+   * zonas, asi que caduca solo, sin estados intermedios que olvidar.
+   */
+  const clavesZonas = JSON.stringify(zones);
+  const aplicadoTexto = aplicado && aplicado.clave === clavesZonas ? aplicado.texto : null;
 
   /**
    * Modulos del simbolo que hay en pantalla ahora mismo.
@@ -680,40 +611,325 @@ export default function EditorPage() {
     return Math.max(1, Math.round(preview.anchoSimbolo / mw));
   }, [preview, zones]);
 
-  useEffect(() => {
-    const mover = (e: MouseEvent) => {
-      const a = arrastre.current;
-      if (!a) return;
-      const { dx, dy } = dotsDelPuntero(e);
-      // El desplazamiento se mide en dots y se redondea al dot entero mas cercano: es la
-      // unidad que entiende la impresora, y dejar fracciones solo produciria ruido.
-      const ex = Math.round(dx - a.tomaX);
-      const ey = Math.round(dy - a.tomaY);
+  // ------------------------------------------------------------------ interaccion
+  //
+  // PUNTERO, NO RATON. Los manejadores van en el lienzo con POINTER EVENTS y
+  // `setPointerCapture`: el puntero sigue llegando aunque salga de la etiqueta o de la
+  // ventana, no hay listeners globales que re-registrar cuando cambia el preview (que es
+  // justo lo que pasaba en pleno arrastre), y el tacto entra solo con `touch-none`.
+  //
+  // EL MARCO NO ESPERA AL SERVIDOR. La caja de cada zona sale de `cajaEstimada()`, con la
+  // misma informacion que usaria `emit()`, y se recalcula en el navegador con cada
+  // fotograma. El render del servidor (~130 ms + 180 ms de debounce) solo hace falta al
+  // SOLTAR, para que el dibujo se ajuste a lo impreso; mientras dura el gesto, la imagen es
+  // la ultima buena y el marco es el que manda.
+  //
+  // Y EL CLIC SELECCIONA Y ARRASTRA A LA VEZ. Clic en cualquier zona editable = seleccion
+  // + arrastre en el mismo gesto, como en Word: no hay que ir primero a la lista lateral,
+  // que era lo que hacia que arrastrar "no funcionara".
 
-      if (a.asidera === null) {
-        const x = Math.max(0, a.origen.x + ex);
-        const y = Math.max(0, a.origen.y + ey);
-        setZones((prev) => prev.map((z, i) => (i === a.indice ? { ...z, x, y } : z)));
+  const lienzoRef = useRef<HTMLDivElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  /**
+   * El gesto en curso, en un REF y no en estado.
+   *
+   * Los manejadores de puntero se leen en el mismo tick en que se escriben: con estado, el
+   * puntero siguiente llega a veces antes de que React haya pintado y el movimiento se pierde.
+   * Ademas el gesto no necesita pintarse: el marco de MOVER ya lo lleva el estado de zonas, y
+   * el de estirar se pinta desde `estirando`, que si es estado.
+   */
+  const gesto = useRef<{
+    indice: number;
+    /** `null` = mover la zona entera. Con asa = estirar por esa arista. */
+    asa: Asider | null;
+    /** Puntero en dots al empezar, para que la zona no salte bajo el cursor. */
+    tomaX: number;
+    tomaY: number;
+    origen: LabelZone;
+    /** Caja de la zona al empezar: la base sobre la que se estira. */
+    base: Marco;
+    ctx: ContextoResize;
+    /** Si ha cambiado algo. Un pulsado sin mover es un clic de seleccion, no un arrastre. */
+    movido: boolean;
+  } | null>(null);
+
+  /** Ultimo puntero visto, en pixels de pantalla. El `requestAnimationFrame` lo consume. */
+  const puntero = useRef<{ clientX: number; clientY: number } | null>(null);
+  const raf = useRef<number | null>(null);
+
+  /**
+   * La caja de cada zona, estimada desde la zona y el ultimo render.
+   *
+   * Esta es el marco que se pinta y el area en la que se acierta al clic, y por eso no
+   * depende de emparejar cajas del render: una zona plegada en dos lineas o cuya caja no se
+   * pudo dibujar seguia quedando fuera del arrastre antes, y aqui tiene marco siempre que la
+   * zona tenga geometria.
+   */
+  const marcos = useMemo(
+    () =>
+      zones.map((z, i) =>
+        preview && EDITABLES.has(z.kind)
+          ? cajaEstimada(z as unknown as LabelZone, {
+              anchoSimbolo: preview.anchoSimbolo,
+              texto: preview.resueltos[i]?.texto ?? null,
+              altoLetra: preview.resueltos[i]?.alto,
+              anchoCelda: preview.resueltos[i]?.ancho,
+            })
+          : null,
+      ),
+    [zones, preview],
+  );
+
+  /**
+   * El marco de la zona seleccionada.
+   *
+   * Sin estirar, es la caja estimada de la zona: como esa caja se deriva de `zones`, el
+   * marco sigue al puntero solo, sin ningun calculo extra. Estirando, es la base del gesto
+   * movida por el delta DEL PUNTERO, que es lo que hace que el borde quede pegado al raton
+   * aunque la zona cuantize (modulos, multiplos de 8, dots enteros de letra).
+   */
+  const marcoSel = useMemo(() => {
+    const base = marcos[sel];
+    if (!base) return null;
+    if (!estirando || estirando.indice !== sel) return base;
+    return estirarMarco(estirando.base, estirando.asa, estirando.dx, estirando.dy, {
+      minAncho: MIN_DOTS.ancho,
+      minAlto: zones[sel]?.kind === "barcode" ? MIN_DOTS.altoBarra : MIN_DOTS.alto,
+    });
+  }, [marcos, sel, estirando, zones]);
+
+  /** Las asas que la zona seleccionada admite de verdad. Las que no, no se dibujan. */
+  const asasMarco: Asider[] = !zonaEjes
+    ? []
+    : ASIDERES.filter((a) => {
+        const horizontal = a === "e" || a === "w";
+        const vertical = a === "n" || a === "s";
+        const esquina = !horizontal && !vertical;
+        // Una esquina arrastra los dos ejes a la vez. Si la zona no admite uno, la esquina
+        // no se ofrece: estirarla solo deformaria el elemento.
+        if (esquina) return zonaEjes.x && zonaEjes.y;
+        return horizontal ? zonaEjes.x : zonaEjes.y;
+      });
+
+  /**
+   * Posicion del puntero sobre la etiqueta, en dots.
+   *
+   * Se mide contra el PROPIO `<img>`, no contra el contenedor con su `p-2` y su borde: el
+   * offset magico de 8+1 px descolocaba el marco respecto al cursor, y aqui no hay ninguna
+   * constante que restar porque el marco y la imagen empiezan en el mismo sitio.
+   */
+  function dotsDelPuntero(e: { clientX: number; clientY: number }) {
+    const el = imgRef.current;
+    if (!el) return { dx: 0, dy: 0 };
+    const r = el.getBoundingClientRect();
+    return { dx: (e.clientX - r.left) / zoom, dy: (e.clientY - r.top) / zoom };
+  }
+
+  /**
+   * Aplica el ultimo puntero visto. Va montado en `requestAnimationFrame` para que, pase lo
+   * que pase con la frecuencia de los eventos, no se pinte mas de una vez por fotograma.
+   */
+  function aplicarPendiente() {
+    raf.current = null;
+    const g = gesto.current;
+    const p = puntero.current;
+    if (!g || !p) return;
+    const { dx, dy } = dotsDelPuntero(p);
+    // El desplazamiento se mide en dots y se redondea al dot entero: es la unidad que
+    // entiende la impresora, y dejar fracciones solo produciria ruido.
+    const ex = Math.round(dx) - g.tomaX;
+    const ey = Math.round(dy) - g.tomaY;
+
+    if (g.asa === null) {
+      // Con `center` la x de la zona no coloca nada (`barcodeX()` recentra el simbolo):
+      // moverla prometeria un movimiento que el render no haria, y el marco se iria de
+      // lado mientras las barras se quedarian quietas.
+      const centrado = g.origen.kind === "barcode" && Boolean(g.origen.center);
+      const x = centrado ? Number(g.origen.x) : Math.max(0, Number(g.origen.x) + ex);
+      const y = Math.max(0, Number(g.origen.y) + ey);
+      if (x === Number(g.origen.x) && y === Number(g.origen.y)) return;
+      g.movido = true;
+      const i = g.indice;
+      setZones((prev) => prev.map((z, j) => (j === i ? { ...z, x, y } : z)));
+      return;
+    }
+
+    // El marco del estirado sigue al puntero aunque la zona no cambie aun: un modulo de
+    // barcode son 95 dots y el logo va a multiplos de 8, y el borde no puede esperar a que
+    // el dato de la zona alcance al raton.
+    g.movido = g.movido || ex !== 0 || ey !== 0;
+    setEstirando({ indice: g.indice, asa: g.asa, base: g.base, dx: ex, dy: ey });
+
+    const nueva = redimensionar(g.origen, g.asa, ex, ey, g.ctx);
+    if (JSON.stringify(nueva) === JSON.stringify(g.origen)) return;
+    const i = g.indice;
+    setZones((prev) => prev.map((z, j) => (j === i ? (nueva as unknown as AnyZone) : z)));
+  }
+
+  function empezarGesto(e: React.PointerEvent) {
+    if (!e.isPrimary) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    const objetivo = e.target as HTMLElement;
+    // El asa se mira ANTES que el marco: esta DENTRO, y si se mirara el marco primero,
+    // tirar de una esquina moveria la zona en vez de estirarla.
+    const asaEl = objetivo.closest<HTMLElement>("[data-asa]");
+    const marcoEl = objetivo.closest<HTMLElement>("[data-marco]");
+    const zonaEl = objetivo.closest<HTMLElement>("[data-zona]");
+
+    let indice: number | null = null;
+    let asa: Asider | null = null;
+    if (asaEl && marcoEl) {
+      asa = asaEl.dataset.asa as Asider;
+      indice = sel;
+    } else if (marcoEl) {
+      indice = sel;
+    } else if (zonaEl) {
+      indice = Number(zonaEl.dataset.zona);
+    }
+    if (indice === null || Number.isNaN(indice)) return;
+
+    const z = zones[indice];
+    const base = marcos[indice];
+    if (!z || !base || !EDITABLES.has(z.kind)) return;
+
+    e.preventDefault();
+    const p = dotsDelPuntero(e);
+    setSel(indice);
+    gesto.current = {
+      indice,
+      asa,
+      tomaX: Math.round(p.dx),
+      tomaY: Math.round(p.dy),
+      origen: structuredClone(z) as unknown as LabelZone,
+      base,
+      ctx: {
+        modulos: modulosActuales,
+        anchoCajaTexto: anchoCajaDeTexto(indice, preview, pegables),
+      },
+      movido: false,
+    };
+    puntero.current = { clientX: e.clientX, clientY: e.clientY };
+    if (asa) setEstirando({ indice, asa, base, dx: 0, dy: 0 });
+    else setEstirando(null);
+    lienzoRef.current?.setPointerCapture(e.pointerId);
+  }
+
+  function moverPuntero(e: React.PointerEvent) {
+    if (!gesto.current) return;
+    puntero.current = { clientX: e.clientX, clientY: e.clientY };
+    if (raf.current == null) raf.current = requestAnimationFrame(aplicarPendiente);
+  }
+
+  function terminarGesto() {
+    if (raf.current != null) {
+      cancelAnimationFrame(raf.current);
+      raf.current = null;
+      // El ultimo fotograma se aplica ya, sin esperar: si no, el ultimo movimiento del
+      // raton se perderia al soltar.
+      aplicarPendiente();
+    }
+    const g = gesto.current;
+    gesto.current = null;
+    puntero.current = null;
+    if (!g || !g.movido) {
+      // Un pulsado sin mover es un clic de seleccion. No hay nada que refrescar, y poner
+      // estado aqui dispararia una peticion al servidor por cada simple clic.
+      if (g?.asa) setEstirando(null);
+      return;
+    }
+    // Al soltar un MOVER no hace falta congelar nada: el marco ya es la caja estimada de la
+    // zona, que acaba de moverse con ella. Al soltar un ESTIRADO si: el marco se queda donde
+    // lo dejo el puntero hasta que llegue el render nuevo, y entonces se ajusta a lo impreso.
+    if (g.asa === null) setEstirando(null);
+  }
+
+  /**
+   * El estirado congelado vive hasta que el servidor contesta: entonces manda lo impreso.
+   *
+   * Si el gesto sigue activo (una pausa larga a mitad de estirar si dispara el debounce), el
+   * marco NO se toca: es el que esta siguiendo al puntero.
+   */
+  useEffect(() => {
+    if (gesto.current?.asa == null) setEstirando(null);
+  }, [preview]);
+
+  /**
+   * Teclado, con la misma idea que Word.
+   *
+   * Flechas = mover la zona seleccionada un dot (0,125 mm); con Mayus, ocho, que es 1 mm.
+   * Escape = cancelar el arrastre y devolver la zona a como estaba.
+   *
+   * Se cuelga de la ventana y no del lienzo porque el lienzo no tiene foco propio, y se
+   * ignora el evento cuando el destino es un campo: mientras se teclea una X en un input, las
+   * flechas tienen que mover el cursor de texto y nada mas.
+   */
+  useEffect(() => {
+    const enCampo = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el || typeof el.tagName !== "string") return false;
+      return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable === true;
+    };
+
+    const teclado = (e: KeyboardEvent) => {
+      if (enCampo(e.target)) return;
+
+      if (e.key === "Escape") {
+        const g = gesto.current;
+        if (!g && !estirando) return;
+        e.preventDefault();
+        if (raf.current != null) {
+          cancelAnimationFrame(raf.current);
+          raf.current = null;
+        }
+        if (g) {
+          const i = g.indice;
+          const origen = g.origen;
+          gesto.current = null;
+          puntero.current = null;
+          setZones((prev) => prev.map((z, j) => (j === i ? ({ ...z, ...origen } as AnyZone) : z)));
+        }
+        setEstirando(null);
         return;
       }
 
-      const nueva = redimensionar(a.origen, a.asidera, ex, ey, {
-        modulos: modulosActuales,
-        anchoCajaTexto: anchoCajaDeTexto(sel, preview, pegables),
-      });
-      setZones((prev) => prev.map((z, i) => (i === a.indice ? (nueva as unknown as AnyZone) : z)));
+      const pasos: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      const paso = pasos[e.key];
+      if (!paso) return;
+      // Con un gesto en curso las flechas no mando: moverian la zona por debajo del marco
+      // que la esta estirando, y saldria una mezcla de las dos operaciones.
+      if (gesto.current) return;
+      const z = zones[sel];
+      if (!z || !EDITABLES.has(z.kind)) return;
+
+      e.preventDefault();
+      const salto = e.shiftKey ? MM_TO_DOTS : 1;
+      const centrado = z.kind === "barcode" && Boolean(z.center);
+      const x = Math.max(0, Number(z.x) + (centrado ? 0 : paso[0] * salto));
+      const y = Math.max(0, Number(z.y) + paso[1] * salto);
+      // Si habia un estirado congelado, la posicion nueva ya no es la suya: que pinte la
+      // caja estimada de la zona mientras llega el render.
+      setEstirando(null);
+      setZones((prev) => prev.map((zz, i) => (i === sel ? { ...zz, x, y } : zz)));
     };
-    const soltar = () => {
-      arrastre.current = null;
-      setRedimensionando(false);
-    };
-    window.addEventListener("mousemove", mover);
-    window.addEventListener("mouseup", soltar);
-    return () => {
-      window.removeEventListener("mousemove", mover);
-      window.removeEventListener("mouseup", soltar);
-    };
-  }, [dotsDelPuntero, modulosActuales, sel, preview, pegables]);
+
+    window.addEventListener("keydown", teclado);
+    return () => window.removeEventListener("keydown", teclado);
+  }, [sel, zones, estirando]);
+
+  // Un `requestAnimationFrame` en vuelo no debe sobrevivir a la pantalla.
+  useEffect(
+    () => () => {
+      if (raf.current != null) cancelAnimationFrame(raf.current);
+    },
+    [],
+  );
 
   /**
    * La zona seleccionada como bloque de TypeScript para `label.template.ts`.
@@ -809,7 +1025,8 @@ export default function EditorPage() {
         <h2 className={h2}>Editor de plantilla</h2>
         <p className="mt-1 text-sm text-ink-soft">
           El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
-          se imprime. Todo se mueve y se redimensiona arrastrando. Con el boton de{" "}
+          se imprime. Haz clic en cualquier zona y arrastra: se selecciona y se mueve de una,
+          como en Word o PowerPoint. Con el boton de{" "}
           <strong>Aplicar cambios</strong> el cambio vale para imprimir al instante; el bloque de
           TypeScript de abajo es para llevarlo al codigo.
         </p>
@@ -1054,9 +1271,9 @@ export default function EditorPage() {
               codigo. Borrar ese archivo, o el boton de abajo, vuelve a como estaba.
             </p>
 
-            {aplicado && (
+            {aplicadoTexto && (
               <div className="mb-3 rounded-md border border-ok-line bg-ok-soft px-3 py-2">
-                <p className="text-xs font-semibold text-ok">{aplicado}</p>
+                <p className="text-xs font-semibold text-ok">{aplicadoTexto}</p>
                 {guardado && (
                   <p className="mt-0.5 font-mono text-[11px] text-ok">
                     data/plantilla-override.json · {guardado.savedAt}
@@ -1097,7 +1314,7 @@ export default function EditorPage() {
               </button>
             )}
 
-            {hayOverride && !aplicado && (
+            {hayOverride && !aplicadoTexto && (
               <p className="mt-2 text-[11px] text-warn">
                 Hay cambios guardados que todavia no has aplicado en pantalla. Si aplicas ahora,
                 se reemplazan.
@@ -1155,8 +1372,9 @@ export default function EditorPage() {
               ver cajas
             </label>
             <span className="text-xs text-ink-mute">
-              Elige una zona, arrastra su caja para moverla y tira de los puntos blancos de las
-              esquinas o los bordes para cambiarle el tamano. Vale para el logo, los textos y
+              Clic en cualquier zona para seleccionarla y arrastrarla en el mismo gesto; tira de
+              los puntos blancos de las esquinas o los bordes para cambiarle el tamano. Flechas =
+              mover 1 dot, con Mayus 1 mm; Escape = deshacer. Vale para el logo, los textos y
               las barras. <strong>El marco no</strong>: es el margen del papel y se calcula
               solo desde el ancho de la etiqueta.
             </span>
@@ -1189,88 +1407,100 @@ export default function EditorPage() {
           {preview && (
             <div
               ref={lienzoRef}
-              className="relative inline-block select-none rounded-lg border border-line-strong bg-white p-2 shadow-card"
-              onMouseDown={empezarArrastre}
+              className="relative inline-block touch-none select-none rounded-lg border border-line-strong bg-white p-2 shadow-card"
+              onPointerDown={empezarGesto}
+              onPointerMove={moverPuntero}
+              onPointerUp={terminarGesto}
+              onPointerCancel={terminarGesto}
+              onLostPointerCapture={terminarGesto}
             >
-              <img
-                src={`data:image/png;base64,${preview.png}`}
-                width={DEFAULT_TEMPLATE.widthDots * zoom}
-                height={DEFAULT_TEMPLATE.heightDots * zoom}
-                alt="Previsualizacion de la etiqueta"
-                draggable={false}
-              />
-              {mostrarCajas &&
-                preview.cajas.map((c, i) => {
-                  // Solo se puede arrastrar la caja que corresponde a la zona seleccionada, y
-                  // solo si esa zona es editable.
-                  const pegable = pegables[i] === sel;
-                  // La seleccionada se adelanta al cursor con el offset de `zones` contra
-                  // `previewZones`; las demas se quedan donde las dibujo el servidor.
-                  const ox = pegable ? desplazamiento.dx : 0;
-                  const oy = pegable ? desplazamiento.dy : 0;
-                  const nota = pegable && zona ? ejesRedimensionables(zona as unknown as LabelZone) : null;
-                  // Las asas de un eje que la zona no admite no se dibujan. Un tirador que no
-                  // hace nada parece un fallo del editor, y para el codigo de barras hay una
-                  // razon de peso: el ancho del simbolo lo fijan los modulos de la
-                  // simbologia (95 en EAN-13) por el ancho de modulo, que es un numero entero,
-                  // asi que un tirador de ancho solo podria ofrecer 190 o 285 dots y nada en
-                  // medio.
-                  const asas: Asider[] = !nota
-                    ? []
-                    : ASIDERES.filter((a) => {
-                        const horizontal = a === "e" || a === "w";
-                        const vertical = a === "n" || a === "s";
-                        const esquina = !horizontal && !vertical;
-                        // Una esquina arrastra los dos ejes a la vez. Si la zona no admite uno,
-                        // la esquina no se ofrece: estirarla solo deformaria el elemento.
-                        if (esquina) return nota.x && nota.y;
-                        return horizontal ? nota.x : nota.y;
-                      });
-                  return (
+              {/* Todo lo absoluto de aca dentro se posiciona contra ESTE wrapper, que empieza
+                  en el mismo punto que la imagen: cero offsets magicos. */}
+              <div className="relative">
+                <img
+                  ref={imgRef}
+                  src={`data:image/png;base64,${preview.png}`}
+                  width={DEFAULT_TEMPLATE.widthDots * zoom}
+                  height={DEFAULT_TEMPLATE.heightDots * zoom}
+                  alt="Previsualizacion de la etiqueta"
+                  draggable={false}
+                  className="block"
+                />
+
+                {/* Cajas del render: SOLO referencia visual de lo ultimo impreso. Sin eventos
+                    y sin chip: el que manda sobre el puntero es el marco de abajo. */}
+                {mostrarCajas &&
+                  preview.cajas.map((c, i) => (
                     <div
                       key={i}
                       data-caja={i}
-                      className={
-                        pegable
-                          ? "absolute cursor-move border-2 border-dashed border-brand"
-                          : "pointer-events-none absolute border border-dashed border-brand/55"
-                      }
+                      className="pointer-events-none absolute border border-dashed border-brand/55"
                       style={{
-                        left: `${(c.x0 + ox) * zoom + 8}px`,
-                        top: `${(c.y0 + oy) * zoom + 8}px`,
+                        left: `${c.x0 * zoom}px`,
+                        top: `${c.y0 * zoom}px`,
                         width: `${(c.x1 - c.x0) * zoom}px`,
                         height: `${(c.y1 - c.y0) * zoom}px`,
                       }}
-                    >
-                      <span
-                        className={`absolute -top-4 left-0 whitespace-nowrap px-1 text-[10px] text-white ${
-                          pegable ? "bg-brand" : "bg-brand/70"
+                    />
+                  ))}
+
+                {/* Area de clic de cada zona editable, derivada de `zones` y no del render:
+                    una zona plegada o sin caja dibujada sigue siendo arrastrable. Invisible
+                    hasta que el puntero se acerca, que es cuando importa. */}
+                {marcos.map((m, i) =>
+                  m ? (
+                    <div
+                      key={`zona-${i}`}
+                      data-zona={i}
+                      className="absolute cursor-move border border-transparent hover:border-brand"
+                      style={{
+                        left: `${m.x0 * zoom}px`,
+                        top: `${m.y0 * zoom}px`,
+                        width: `${(m.x1 - m.x0) * zoom}px`,
+                        height: `${(m.y1 - m.y0) * zoom}px`,
+                      }}
+                    />
+                  ) : null,
+                )}
+
+                {/* Marco de la zona seleccionada: unico, con asas, y POR ENCIMA de todo. */}
+                {marcoSel && (
+                  <div
+                    data-marco
+                    className="absolute cursor-move border-2 border-brand"
+                    style={{
+                      left: `${marcoSel.x0 * zoom}px`,
+                      top: `${marcoSel.y0 * zoom}px`,
+                      width: `${(marcoSel.x1 - marcoSel.x0) * zoom}px`,
+                      height: `${(marcoSel.y1 - marcoSel.y0) * zoom}px`,
+                    }}
+                  >
+                    <span className="absolute -top-4 left-0 whitespace-nowrap bg-brand px-1 text-[10px] text-white">
+                      {zona ? etiquetaDe(zona, sel) : ""} · x{Math.round(marcoSel.x0)}-
+                      {Math.round(marcoSel.x1)} y{Math.round(marcoSel.y0)}-{Math.round(marcoSel.y1)}
+                      {asasMarco.length > 0 ? " · arrastra o estira" : " · arrastra"}
+                    </span>
+                    {asasMarco.map((a) => (
+                      <div
+                        key={a}
+                        data-asa={a}
+                        title={TITULO_ASIDERA[a]}
+                        className={`absolute h-3 w-3 rounded-sm border border-brand bg-white ${
+                          CURSA_ASIDERA[a]
                         }`}
-                      >
-                        {c.texto ?? c.etiqueta} · x{c.x0 + ox}-{c.x1 + ox} y{c.y0 + oy}-{c.y1 + oy}
-                        {pegable && (asas.length > 0 ? " · arrastra o estira" : " · arrastra")}
-                      </span>
-                      {asas.map((a) => (
-                        <div
-                          key={a}
-                          data-asidera={a}
-                          title={TITULO_ASIDERA[a]}
-                          className={`absolute h-3 w-3 rounded-sm border border-brand bg-white ${
-                            CURSA_ASIDERA[a]
-                          }`}
-                          style={{
-                            left: `${POS_ASIDERA[a].x * 100}%`,
-                            top: `${POS_ASIDERA[a].y * 100}%`,
-                            // El asa va ENCIMA del borde, no pegada dentro: tiene que caer justo
-                            // sobre la linea que estira, que es donde el raton ya esta.
-                            marginLeft: -6,
-                            marginTop: -6,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
+                        style={{
+                          left: `${POS_ASIDERA[a].x * 100}%`,
+                          top: `${POS_ASIDERA[a].y * 100}%`,
+                          // El asa va ENCIMA del borde, no pegada dentro: tiene que caer justo
+                          // sobre la linea que estira, que es donde el puntero ya esta.
+                          marginLeft: -6,
+                          marginTop: -6,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
