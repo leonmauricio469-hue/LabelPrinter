@@ -7,6 +7,7 @@ import { QuantityStepper } from "@/components/quantity-stepper";
 import { PrintStatus } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import { lookupProducts, usePrint } from "@/components/use-print";
+import { buttonGhost, buttonPrint, card, hint, input, label } from "@/components/ui";
 import { MIN_BUSQUEDA } from "@/lib/products/product.lookup";
 import type { Product } from "@/lib/products/product.types";
 
@@ -107,7 +108,7 @@ export default function Home() {
   }, [print, qty, selected]);
 
   return (
-    <main className="flex flex-col gap-6">
+    <main className="flex flex-col gap-5">
       {/* Aqui si se muestra siempre: el operador va a confirmar antes de gastar papel, asi
           que ver el estado de la impresora antes de confirmar es util. */}
       <PrinterStatusBanner refreshKey={refreshKey} />
@@ -120,11 +121,19 @@ export default function Home() {
         }}
       />
 
-      <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-        <label
-          htmlFor="term"
-          className="text-sm font-medium text-neutral-700"
-        >
+      {/*
+        El campo de busqueda es el unico control que siempre esta en pantalla, asi que es
+        el que define el ritmo de la pagina. Se agrando de 40px a 48px de alto y el texto
+        subio a 16px por dos motivos practicos: a 15px iOS hace zoom al enfocar y la
+        pantalla salta, y con el escaner mapeado a teclado el texto que "escribe" es el
+        operador leyendo lo que llega, no la maquina.
+
+        `Buscar` pasa a boton secundario, no a primario: con el escaner en la mano el
+        Enter llega solo, y un boton azul compitiendo con IMPRIMIR hace que haya dos
+        cosas rojas en pantalla cuando solo una gasta papel.
+      */}
+      <section className={card + " p-5"}>
+        <label htmlFor="term" className={label}>
           Codigo de barras o codigo de producto
         </label>
         <form
@@ -141,65 +150,76 @@ export default function Home() {
             spellCheck={false}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="Escanea aqui, o escribe el codigo y Enter"
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2.5 text-sm focus:border-neutral-900 focus:outline-none"
+            placeholder="Escanea aqui, o escribe el codigo y pulsa Enter"
+            className={`${input} h-12 flex-1 text-base`}
           />
           <button
             type="submit"
             disabled={busy || term.trim() === ""}
-            className="rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-900 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+            className={buttonGhost + " h-12 shrink-0"}
           >
-            Buscar
+            {searching ? "Buscando..." : "Buscar"}
           </button>
         </form>
-        <p className="mt-2 text-xs text-neutral-500">
-          El escaner USB funciona como teclado: escanea sobre la pagina y ya esta. Tambien
-          puedes escribir el codigo a mano si el barcode esta danado.
+        <p className={hint}>
+          El escaner USB funciona como teclado: apunta a la pagina y listo. Tambien puedes
+          escribir el codigo a mano si el codigo de barras esta danado.
         </p>
       </section>
 
+      {/*
+        Coincidencias. Van ANTES del producto elegido porque el operador que llega aca todavia
+        no sabe cual es el suyo: esconder la lista detras de la tarjeta del producto ya
+        elegido obligaria a limpiar para volver a elegir.
+      */}
       {matches.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-700">
-            {matches.length} coincidencias
+          <h2 className="flex items-baseline gap-2 text-sm font-semibold text-ink-soft">
+            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-bold tabular-nums text-brand-ink">
+              {matches.length}
+            </span>
+            Elige el producto
           </h2>
-          {matches.map((product) => (
-            <ProductCard
-              key={product.code}
-              product={product}
-              onSelect={() => {
-                setSelected(product);
-                setMatches([]);
-                setQty(1);
-                notify({ kind: "ok", message: product.name });
-              }}
-            />
-          ))}
+          <div className="flex flex-col gap-2">
+            {matches.map((product) => (
+              <ProductCard
+                key={product.code}
+                product={product}
+                onSelect={() => {
+                  setSelected(product);
+                  setMatches([]);
+                  setQty(1);
+                  notify({ kind: "ok", message: product.name });
+                }}
+              />
+            ))}
+          </div>
         </section>
       )}
 
       {selected && (
-        <section className="flex flex-col gap-5 rounded-lg border border-neutral-900 bg-white p-5 shadow-sm">
+        <section className="flex flex-col gap-5 rounded-xl border-2 border-brand-ink/15 bg-surface p-5 shadow-pop">
           <ProductCard product={selected} selected />
-          <div className="flex flex-wrap items-end justify-between gap-4">
+
+          {/*
+            La unica zona donde se gasta papel. Se separa del resto con una linea y se le
+            da todo el ancho al boton: el stepper a la izquierda, la accion a la derecha,
+            y el boton NO se mueve al cambiar la cantidad (min-w en `buttonPrint`).
+          */}
+          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4">
             <div>
-              <span className="text-sm font-medium text-neutral-700">
-                Cantidad de etiquetas
-              </span>
+              <span className={label}>Cantidad de etiquetas</span>
               <div className="mt-2">
-                <QuantityStepper
-                  value={qty}
-                  onChange={setQty}
-                  disabled={busy}
-                />
+                <QuantityStepper value={qty} onChange={setQty} disabled={busy} />
               </div>
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex flex-1 justify-end gap-2">
               <button
                 type="button"
                 onClick={clearAll}
                 disabled={busy}
-                className="rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-900 hover:bg-neutral-100 disabled:opacity-40"
+                className={buttonGhost}
               >
                 Limpiar
               </button>
@@ -207,9 +227,10 @@ export default function Home() {
                 type="button"
                 onClick={doPrint}
                 disabled={busy}
-                className="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className={buttonPrint}
+                aria-busy={busy}
               >
-                IMPRIMIR
+                {busy ? "Imprimiendo..." : `IMPRIMIR ×${qty}`}
               </button>
             </div>
           </div>
