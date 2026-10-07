@@ -50,3 +50,9 @@ next-env.d.ts
 # archivo, se imprime la plantilla del codigo. Ese es el estado al que hay que poder volver sin
 # pedirle nada a nadie.
 data/plantilla-override.json
+
+# La etiqueta a mano de 59 x 35 mm y su generador: scratch de una etiqueta concreta, no de la
+# app. El ZPL y el PNG se regeneran con:
+#   npx tsc -p tsconfig.preview.json && node .preview-build/scripts/zz-gen-etiqueta.js
+scripts/zz-gen-etiqueta.ts
+preview/zz-*
