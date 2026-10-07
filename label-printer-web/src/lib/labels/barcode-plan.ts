@@ -201,7 +201,7 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
  * precio, las barras iban de y 96 a 168, la linea de interpretacion de 168 a 192, y la
  * referencia de 186 a 198. Se pisan 6 dots.
  *
- * `hriHeight` lo fija y quita el solape. La plantilla de 59 x 35 mm lo dice (14 dots). Si una
+ * `hriHeight` lo fija y quita el solape. La plantilla de 59 x 35 mm lo dice (12 dots). Si una
  * zona no lo dice, se emite `^BY` a secas y la linea cae donde le toque.
  */
 export function barcodeFormat(

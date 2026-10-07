@@ -210,7 +210,7 @@ const problemas: string[] = [];
  *
  * VACIO desde v1.3. La unica entrada que habia era el solape de 6 dots entre la linea de
  * interpretacion y `REF:` de la plantilla de 50 x 25 mm, que se llevo por delante la
- * plantilla entera. La de 59 x 35 mm lo evita diciendo `hriHeightDots: 14` en la zona de
+ * plantilla entera. La de 59 x 35 mm lo evita diciendo `hriHeightDots: 12` en la zona de
  * barras, en vez de dejar que la linea caiga a la altura de la fuente vigente.
  */
 const SOLAPES_CONOCIDOS: Record<string, string> = {};

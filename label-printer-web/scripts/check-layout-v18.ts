@@ -222,6 +222,8 @@ seccion("El alto de las barras y el de la linea de interpretacion");
 seccion("La vista previa y el papel: los mismos numeros");
 // ===================================================================================
 {
+  const bz = T.zones.find((z) => z.kind === "barcode");
+  const barrasEsperadas = bz?.kind === "barcode" ? bz.y + bz.heightDots + (bz.hriHeightDots ?? 0) : 0;
   for (const [titulo, d] of [
     ["el producto de prueba", datos()],
     ["nombre corto", datos({ productName: "ACEITE", barcode: "033844007522" })],
@@ -250,6 +252,18 @@ seccion("La vista previa y el papel: los mismos numeros");
       r.informe.every((i) => !i.includes("SE PASA")),
       r.informe.filter((i) => i.includes("SE PASA")).join(" | "),
     );
+    // La caja de las barras tiene que medir lo que dice la plantilla: simbolo y, pegada
+    // al pie SIN hueco, la linea de interpretacion del `^BY`. El render tenia un `hriH = 12`
+    // fijo y un aire de 2 dots: con `^BY1,,9` la previa acababa en 247 y el papel en 242.
+    // La caja no aparece cuando el codigo no se puede imprimir, y ahi no hay nada que medir.
+    const cb = r.cajas.find((c) => c.etiqueta === "barras");
+    if (cb && bz?.kind === "barcode") {
+      ok(
+        `${titulo}: la caja de las barras cumple la plantilla`,
+        cb.y0 === bz.y && cb.y1 === barrasEsperadas,
+        `${cb.y0}..${cb.y1}, esperado ${bz.y}..${barrasEsperadas}`,
+      );
+    }
   }
 }
 

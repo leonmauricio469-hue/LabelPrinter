@@ -306,16 +306,18 @@ export function renderLabel(
     return right <= widthDots && x >= 10 * moduleW && widthDots - right >= 10 * moduleW;
   }
 
-  function drawEan13(text: string, xDot: number, yDot: number, hDot: number, moduleW: number) {
+  function drawEan13(text: string, xDot: number, yDot: number, hDot: number, moduleW: number, hriH: number) {
     const total = EAN13_MODULES * moduleW;
     for (let m = 0; m < EAN13_MODULES; m++) {
       const inGuard = m < 3 || (m >= 45 && m < 50) || m >= 92;
       const on = inGuard ? m % 2 === 0 : (m * 7 + 3) % 3 !== 0;
       if (on) rect(xDot + m * moduleW, yDot, moduleW, hDot, BLACK);
     }
-    const hriH = 12;
-    const hri = textBox(text, xDot, yDot + hDot + 2, hriH, 7);
-    drawText(xDot, yDot + hDot + 2, hriH, 7, text, TEXT);
+    // La linea de interpretacion empieza donde acaban las barras, sin hueco: asi la miden
+    // `check-zonas.ts` y `cajaEstimada()`, y asi sale en el papel. `hriH = 0` es el `N` del
+    // `^BE`, que no imprime el numero de abajo, y la caja se queda en el pie de las barras.
+    const pie = yDot + hDot;
+    if (hriH > 0) drawText(xDot, pie, hriH, 7, text, TEXT);
     const right = xDot + total;
     const ok = quietOk(xDot, right, moduleW);
     vLine(right, yDot, yDot + hDot, ok ? OKEDGE : BADEDGE);
@@ -324,11 +326,11 @@ export function renderLabel(
         `  x ${xDot}..${right}  quieta ${xDot}/${widthDots - right} dots` +
         ` (${(xDot / 8).toFixed(2)}/${((widthDots - right) / 8).toFixed(2)} mm, min 10X = ${(10 * moduleW / 8).toFixed(2)} mm)  ${ok ? "OK" : "FALLA"}`,
     );
-    cajas.push({ etiqueta: "barras", x0: xDot, y0: yDot, x1: right, y1: hri.y1 });
+    cajas.push({ etiqueta: "barras", x0: xDot, y0: yDot, x1: right, y1: pie + hriH });
     return { total, right, ok };
   }
 
-  function drawCode128(text: string, xDot: number, yDot: number, hDot: number, moduleW: number) {
+  function drawCode128(text: string, xDot: number, yDot: number, hDot: number, moduleW: number, hriH: number) {
     const { encoded, note } = encodeCode128Auto(text);
     const total = encoded.modules * moduleW;
     let cx = xDot;
@@ -338,9 +340,10 @@ export function renderLabel(
       cx += w * moduleW;
       bar = !bar;
     }
-    const hriH = 12;
-    const hri = textBox(text, xDot, yDot + hDot + 2, hriH, 7);
-    drawText(xDot, yDot + hDot + 2, hriH, 7, text, TEXT);
+    // Igual que en `drawEan13()`: al pie de las barras, sin hueco, y sin numero si el
+    // comando del simbolo trae la interpretacion en `N`.
+    const pie = yDot + hDot;
+    if (hriH > 0) drawText(xDot, pie, hriH, 7, text, TEXT);
     const right = xDot + total;
     const ok = quietOk(xDot, right, moduleW);
     vLine(right, yDot, yDot + hDot, ok ? OKEDGE : BADEDGE);
@@ -348,7 +351,7 @@ export function renderLabel(
       `CODE 128 automatico (${note}): ${encoded.modules} mod x ${moduleW} = ${total} dots (${(total / 8).toFixed(1)} mm)` +
         `  x ${xDot}..${right}  quieta ${xDot}/${widthDots - right} dots  ${ok ? "OK" : "FALLA"}`,
     );
-    cajas.push({ etiqueta: "barras", x0: xDot, y0: yDot, x1: right, y1: hri.y1 });
+    cajas.push({ etiqueta: "barras", x0: xDot, y0: yDot, x1: right, y1: pie + hriH });
     return { total, right, ok };
   }
 
@@ -421,7 +424,13 @@ export function renderLabel(
   let fontH = 0;
   let fontW = 0;
   let byW = 2;
+  // Tercer parametro de `^BY`: el alto de la linea de interpretacion. `NaN` cuando no viene,
+  // que es cuando manda la fuente vigente (lo que dice el manual de ZPL II, ver
+  // `barcodeFormat()`).
+  let byH = NaN;
   let bcH = 0;
+  // El `Y`/`N` del comando de simbolo: con `N` la impresora no imprime el numero de abajo.
+  let conHri = true;
   let symbology: "ean13" | "code128" | null = null;
   let inBarcode = false;
   let datosImpresos: string | null = null;
@@ -486,11 +495,15 @@ export function renderLabel(
       continue;
     }
     if (line.startsWith("^BY")) {
-      byW = Number.parseInt(line.slice(3).split(",")[0], 10);
+      const p = line.slice(3).split(",");
+      byW = Number.parseInt(p[0], 10);
+      byH = Number.parseInt(p[2] ?? "", 10);
       continue;
     }
     if (line.startsWith("^BC") || line.startsWith("^BE")) {
-      bcH = Number.parseInt(line.slice(3).split(",")[1], 10);
+      const p = line.slice(3).split(",");
+      bcH = Number.parseInt(p[1], 10);
+      conHri = p[2] !== "N";
       symbology = line.startsWith("^BE") ? "ean13" : "code128";
       inBarcode = true;
       continue;
@@ -499,8 +512,14 @@ export function renderLabel(
       const text = line.slice(3).replace(/\^FS$/, "");
       if (inBarcode) {
         datosImpresos = text;
-        if (symbology === "ean13") drawEan13(text, curX, curY, bcH, byW);
-        else drawCode128(text, curX, curY, bcH, byW);
+        // Alto de la linea de interpretacion: primero el `^BY`, luego la fuente vigente, y
+        // con el flag a `N` ninguna. Sin esto el dibujo desdecia al papel: `^BY1,,9` imprimia
+        // 9 dots de numero y aqui salian 12 pegados con un hueco de 2.
+        let hriH = fontH > 0 ? fontH : 12;
+        if (Number.isFinite(byH) && byH > 0) hriH = byH;
+        if (!conHri) hriH = 0;
+        if (symbology === "ean13") drawEan13(text, curX, curY, bcH, byW, hriH);
+        else drawCode128(text, curX, curY, bcH, byW, hriH);
         inBarcode = false;
         continue;
       }
