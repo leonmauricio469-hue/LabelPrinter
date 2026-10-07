@@ -1,5 +1,5 @@
 import type { LabelData } from "./label.types";
-import { DEFAULT_TEMPLATE } from "./label.template";
+import { MM_TO_DOTS, DEFAULT_TEMPLATE } from "./label.template";
 import type {
   LabelTemplate,
   BarcodeZone,
@@ -322,7 +322,7 @@ export function problemaDeMedio(
   mediaWidthDots: number,
 ): string | null {
   if (mediaWidthDots >= template.widthDots) return null;
-  const mm = (dots: number) => (dots / DOTS_POR_MM).toFixed(2);
+  const mm = (dots: number) => (dots / MM_TO_DOTS).toFixed(2);
   return (
     `el medio cargado mide ${mm(mediaWidthDots)} mm y la etiqueta mide ` +
     `${mm(template.widthDots)} mm. Con un medio mas estrecho que la etiqueta, ^PW recorta y no ` +
@@ -330,9 +330,6 @@ export function problemaDeMedio(
     `${template.widthMm} mm o mas, o la etiqueta se hace mas estrecha.`
   );
 }
-
-/** Dots por mm a 203 dpi, que es lo que usa `label.template.ts`. */
-const DOTS_POR_MM = 8;
 
 function emit(
   template: LabelTemplate,
