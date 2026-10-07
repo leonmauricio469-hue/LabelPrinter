@@ -1,4 +1,4 @@
-import { LOGO_DOTS_W, LOGO_GF } from "./pa-picar-logo";
+import { LOGO_GF } from "./pa-picar-logo";
 import { scaleGraphic } from "./gf-graphic";
 import type { LabelData } from "./label.types";
 
@@ -245,15 +245,73 @@ export interface LabelTemplate {
 // Decision: el barcode va centrado y a su ancho natural, y REF baja a su propia linea,
 // alineado a la derecha. Es lo unico que cabe para EAN-13 con la norma respetada.
 
-// Medidas de la etiqueta, en un sitio solo.
+// La etiqueta se describe en milimetros, UNA sola vez, y de ahi salen todos los dots.
 //
 // Antes cada consumidor de la medida volvia a escribir `dotsFromMm(59)`: el marco, el centrado del
 // logo, y las dos propiedades de la plantilla. Tres sitios, el mismo numero, y nada que
 // compruebe que siguen siendo el mismo. Cambiar el ancho de la etiqueta a mano era cambiar
 // uno y olvidarse de los otros dos, y el que se olvidaba era el marco, que es justo el que no
 // se puede equivocar.
-const MM_ANCHO = 59;
-const MM_ALTO = 35;
+//
+// Hoy ademas cada zona tiene su geometria en mm: el logo, el nombre, el codigo (con su linea
+// de interpretacion, que es la pieza `barcodeHumanText`), el REF y el precio. Nada de esto se
+// escribe dos veces: se declara aqui en mm y las zonas quedan en dots via `dotsFromMm()`,
+// que multiplica por `MM_TO_DOTS` (8 dots/mm a 203 dpi, la GK420t real). Si la etiqueta
+// cambia de tamano, cambian estas constantes y las zonas lo siguen solas.
+export const LABEL_WIDTH_MM = 59.0;
+export const LABEL_HEIGHT_MM = 35.0;
+
+// Logo: 27 x 9 mm (45,8 % del ancho, el "logo grande" que se pidio), centrado y a 5 mm del
+// borde superior. El 16 sale de (59 - 27) / 2; escrito en mm para que seguir el centro del
+// logo no dependa de acordarse de la resta.
+const LOGO_W_MM = 27;
+const LOGO_H_MM = 9;
+const LOGO_X_MM = (LABEL_WIDTH_MM - LOGO_W_MM) / 2;
+const LOGO_Y_MM = 5;
+
+// Nombre: desde 15 mm (8 dots de aire bajo el logo, que acaba en 9 mm) con hasta 6 mm de
+// letra. El bloque entero no pasa de 5 mm: a lo sumo llega a 15 + 5 = 20 mm y deja 1 mm de
+// aire al codigo, que arranca en 21 mm.
+//
+// El minimo es 1,625 mm (13 dots) y NO 2 mm como en v1.8: con 2 mm, dos lineas ocupan
+// 3 * 16 = 48 dots y el bloque maximo de 40 no se puede respetar, asi que el nombre largo
+// caia en el caso 3 de `resolveAutoFit()` y se dibujaba tocando las barras. Con 13 dots,
+// 3 * 13 = 39 <= 40, el bloque se respeta siempre y 68 caracteres (el maximo del catalogo)
+// salen en UNA linea de 15 dots.
+const NOMBRE_Y_MM = 15;
+const NOMBRE_MAX_H_MM = 6;
+const NOMBRE_MIN_H_MM = 1.625;
+const NOMBRE_BLOQUE_MM = 5;
+
+// Codigo de barras: 5 mm de x (los 30 dots de zona quieta de la izquierda son parte de la
+// norma ISO/IEC 15420, no un adorno), 21 mm de y, 9,375 mm de barra (75 dots) y 1,5 mm de
+// linea de interpretacion (12 dots, dicha a mano para que no caiga a la altura de otra
+// fuente). Barras mas linea acaban en 21 + 9,375 + 1,5 = 31,875 mm, dentro de los 34 mm del
+// interior del marco.
+const BARRAS_X_MM = 5;
+const BARRAS_Y_MM = 21;
+const BARRAS_H_MM = 9.375;
+const BARRAS_HRI_MM = 1.5;
+
+// Precio y REF: columna derecha, alineados con la zona media/baja del codigo (21..30 mm) y
+// con el pie en 28,75 mm. Los decimales son exactos a 8 dots/mm: 371 = 46,375 mm, 329 =
+// 41,125 mm. El precio acaba en 459 dots (57,375 mm), 2 dots dentro del interior del marco,
+// y el REF queda a la izquierda del precio, cerca, como salio en la prueba fisica.
+const PRECIO_X_MM = 46.375;
+const PRECIO_Y_MM = 23.75;
+const PRECIO_W_MM = 11;
+const PRECIO_MAX_H_MM = 5;
+const PRECIO_MIN_H_MM = 2.25;
+
+const REF_X_MM = 41.125;
+const REF_Y_MM = 26.25;
+const REF_W_MM = 5;
+const REF_H_MM = 2.5;
+
+// Sin codigo de barras: el nombre arranca igual (15 mm) y el precio centrado queda a 22 mm,
+// con la referencia a 30 mm.
+const SIN_PRECIO_Y_MM = 22;
+const SIN_REF_Y_MM = 30;
 /**
  * Margen de seguridad por los cuatro lados, en dots.
  *
@@ -271,54 +329,64 @@ const MARGEN_INF_DOTS = 8;
 /** Radio de las esquinas del marco. 2 mm. */
 const MM_RADIO = 2;
 /** Las mismas medidas en dots, que es como trabaja todo lo demas. */
-const ANCHO_DOTS = dotsFromMm(MM_ANCHO);
-const ALTO_DOTS = dotsFromMm(MM_ALTO);
+const ANCHO_DOTS = dotsFromMm(LABEL_WIDTH_MM);
+const ALTO_DOTS = dotsFromMm(LABEL_HEIGHT_MM);
 
 /**
- * El logo del layout v1.8: 160 x 54 dots, reescalado del original de 200 x 67.
+ * El logo del layout actual: 216 x 72 dots (27 x 9 mm), reescalado del original de 200 x 67.
  *
  * Se reescala aqui, al cargar el modulo, y no en `/editor`, porque el layout del codigo tiene
  * que salir bien sin que nadie abra el editor. `scaleGraphic()` conserva la proporcion
- * (160/54 = 2,963 contra 200/67 = 2,985; la diferencia es el redondeo al byte) y ajusta el
- * ancho al multiplo de 8 mas cercano, que aqui ya es exacto.
+ * (216/72 = 3,0 contra 200/67 = 2,985; la diferencia es el redondeo al byte) y ajusta el
+ * ancho al multiplo de 8 mas cercano, que aqui ya es exacto (27 bytes).
+ *
+ * El 45,8 % del ancho sale de `LOGO_W_MM` y `LOGO_H_MM`, declarados arriba en mm con el resto
+ * de la geometria; aqui solo se convierten a dots para reescalar el `^GFA`.
  *
  * Y NO se regenera `pa-picar-logo.ts`. El original se queda como esta: es el logo original, y
  * de el se derivan los demas tamanos. Reescribir el fichero por cada medida dejaria una sola
  * medida viva y `check-gf` dejaria de poder compararla con nada.
  */
-const LOGO_V1_8 = scaleGraphic(LOGO_GF, 160, 54);
+const LOGO_V1_8 = scaleGraphic(LOGO_GF, dotsFromMm(LOGO_W_MM), dotsFromMm(LOGO_H_MM));
 const LOGO_V1_8_GF = "gf" in LOGO_V1_8 ? LOGO_V1_8.gf : LOGO_GF;
-const LOGO_V1_8_W = "dots" in LOGO_V1_8 ? LOGO_V1_8.dots.w : LOGO_DOTS_W;
 
 // ---------------------------------------------------------------------------------------
-// LAYOUT v1.8: LOGO ARRIBA, NOMBRE EN MAYUSCULAS, BARRAS IZQUIERDA Y PRECIO A LA DERECHA
+// LAYOUT 2026-10: LOGO GRANDE ARRIBA, NOMBRE EN MAYUSCULAS, BARRAS IZQUIERDA Y PRECIO A LA
+// DERECHA
 // ---------------------------------------------------------------------------------------
 //
-// Antes las barras iban centradas y ocupaban todo el ancho, con el precio debajo. Ahora el
-// ancho se parte en dos columnas: las barras a la izquierda y el precio a la derecha, a la
-// altura de las barras. El reparto y el porqué de 345 dots estan en `zpl.builder.ts`
-// (`COLUMNA_BARRAS_DOTS`), que es donde vive la decision de verdad.
+// La prueba fisica del 7/10 midio el logo al 30-35 % y la spec nueva lo pide al 45-50 %, y
+// las dos cosas no pueden ser las dos. Se eligio el "logo grande" (45,8 %) porque es lo que
+// la spec pide, y el barcode se mantiene LEGAL (modulo 3, 0,375 mm, ISO/IEC 15420), que es
+// lo que hace que la columna de las barras sean 345 dots. Ver `COLUMNA_BARRAS_DOTS` en
+// `zpl.builder.ts`, que es donde vive la decision de verdad.
 //
-// REPARTO VERTICAL, con el logo a 54 dots de alto y las barras a 75:
+// REPARTO VERTICAL (todo en mm arriba, en las constantes; aqui el resumen en mm):
 //
-//   y  10.. 64   logo, 160 x 54 dots (20,0 x 6,8 mm), centrado
-//   y  72..128   nombre, UNA linea, hasta 56 dots de alto, en mayusculas
-//   y 168..243   barras, 75 dots = 9,4 mm
-//   y 243..255   linea de interpretacion, 12 dots
-//   y 168..208   "3.00", 40 dots de alto, columna derecha
-//   y 188..208   "REF:", 20 dots, al pie del numero (misma linea de base)
-//   y 272        borde interior
+//   y   5.. 14   logo, 27 x 9 mm (45,8 % del ancho), centrado
+//   y  15..      nombre, UNA linea si se puede, hasta 6 mm de letra, en mayusculas;
+//                el bloque entero nunca pasa de 5 mm, asi que acaba a lo sumo en 20 mm
+//                y deja 1 mm de aire al codigo.
+//   y  21.. 30,375   barras, 75 dots = 9,4 mm
+//   y  30,375..31,875 linea de interpretacion, 12 dots
+//   y  23,75..28,75  "3.00", hasta 5 mm de alto, columna derecha (zona media/baja del codigo)
+//   y  26,25..28,75  "REF:", 2,5 mm, al pie del numero (misma linea de base)
+//   y  34        borde interior
 //
-// El logo y el nombre NO se tocan ni aunque el nombre se haga mas grande: el techo del nombre
-// son 56 dots y acaba en 128, y el logo acaba en 64. Quedan 8 dots de aire entre los dos con
-// el nombre a su maximo, y 40 con un nombre corto. Ese hueco es el que hace que el nombre se
-// pueda agrandar sin tocar el logo, que es lo que se pidio.
+// El logo y el nombre NO se tocan ni aunque el nombre crezca: el logo acaba en 14 mm y el
+// nombre arranca en 15 mm. El nombre y el codigo tampoco: el bloque del nombre acaba en
+// 20 mm y las barras arrancan en 21 mm. Ambos huecos son de 1 mm, fijos.
+//
+// El ancho se parte en dos columnas: las barras a la izquierda (345 dots, el simbolo de 285
+// a modulo 3 mas las dos zonas quietas de 10X) y el precio a la derecha (127 dots), a la
+// altura de la zona media/baja del codigo. REF va a la izquierda del precio, chico y al pie,
+// como salio en la prueba fisica.
 
 export const DEFAULT_TEMPLATE: LabelTemplate = {
   id: "papicar-59x35",
   name: "Papicar 59 x 35 mm",
-  widthMm: MM_ANCHO,
-  heightMm: MM_ALTO,
+  widthMm: LABEL_WIDTH_MM,
+  heightMm: LABEL_HEIGHT_MM,
   widthDots: ANCHO_DOTS,
   heightDots: ALTO_DOTS,
   zones: [
@@ -349,75 +417,90 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       thicknessDots: 1,
       radiusDots: dotsFromMm(MM_RADIO),
     },
-    // 2. Logo: 160 x 54 dots, centrado. Es mas pequeno que el de antes (200 x 67) a proposito.
+    // 2. Logo: 216 x 72 dots (27 x 9 mm, 45,8 % del ancho), centrado y a 5 mm del borde.
     //
-    //    Se pidio "55-65 % del ancho" y "45-55 dots de alto" a la vez, y con el logo de
-    //    proporcion 200:67 (2,985) esas dos cosas no pueden ser las dos: 55 % del ancho son
-    //    260 dots, que son 87 de alto, y 45-55 de alto son 134-164 de ancho, que es 28-35 %.
-    //    Elegido el alto, porque lo que se lee de lejos en un lineal es el nombre, y un logo
-    //    de 103 dots de alto deja 130 dots para todo lo demas.
+    //    Es el 'logo grande' que se pidio: antes era 160 x 54 (33,9 %). El 45,8 % sale de
+    //    `LOGO_W_MM` / `LOGO_H_MM`, que estan arriba con el resto de la geometria en mm.
+    //
+    //    Con la proporcion del logo (200:67 = 2,985), 27 x 9 mm son 216 x 72 dots: 216/72 = 3,0,
+    //    la diferencia es el redondeo al byte de `scaleGraphic()`. Y deja sitio: el nombre
+    //    arranca en 15 mm, 1 mm por debajo del logo.
     //
     //    El `^GFA` se reescala con `scaleGraphic()`, que conserva la proporcion y ajusta el
-    //    ancho al multiplo de 8 MAS CERCANO. 160 ya es multiplo de 8, asi que aqui no hay
-    //    redondeo; esta comprobada en `check-gf`.
+    //    ancho al multiplo de 8 MAS CERCANO. 216 ya es multiplo de 8 (27 bytes), asi que aqui
+    //    no hay redondeo; esta comprobado en `check-gf`.
     //
     //    Para otro tamaño NO hay que regenerar `pa-picar-logo.ts`: en `/editor` se estira el
     //    logo con el asa de la derecha, `scaleGraphic()` reescribe el `^GFA` conservando la
     //    proporcion, y "Aplicar cambios" lo guarda entero.
     {
       kind: "graphic",
-      x: Math.round((ANCHO_DOTS - LOGO_V1_8_W) / 2),
-      y: 10,
+      x: dotsFromMm(LOGO_X_MM),
+      y: dotsFromMm(LOGO_Y_MM),
       gf: LOGO_V1_8_GF,
     },
-    // 3. Nombre: una sola linea, centrada, EN MAYUSCULAS, con la fuente mas grande que quepa
-    //    sin salirse.
+    // 3. Nombre: una sola linea cuando cabe, centrada, EN MAYUSCULAS, con la fuente mas grande
+    //    que quepa sin salirse.
     //
     //    `uppercase: true` es una decision de esta zona y no un plegado global: la GK420t
-    //    imprime el texto que le llega, y "BADIA JALAPENO 2 OZ" a 56 dots de alto se lee de
+    //    imprime el texto que le llega, y "BADIA JALAPENO 2 OZ" a 40 dots de alto se lee de
     //    lejos, mientras que a 24 dots no se lee ni de cerca. Ver `TextZone.uppercase`.
     //
-    //    `maxWidthDots: 452` es todo el ancho util, de 10 a 462. Con `justify: "C"` el texto
+    //    `maxWidthDots: 446` es todo el ancho util, de 13 a 459. Con `justify: "C"` el texto
     //    se centra en esa caja, asi que un nombre corto queda en el medio y uno largo llega
     //    hasta los bordes. "ocupar el 85-90 % del ancho" es lo que hace un nombre largo; un
     //    nombre corto no puede ocupar el 90 % sin estirar los glifos, y eso no se hace.
     //
     //    `widthRatio: 0,42` es condensada: el ancho del caracter es el 42 % de su alto. A 0,5
-    //    el nombre de 40 caracteres del producto de prueba sale a 23 dots de alto, y a 0,42
-    //    sale a 28. Los dos caben en 56; lo que cambia es cuanto se lee.
+    //    el nombre de 42 caracteres del producto de prueba sale a 20 dots de alto, y a 0,42
+    //    sale a 24. Los dos caben en 40 (5 mm de bloque); lo que cambia es cuanto se lee.
     {
       kind: "text",
       x: 13,
-      y: 72,
-      format: "^A0N,56,24",
+      y: dotsFromMm(NOMBRE_Y_MM),
+      format: "^A0N,48,20",
       source: "productName",
       uppercase: true,
       // 446 y no 452: la caja del `^FB` llega a los bordes del area util y el marco esta en
       // 10, asi que el texto acabaria pegado al borde, con el trazo de 1 dot encima. Con 3 dots
       // de aire a cada lado la caja queda en 13..459, dentro del interior del marco (11..461).
       //
-      // `maxLines: 2` y no 1. Con una sola linea, el nombre mas largo del catalogo (68
-      // caracteres) necesita 476 dots a la fuente mas pequena y se salen 30 dots de la caja;
-      // en el papel, `^FB` los recorta y el nombre pierde el final. Con dos lineas, ese mismo
-      // nombre sale a 26 dots de alto repartido en dos, y se lee entero. `resolveAutoFit()`
-      // sigue preferring una linea siempre que quepa, asi que esto solo se usa cuando de
-      // verdad no cabe, que son 4 productos de 3080.
+      // `maxLines: 2` y no 1, a proposito. Con UNA sola linea, el nombre mas largo del
+      // catalogo (68 caracteres) pide mas de 446 dots a la fuente mas pequena permitida, y
+      // `^FB` recortaria el final en el papel. Con dos lineas, `resolveAutoFit()` encuentra un
+      // alto menor que quepa entero.
+      //
+      // Con el layout nuevo casi nunca se usa: 68 caracteres caben en UNA linea de 15 dots
+      // (68 * 6 = 408 <= 446), asi que el paso 1 se lleva la victoria. La segunda linea queda
+      // para el nombre que no cabe ni a 13 dots en una linea (mas de 89 caracteres), que en el
+      // catalogo no existe hoy, y para el editor, donde el usuario puede estrechar la caja.
       maxWidthDots: 446,
       maxLines: 2,
       justify: "C",
-      // 88 dots de bloque: el nombre arranca en 72, las barras en 168, y entre medias quedan
-      // 96. Se dejan 8 de aire para que la ultima linea no quede pegada a las barras, que es
-      // un contacto que el detector de solapes NO marca (dos cajas que se tocan no se solapan)
-      // y que en el papel se ve como un nombre arrimado al codigo.
-      autoFit: { maxHeight: 56, minHeight: 16, widthRatio: 0.42, maxBlockDots: 88 },
+      // 40 dots de bloque (5 mm): el nombre arranca en 15 mm (120 dots), las barras en 21 mm
+      // (168), y entre medias quedan 48 dots. Se dejan 8 de aire para que la ultima linea no
+      // quede pegada a las barras, que es un contacto que el detector de solapes NO marca (dos
+      // cajas que se tocan no se solapan) y que en el papel se ve como un nombre arrimado al
+      // codigo.
+      //
+      // El suelo es 13 dots (1,625 mm) y NO 16 (2 mm) por esto: con 16, dos lineas ocupan
+      // 3 * 16 = 48 dots y el bloque de 40 no se puede respetar, asi que el nombre largo caia
+      // al caso 3 de `resolveAutoFit()` y se dibujaba tocando las barras. Con 13, 3 * 13 = 39
+      // y el bloque se cumple siempre, en una o en dos lineas.
+      autoFit: {
+        maxHeight: dotsFromMm(NOMBRE_MAX_H_MM),
+        minHeight: dotsFromMm(NOMBRE_MIN_H_MM),
+        widthRatio: 0.42,
+        maxBlockDots: dotsFromMm(NOMBRE_BLOQUE_MM),
+      },
     },
     // 4. Codigo de barras: mitad IZQUIERDA INFERIOR, 75 dots de alto (9,4 mm), con la linea de
     //    interpretacion debajo a 12 dots (dicho a mano: si no, ^BY la pone a la altura de la
     //    fuente vigente y se come al precio).
     //
-    //    `center: false` y `x: 40`. La `x` es donde empieza el SIMBOLO, y va a 40 y no a 10
-    //    porque los 30 dots de zona quieta de la izquierda (10X a modulo 3) son parte de la
-    //    norma, no un adorno: si el simbolo tocara el marco, el lector tendria el borde del
+    //    `center: false` y `x: 40` (5 mm). La `x` es donde empieza el SIMBOLO, y va a 40 y no
+    //    a 10 porque los 30 dots de zona quieta de la izquierda (10X a modulo 3) son parte de
+    //    la norma, no un adorno: si el simbolo tocara el marco, el lector tendria el borde del
     //    papel en el margen que la norma exige. El simbolo acaba en 325, y desde ahi hasta el
     //    precio hay 30 dots de zona quieta a la derecha mas un poco de aire.
     //
@@ -429,35 +512,42 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     //    ISO/IEC 15420. A 2 dots el simbolo seria de 190 y dejaria 127 dots mas para el
     //    precio, pero 0,250 mm queda por debajo de la norma y el lector puede rechazarla.
     //    Ver `COLUMNA_BARRAS_DOTS` en `zpl.builder.ts` y [[Prueba Legibilidad Barcode]].
+    //
+    //    La linea de interpretacion (el `barcodeHumanText` de la spec: los numeros que dibuja
+    //    la impresora bajo las barras) NO es una zona aparte: es el `^BY` del propio simbolo,
+    //    y su alto va en `hriHeightDots` para que el marco del editor la incluya al estirar.
     {
       kind: "barcode",
-      x: 40,
-      y: 168,
-      heightDots: 75,
+      x: dotsFromMm(BARRAS_X_MM),
+      y: dotsFromMm(BARRAS_Y_MM),
+      heightDots: dotsFromMm(BARRAS_H_MM),
       interpretationLine: true,
       source: "barcode",
       center: false,
       moduleWidth: 3,
-      hriHeightDots: 12,
+      hriHeightDots: dotsFromMm(BARRAS_HRI_MM),
     },
-    // 5. Precio y referencia, columna DERECHA, alineados con las barras.
+    // 5. Precio y referencia, columna DERECHA, alineados con la zona media/baja del codigo.
     //
     //    "REF:" a 20 dots y el numero a 40, con la PIE de la palabra a la altura de la del
-    //    numero: los dos acaban en 208, que es la misma linea de base. Asi se leen como
-    //    "REF: 3.00" y no como dos textos sueltos.
+    //    numero: el precio acaba en 230 y el REF tambien (26,25 + 2,5 = 28,75 mm), que es la
+    //    misma linea de base. Asi se leen como "REF: 3.00" y no como dos textos sueltos, y
+    //    quedan en la zona media/baja del codigo como salio en la prueba fisica (las barras
+    //    van de 21 a 30,375 mm y esto cubre de 23,75 a 28,75).
     //
-    //    Los dos con `justify: "R"` y acabando en 462 (el margen derecho). Un precio de
-    //    "1234.56" ocupa 7 caracteres y uno de "3.00" ocupa 5 con el "$": con la `x` fijada a
-    //    la izquierda, el numero corto pegaria al centro de su caja en vez de a la derecha, y
-    //    "REF:" y el precio se separarian al variar el precio.
+    //    Los dos con `justify: "R"` y acabando en 459 (el margen derecho, con 2 dots de aire
+    //    al interior del marco). Un precio de "1234.56" ocupa 7 caracteres y uno de "3.00"
+    //    ocupa 5 con el "$": con la `x` fijada a la izquierda, el numero corto pegaria al
+    //    centro de su caja en vez de a la derecha, y "REF:" y el precio se separarian al
+    //    variar el precio.
     //
     //    El precio lleva `autoFit` porque con el ancho de columna que queda no caben todos:
-    //    a 40 dots un "1234.56" mide 140 dots y la columna son 99. `autoFit` lo baja hasta que
+    //    a 40 dots un "1234.56" mide 136 dots y la columna son 88. `autoFit` lo baja hasta que
     //    quepa, con un suelo de 18 dots (2,25 mm), por debajo del cual ya no se lee de lejos.
     {
       kind: "text",
-      x: 329,
-      y: 188,
+      x: dotsFromMm(REF_X_MM),
+      y: dotsFromMm(REF_Y_MM),
       format: "^A0N,20,10",
       source: "referenceLabel",
       // La caja va de 329 a 369, y el precio de 371 a 459. Tres cosas tienen que cuadrar aqui y
@@ -466,30 +556,38 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       //   - "REF:" a 10 dots de celda son 40, y la caja mide 40. Con la caja mas estrecha que
       //     el texto, el render lo dibujaba de 316 a 356 y la caja llegaba a 360: dos avisos
       //     falsos, un MARCO y un CHOQUE contra el precio. La caja mide lo que mide el texto.
-      //   - El 329 es porque las barras acaban en 325 y hay que empezar despues. Con x en 316
-      //     la palabra se metia debajo de ellas: `"REF:" pisa a "barras"`, que es cierto.
-      //   - El 371 es porque el precio necesita 85 dots para "$3.00" a 17 de celda, y con la
-      //     caja en 363 el texto se dibujaba desde 374 y las cajas se tocaban.
-      maxWidthDots: 40,
+      //   - El 329 (41,125 mm) es porque las barras acaban en 325 y hay que empezar despues.
+      //     Con x en 316 la palabra se metia debajo de ellas: `"REF:" pisa a "barras"`, que es
+      //     cierto.
+      //   - El 371 (46,375 mm) es porque el precio necesita 85 dots para "$3.00" a 17 de
+      //     celda, y con la caja en 363 el texto se dibujaba desde 374 y las cajas se tocaban.
+      maxWidthDots: dotsFromMm(REF_W_MM),
       maxLines: 1,
       justify: "R",
     },
     {
       kind: "text",
-      x: 371,
-      y: 168,
+      x: dotsFromMm(PRECIO_X_MM),
+      // 23,75 mm: la zona media/baja de las barras (21..30,375), no arriba como antes. Con el
+      // logo grande, el precio subido a 21 mm quedaba visualmente colgado entre el nombre y el
+      // codigo; en la prueba fisica salio mas abajo, en la zona del codigo.
+      y: dotsFromMm(PRECIO_Y_MM),
       format: "^A0N,40,17",
       source: "price",
       // El "$" va aqui y no dentro de `LabelData` porque es una decision de la plantilla, no
       // del producto. La plantilla de 50 x 25 mm tambien lo llevaba y asi sigue en el
       // mostrador: quitarlo seria un cambio de aspecto que nadie ha pedido.
       prefix: "$",
-      // 88 y no 96: la caja acaba en 459, dos dots por dentro del interior del marco (461),
-      // y a 363 se solapaba con la de "REF:".
-      maxWidthDots: 88,
+      // 88 y no 96: la caja acaba en 459 (57,375 mm), dos dots por dentro del interior del
+      // marco (461), y a 363 se solapaba con la de "REF:".
+      maxWidthDots: dotsFromMm(PRECIO_W_MM),
       maxLines: 1,
       justify: "R",
-      autoFit: { maxHeight: 40, minHeight: 18, widthRatio: 0.42 },
+      autoFit: {
+        maxHeight: dotsFromMm(PRECIO_MAX_H_MM),
+        minHeight: dotsFromMm(PRECIO_MIN_H_MM),
+        widthRatio: 0.42,
+      },
     },
   ],
 
@@ -502,8 +600,8 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
    *
    * El logo y el nombre van IGUAL que en la etiqueta con barras, para que la fila del lineal
    * se lea pareja: el mismo logo, el mismo sitio y las mismas mayusculas. Lo que cambia es que
-   * el nombre puede ocupar mas lineas (hasta 3, en vez de 1) porque no hay nada debajo, y el
-   * precio se pone CENTRADO y en grande, en vez de en la columna derecha.
+   * el nombre puede ocupar mas lineas (hasta 2, en vez de preferir siempre 1) porque no hay
+   * nada debajo, y el precio se pone CENTRADO y en grande, en vez de en la columna derecha.
    */
   zonesWithoutBarcode: [
     {
@@ -517,37 +615,43 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     },
     {
       kind: "graphic",
-      x: Math.round((ANCHO_DOTS - LOGO_V1_8_W) / 2),
-      y: 10,
+      x: dotsFromMm(LOGO_X_MM),
+      y: dotsFromMm(LOGO_Y_MM),
       gf: LOGO_V1_8_GF,
     },
-    // UNA sola linea, como en la etiqueta con barras. Aqui habria sitio para mas, pero
-    // partir el nombre en dos lo hace mas lento de leer de un vistazo, y sin barras la
-    // etiqueta ya no es identica a la de al lado: anadirle la unica diferencia de mas
-    // complica mas de lo que ayuda.
+    // UNA sola linea siempre que quepa, como en la etiqueta con barras. Aqui habria sitio
+    // para mas, pero partir el nombre en dos lo hace mas lento de leer de un vistazo, y sin
+    // barras la etiqueta ya no es identica a la de al lado: anadirle la unica diferencia de
+    // mas complica mas de lo que ayuda.
     //
-    // El techo baja de 56 a 40 porque el precio centrado de abajo arranca en 208 y 3 lineas
-    // de 56 dots se comian el sitio. Con `autoFit` el nombre largo nunca llega a 40: el
-    // nombre de 50 caracteres del catalogo sale a 21 dots. El 40 es para nombres de 20-25.
+    // El techo es el mismo bloque de la etiqueta con barras: el nombre arranca en 15 mm
+    // (120 dots), el precio centrado en 22 mm (176), y entre medias quedan 56 dots. Se
+    // dejan 8 de aire y el bloque queda en 48, que con `maxLines: 2` da dos lineas de 16
+    // dots como techo. No hace falta usarlo: nombres de 50 caracteres caben en una linea
+    // de 21, y el maximo del catalogo (68) en una de 15 (68 * 6 = 408, caja de 452).
     {
       kind: "text",
       x: MARGEN_IZQ_DOTS,
-      y: 72,
-      format: "^A0N,40,17",
+      y: dotsFromMm(NOMBRE_Y_MM),
+      format: "^A0N,48,20",
       source: "productName",
       uppercase: true,
       maxWidthDots: ANCHO_DOTS - MARGEN_IZQ_DOTS - MARGEN_DER_DOTS,
       maxLines: 2,
       justify: "C",
-      // Aqui hay 104 dots entre el nombre (72) y el precio (176), y se dejan 8 de aire.
-      // Con 96 de bloque caben dos lineas de 48, de modo que un nombre largo sale en dos
-      // lineas grandes en vez de en una linea de 20 dots que no se lee de lejos.
-      autoFit: { maxHeight: 48, minHeight: 16, widthRatio: 0.42, maxBlockDots: 96 },
+      autoFit: {
+        maxHeight: dotsFromMm(NOMBRE_MAX_H_MM),
+        minHeight: dotsFromMm(NOMBRE_MIN_H_MM),
+        widthRatio: 0.42,
+        // 48 y no mas: el precio esta en 176 y el bloque no puede pasar de 168, con los
+        // mismos 8 dots de aire que en la etiqueta con barras.
+        maxBlockDots: dotsFromMm(NOMBRE_BLOQUE_MM) + 8,
+      },
     },
     {
       kind: "text",
       x: MARGEN_IZQ_DOTS,
-      y: 176,
+      y: dotsFromMm(SIN_PRECIO_Y_MM),
       format: "^A0N,52,22",
       source: "price",
       prefix: "$",
@@ -559,13 +663,13 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     {
       kind: "text",
       x: MARGEN_IZQ_DOTS,
-      y: 240,
+      y: dotsFromMm(SIN_REF_Y_MM),
       format: "^A0N,16,8",
       source: "reference",
       prefix: "REF: ",
-      // El precio acaba en 228 y la referencia empieza en 240: 12 dots de aire. Con la
-      // referencia en 256 se salia por abajo del marco (el interior acaba en 271 y el texto
-      // llegaba a 272), y con el precio en 208 las dos cajas se pisaban.
+      // El precio acaba en 228 (22 + 6,5 mm) y la referencia empieza en 240 (30 mm): 12 dots
+      // de aire. Con la referencia en 256 se salia por abajo del marco (el interior acaba en
+      // 271 y el texto llegaba a 272), y con el precio en 208 las dos cajas se pisaban.
       maxWidthDots: ANCHO_DOTS - MARGEN_IZQ_DOTS - MARGEN_DER_DOTS,
       maxLines: 1,
       justify: "C",

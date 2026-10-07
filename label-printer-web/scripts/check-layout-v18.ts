@@ -77,6 +77,46 @@ seccion("Zonas: las que se pidieron, y solo esas");
 }
 
 // ===================================================================================
+seccion("El logo grande: 45-50 % del ancho, centrado, sin tocar el nombre");
+// ===================================================================================
+{
+  const logo = T.zones.find((z) => z.kind === "graphic");
+  ok("el logo es una zona grafica", logo?.kind === "graphic");
+  if (logo?.kind === "graphic") {
+    // El ancho se mide de la caja que el RENDER dibuja, no de la zona: la zona reescala el
+    // `^GFA` y el ancho efectivo lo decide `scaleGraphic()`. Medir la caja es comprobar lo que
+    // se imprime, que es justo lo que importa.
+    const r = renderLabel(T, datos());
+    const cajaLogo = r.cajas.find((c) => c.etiqueta === "logo");
+    const logoW = cajaLogo ? cajaLogo.x1 - cajaLogo.x0 : 0;
+    const proporcion = logoW / T.widthDots;
+    ok(
+      "el logo dibujado ocupa 45-50 % del ancho",
+      logoW > 0 && proporcion >= 0.45 && proporcion <= 0.5,
+      `${logoW} dots, ${(proporcion * 100).toFixed(1)} % del ancho`,
+    );
+
+    // Centrado: en el render el logo tiene que quedar centrado en la etiqueta, no arrimado a
+    // un borde, y por encima del nombre, con aire de por medio.
+    const nombre = zona("productName") as TZ;
+    const centroEtiqueta = T.widthDots / 2;
+    const centroLogo = cajaLogo ? (cajaLogo.x0 + cajaLogo.x1) / 2 : 0;
+    ok(
+      "el logo sale centrado",
+      cajaLogo !== undefined && Math.abs(centroEtiqueta - centroLogo) <= 2,
+      `centro de la etiqueta ${centroEtiqueta}, centro del logo ${centroLogo}`,
+    );
+    ok("el logo queda por encima del nombre", logo.y < nombre.y, `logo y=${logo.y}, nombre y=${nombre.y}`);
+    ok(
+      "el logo no toca el marco superior",
+      // Margen de seguridad superior de la plantilla: 8 dots (1 mm), igual que en el template.
+      logo.y >= 8,
+      `y=${logo.y} y margen 8`,
+    );
+  }
+}
+
+// ===================================================================================
 seccion("Mayusculas: solo el nombre, y despues del plegado");
 // ===================================================================================
 {
@@ -169,7 +209,7 @@ seccion("El alto del nombre no crece hacia las barras");
     const texto = "X".repeat(largo);
     const r = renderLabel(T, datos({ productName: texto }));
     // Solo las cajas del nombre. Sin el filtro tambien entran el precio y el "REF:", que
-    // estan a y=168..208, y el max() se los comia: el test daba 208 siempre, seVie si el
+    // estan a y=190..230, y el max() se los comia: el test daba 230 siempre, sin ver si el
     // nombre crecia bien o no.
     const cajas = r.cajas.filter((c) => c.etiqueta === "texto" && c.texto?.startsWith("X"));
     ok(`${largo} caracteres: el nombre sale en alguna linea`, cajas.length > 0);
@@ -216,6 +256,17 @@ seccion("El alto de las barras y el de la linea de interpretacion");
   // 9,4 mm de barra. Por debajo de unos 6,6 mm las barras ya no las leian bien los escaneres
   // de mano, y ese minimo se cruzo en v1.x.
   ok("las barras miden mas de 8 mm", barras!.heightDots >= 64, `${(barras!.heightDots / 8).toFixed(1)} mm`);
+
+  // El codigo entero (barras + linea de interpretacion) tiene que caber dentro de los 35 mm
+  // de alto: en la prueba fisica Mau midio que "la parte inferior del codigo/numeros estaba
+  // practicamente en el limite inferior de la etiqueta". Con las barras en 21 mm, 9,375 de
+  // alto y 1,5 de HRI acaban en 31,875 mm, 3 mm por encima del interior del marco (34 mm).
+  const bz = barras?.kind === "barcode" ? barras : undefined;
+  ok(
+    "barras + HRI caben en el alto de la etiqueta",
+    bz !== undefined && bz.y + bz.heightDots + (bz.hriHeightDots ?? 0) <= 280,
+    bz !== undefined ? `${bz.y}..${bz.y + bz.heightDots + (bz.hriHeightDots ?? 0)}` : "sin zona",
+  );
 }
 
 // ===================================================================================
