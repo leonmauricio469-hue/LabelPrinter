@@ -124,7 +124,9 @@ console.log("Reescalado a otras medidas");
     eq("no hubo ajuste de ancho", r.pedido.w, r.dots.w);
     // 280/8 = 35 bytes por fila, 35 * 94 = 3290 bytes.
     ok("cabecera coherente", r.gf.startsWith("^GFA,3290,3290,35,"), r.gf.slice(0, 22));
-    eq("numero de filas", r.gf.split("\n").length, 94);
+    // El `^FS` de cierre va en su propia linea y no es una fila del bitmap.
+    eq("numero de filas", r.gf.replace(/\n\^FS$/, "").split("\n").length, 94);
+    ok("el campo viene cerrado", r.gf.endsWith("\n^FS"), r.gf.slice(-10));
     const antes = puntosDe(LOGO_GF).size;
     const despues = puntosDe(r.gf).size;
     // Vecino mas proximo: al agrandar 1,4x el area crece 1,96x, pero el borde del logo es

@@ -112,8 +112,9 @@ export function graphicDots(gf: string): { dots: GraphicDots | null; fallo: stri
  * y la real. La pantalla enseña las dos, para que pedir 35,0 mm y quedarse con 35,0 (que si
  * cabe exacto) no se confunda con pedir 12,5 mm y quedarse con 13,0 sin motivo aparente.
  *
- * Devuelve el `^GFA` nuevo tal cual, listo para guardar en la zona, y el error si la medida
- * pedida no tiene sentido.
+ * Devuelve el `^GFA` nuevo tal cual, con el `^FS` de cierre que exige el contrato de
+ * `GraphicZone` (sin el, el campo grafico sale abierto en el ZPL y la impresora se come lo
+ * que venga despues), y el error si la medida pedida no tiene sentido.
  */
 export function scaleGraphic(
   gf: string,
@@ -170,7 +171,9 @@ export function scaleGraphic(
   const cuerpo = lineas.join(c.separador === "," ? "," : "\n");
 
   return {
-    gf: `^GFA,${totalBytes},${totalBytes},${bytesPerRow},${cuerpo}`,
+    // `^FS` en su propia linea, con el mismo formato que trae `LOGO_GF`: los parsers de aqui
+    // descartan lo que no sea hex, y la linea del terminador no es una fila del bitmap.
+    gf: `^GFA,${totalBytes},${totalBytes},${bytesPerRow},${cuerpo}\n^FS`,
     dots: { w, h },
     pedido: { w: wPedido, h: hPedido },
   };
