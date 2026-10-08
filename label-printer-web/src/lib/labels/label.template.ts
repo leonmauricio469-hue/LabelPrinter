@@ -283,28 +283,50 @@ const NOMBRE_MAX_H_MM = 6;
 const NOMBRE_MIN_H_MM = 1.625;
 const NOMBRE_BLOQUE_MM = 5;
 
-// Codigo de barras: 5 mm de x (los 30 dots de zona quieta de la izquierda son parte de la
-// norma ISO/IEC 15420, no un adorno), 21 mm de y, 9,375 mm de barra (75 dots) y 1,5 mm de
-// linea de interpretacion (12 dots, dicha a mano para que no caiga a la altura de otra
-// fuente). Barras mas linea acaban en 21 + 9,375 + 1,5 = 31,875 mm, dentro de los 34 mm del
-// interior del marco.
-const BARRAS_X_MM = 5;
-const BARRAS_Y_MM = 21;
-const BARRAS_H_MM = 9.375;
-const BARRAS_HRI_MM = 1.5;
+// Codigo de barras: 5 mm de x (la zona quieta de la izquierda es parte de la norma
+// ISO/IEC 15420, no un adorno), 21 mm de y y 8,5 mm de barra (68 dots, por encima de los 8 mm
+// que pide la legibilidad de mano).
+//
+// El 21 mm de y es un TECHO y no un gusto: el nombre, corto o largo, acaba a lo sumo en
+// 20 mm (15 mm + bloque de 5 mm) y las barras necesitan 8 dots de aire (1 mm), que es una
+// regla que ya atrapo una regresion real. Subir las barras por encima de 168 sin tocar el
+// nombre no se puede: hay que elegir entre el bloque del nombre y el del codigo, y quien se
+// queda con el sitio es el nombre.
+//
+// A MODULO 2 (0,250 mm de modulo, 190 dots = 23,75 mm de simbolo) y no a 3: lo decidio el
+// usuario el 8/10 tras la prueba fisica del layout de dos columnas, que midio las barras
+// "demasiado anchas y pegadas a REF". A modulo 2 el simbolo EAN-13 mide 190 dots y con las
+// dos zonas quietas de 10X (2,5 mm a cada lado) la columna entera son 230 dots = 28,75 mm,
+// 115 menos que con el modulo 3. Queda un 5 % por debajo del minimo de 0,264 mm de la
+// norma, aceptado a cambio de que REF y PRICE respiren. Ver `COLUMNA_BARRAS_DOTS` en
+// `zpl.builder.ts`.
+export const BARCODE_X_MM = 5;
+export const BARCODE_Y_MM = 21;
+/** Ancho del AREA del codigo: simbolo a modulo 2 + las dos zonas quietas de 10X. */
+export const BARCODE_WIDTH_MM = 28.75;
+export const BARCODE_HEIGHT_MM = 8.5;
 
-// Precio y REF: columna derecha, alineados con la zona media/baja del codigo (21..30 mm) y
+// Los numeros human-readable van en SU PROPIA ZONA, como texto, y no como la linea de
+// interpretacion del `^BE`: la impresora coloca la linea del `^BY` con un hueco propio bajo
+// las barras, que el ZPL no controla, y en la prueba fisica los numeros caian fuera de la
+// etiqueta. Como zona de texto, la posicion la deciden estas dos constantes, el render mide
+// exactamente lo que se imprime y nadie depende del firmware. 30,5 mm: 1 mm de aire sobre
+// las barras (que acaban en 29,5) y 2 mm hasta el interior del marco (34 mm).
+export const BARCODE_TEXT_X_MM = 5;
+export const BARCODE_TEXT_Y_MM = 30.5;
+
+// Precio y REF: columna derecha, alineados con la zona media/baja del codigo (21..32 mm) y
 // con el pie en 28,75 mm. Los decimales son exactos a 8 dots/mm: 371 = 46,375 mm, 329 =
 // 41,125 mm. El precio acaba en 459 dots (57,375 mm), 2 dots dentro del interior del marco,
 // y el REF queda a la izquierda del precio, cerca, como salio en la prueba fisica.
-const PRECIO_X_MM = 46.375;
-const PRECIO_Y_MM = 23.75;
-const PRECIO_W_MM = 11;
-const PRECIO_MAX_H_MM = 5;
-const PRECIO_MIN_H_MM = 2.25;
+export const PRICE_X_MM = 46.375;
+export const PRICE_Y_MM = 23.75;
+const PRICE_W_MM = 11;
+export const PRICE_MAX_H_MM = 5;
+export const PRICE_MIN_H_MM = 2.25;
 
-const REF_X_MM = 41.125;
-const REF_Y_MM = 26.25;
+export const REFERENCE_X_MM = 41.125;
+export const REFERENCE_Y_MM = 26.25;
 const REF_W_MM = 5;
 const REF_H_MM = 2.5;
 
@@ -357,28 +379,36 @@ const LOGO_V1_8_GF = "gf" in LOGO_V1_8 ? LOGO_V1_8.gf : LOGO_GF;
 //
 // La prueba fisica del 7/10 midio el logo al 30-35 % y la spec nueva lo pide al 45-50 %, y
 // las dos cosas no pueden ser las dos. Se eligio el "logo grande" (45,8 %) porque es lo que
-// la spec pide, y el barcode se mantiene LEGAL (modulo 3, 0,375 mm, ISO/IEC 15420), que es
-// lo que hace que la columna de las barras sean 345 dots. Ver `COLUMNA_BARRAS_DOTS` en
-// `zpl.builder.ts`, que es donde vive la decision de verdad.
+// la spec pide. El barcode se bajo a MODULO 2 (0,250 mm) el 8/10, cuando la prueba fisica
+// del layout de dos columnas mostro las barras a modulo 3 "demasiado anchas y pegadas a
+// REF": a 3 dots el EAN-13 mide 285 dots (35,6 mm) y no deja columna derecha que valga. A
+// 2 dots mide 190 (23,75 mm) y la columna de las barras queda en 230 dots. Ver
+// `COLUMNA_BARRAS_DOTS` en `zpl.builder.ts`, y [[Prueba Legibilidad Barcode]].
 //
 // REPARTO VERTICAL (todo en mm arriba, en las constantes; aqui el resumen en mm):
 //
 //   y   5.. 14   logo, 27 x 9 mm (45,8 % del ancho), centrado
-//   y  15..      nombre, UNA linea si se puede, hasta 6 mm de letra, en mayusculas;
+//   y  15..20    nombre, UNA linea si se puede, hasta 6 mm de letra, en mayusculas;
 //                el bloque entero nunca pasa de 5 mm, asi que acaba a lo sumo en 20 mm
 //                y deja 1 mm de aire al codigo.
-//   y  21.. 30,375   barras, 75 dots = 9,4 mm
-//   y  30,375..31,875 linea de interpretacion, 12 dots
-//   y  23,75..28,75  "3.00", hasta 5 mm de alto, columna derecha (zona media/baja del codigo)
+//   y  21..29,5  barras, 68 dots = 8,5 mm
+//   y  29,5..30,5 aire entre las barras y los numeros, 8 dots = 1 mm
+//   y  30,5..32  "390000099999", los numeros human-readable COMO TEXTO PROPIO, 12 dots
+//                (el bloque entero del codigo acaba en 32 mm, 2 mm por encima del
+//                interior del marco de 34 mm y 3 mm del borde del papel)
+//   y  23,75..28,75  precio, hasta 5 mm de alto, columna derecha (zona media/baja del codigo)
 //   y  26,25..28,75  "REF:", 2,5 mm, al pie del numero (misma linea de base)
 //   y  34        borde interior
 //
 // El logo y el nombre NO se tocan ni aunque el nombre crezca: el logo acaba en 14 mm y el
-// nombre arranca en 15 mm. El nombre y el codigo tampoco: el bloque del nombre acaba en
-// 20 mm y las barras arrancan en 21 mm. Ambos huecos son de 1 mm, fijos.
+// nombre arranca en 15 mm. El nombre y el codigo tampoco: el bloque del nombre acaba a lo
+// sumo en 20 mm (15 mm + 5 mm de bloque, sea cual sea la fuente que el `autoFit` elija) y
+// las barras arrancan en 21 mm: 1 mm de aire. Ese aire es una regla vieja: sin el, un
+// nombre de dos lineas llegaba hasta las barras y el detector de solapes no lo marcaba
+// porque dos cajas que se tocan no se solapan.
 //
-// El ancho se parte en dos columnas: las barras a la izquierda (345 dots, el simbolo de 285
-// a modulo 3 mas las dos zonas quietas de 10X) y el precio a la derecha (127 dots), a la
+// El ancho se parte en dos columnas: las barras a la izquierda (230 dots, el simbolo de 190
+// a modulo 2 mas las dos zonas quietas de 10X) y el precio a la derecha (242 dots), a la
 // altura de la zona media/baja del codigo. REF va a la izquierda del precio, chico y al pie,
 // como salio en la prueba fisica.
 
@@ -494,46 +524,64 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
         maxBlockDots: dotsFromMm(NOMBRE_BLOQUE_MM),
       },
     },
-    // 4. Codigo de barras: mitad IZQUIERDA INFERIOR, 75 dots de alto (9,4 mm), con la linea de
-    //    interpretacion debajo a 12 dots (dicho a mano: si no, ^BY la pone a la altura de la
-    //    fuente vigente y se come al precio).
+    // 4. Codigo de barras: mitad IZQUIERDA INFERIOR, 68 dots de alto (8,5 mm), SIN linea de
+    //    interpretacion: los numeros van como zona de texto aparte, debajo, en su propia
+    //    posicion. Ver la zona 5.
     //
     //    `center: false` y `x: 40` (5 mm). La `x` es donde empieza el SIMBOLO, y va a 40 y no
-    //    a 10 porque los 30 dots de zona quieta de la izquierda (10X a modulo 3) son parte de
-    //    la norma, no un adorno: si el simbolo tocara el marco, el lector tendria el borde del
-    //    papel en el margen que la norma exige. El simbolo acaba en 325, y desde ahi hasta el
-    //    precio hay 30 dots de zona quieta a la derecha mas un poco de aire.
+    //    a 10 porque los 20 dots de zona quieta de la izquierda que pide la norma a modulo 2
+    //    (10X = 20 dots, mas aire) son parte de ISO/IEC 15420, no un adorno: si el simbolo
+    //    tocara el marco, el lector tendria el borde del papel en el margen que la norma
+    //    exige. El simbolo acaba en 230, y desde ahi hasta REF (329) hay 99 dots: la quiet
+    //    zone derecha entera (20 dots) y la columna de REF/PRICE respirando.
     //
-    //    El numero de abajo lo dibuja la propia impresora desde `plan.data`, que ya lleva
-    //    el 0 delante de los UPC-A y el digito de control corregido, asi que no puede
-    //    desincronizarse del simbolo.
-    //
-    //    `moduleWidth: 3` son 0,375 mm de barra, por encima del minimo de 0,264 mm de
-    //    ISO/IEC 15420. A 2 dots el simbolo seria de 190 y dejaria 127 dots mas para el
-    //    precio, pero 0,250 mm queda por debajo de la norma y el lector puede rechazarla.
-    //    Ver `COLUMNA_BARRAS_DOTS` en `zpl.builder.ts` y [[Prueba Legibilidad Barcode]].
-    //
-    //    La linea de interpretacion (el `barcodeHumanText` de la spec: los numeros que dibuja
-    //    la impresora bajo las barras) NO es una zona aparte: es el `^BY` del propio simbolo,
-    //    y su alto va en `hriHeightDots` para que el marco del editor la incluya al estirar.
+    //    `moduleWidth: 2` son 0,250 mm de barra: la decision del 8/10, tras la prueba fisica
+    //    que midio las barras a modulo 3 "demasiado anchas y pegadas a REF". A 3 dots el
+    //    simbolo media 285 (35,6 mm) y la columna derecha no respiraba; a 2 mide 190 (23,75
+    //    mm) y REF/PRICE tienen sitio. Queda un 5 % por debajo del minimo de 0,264 mm de
+    //    ISO/IEC 15420, aceptado. Ver `COLUMNA_BARRAS_DOTS` en `zpl.builder.ts` y [[Prueba
+    //    Legibilidad Barcode]].
     {
       kind: "barcode",
-      x: dotsFromMm(BARRAS_X_MM),
-      y: dotsFromMm(BARRAS_Y_MM),
-      heightDots: dotsFromMm(BARRAS_H_MM),
-      interpretationLine: true,
+      x: dotsFromMm(BARCODE_X_MM),
+      y: dotsFromMm(BARCODE_Y_MM),
+      heightDots: dotsFromMm(BARCODE_HEIGHT_MM),
+      interpretationLine: false,
       source: "barcode",
       center: false,
-      moduleWidth: 3,
-      hriHeightDots: dotsFromMm(BARRAS_HRI_MM),
+      moduleWidth: 2,
     },
-    // 5. Precio y referencia, columna DERECHA, alineados con la zona media/baja del codigo.
+    // 5. Los numeros human-readable (el `barcodeHumanText` de la spec) como TEXTO PROPIO:
+    //    la propia impresora los dibujaba con un hueco que el ZPL no controla y caian fuera
+    //    de la etiqueta; como zona de texto, `BARCODE_TEXT_Y_MM` manda y el render mide lo
+    //    mismo que se imprime.
+    //
+    //    `source: "barcodeData"` saca `plan.data`, que ya lleva el 0 delante de los UPC-A y
+    //    el digito de control corregido, asi que no puede desincronizarse del simbolo.
+    //
+    //    12 dots de alto, celda de 7: la misma proporcion que dibujaba el `^BY` del firmware.
+    //    La `x` es la del simbolo (5 mm) y la `y` 30,5 mm: 1 mm de aire sobre las barras
+    //    (que acaban en 29,5 mm) y 2 mm hasta el interior del marco (34 mm). Nunca se corta.
+    {
+      kind: "text",
+      x: dotsFromMm(BARCODE_TEXT_X_MM),
+      y: dotsFromMm(BARCODE_TEXT_Y_MM),
+      format: "^A0N,12,7",
+      source: "barcodeData",
+      // La caja llega hasta la quiet zone derecha del simbolo (230 dots), asi el texto no
+      // puede invadir la columna de REF/PRICE ni siquiera con un codigo de 13 digitos a
+      // 7 dots de celda (91 dots).
+      maxWidthDots: dotsFromMm(BARCODE_WIDTH_MM),
+      maxLines: 1,
+      justify: "L",
+    },
+    // 6. Precio y referencia, columna DERECHA, alineados con la zona media/baja del codigo.
     //
     //    "REF:" a 20 dots y el numero a 40, con la PIE de la palabra a la altura de la del
     //    numero: el precio acaba en 230 y el REF tambien (26,25 + 2,5 = 28,75 mm), que es la
     //    misma linea de base. Asi se leen como "REF: 3.00" y no como dos textos sueltos, y
     //    quedan en la zona media/baja del codigo como salio en la prueba fisica (las barras
-    //    van de 21 a 30,375 mm y esto cubre de 23,75 a 28,75).
+    //    van de 19 a 28 mm y esto cubre de 23,75 a 28,75).
     //
     //    Los dos con `justify: "R"` y acabando en 459 (el margen derecho, con 2 dots de aire
     //    al interior del marco). Un precio de "1234.56" ocupa 7 caracteres y uno de "3.00"
@@ -546,8 +594,8 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     //    quepa, con un suelo de 18 dots (2,25 mm), por debajo del cual ya no se lee de lejos.
     {
       kind: "text",
-      x: dotsFromMm(REF_X_MM),
-      y: dotsFromMm(REF_Y_MM),
+      x: dotsFromMm(REFERENCE_X_MM),
+      y: dotsFromMm(REFERENCE_Y_MM),
       format: "^A0N,20,10",
       source: "referenceLabel",
       // La caja va de 329 a 369, y el precio de 371 a 459. Tres cosas tienen que cuadrar aqui y
@@ -556,8 +604,9 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       //   - "REF:" a 10 dots de celda son 40, y la caja mide 40. Con la caja mas estrecha que
       //     el texto, el render lo dibujaba de 316 a 356 y la caja llegaba a 360: dos avisos
       //     falsos, un MARCO y un CHOQUE contra el precio. La caja mide lo que mide el texto.
-      //   - El 329 (41,125 mm) es porque las barras acaban en 325 y hay que empezar despues.
-      //     Con x en 316 la palabra se metia debajo de ellas: `"REF:" pisa a "barras"`, que es
+      //   - El 329 (41,125 mm) es porque las barras acaban en 230 (23,75 mm) y a partir de
+      //     ahi la quiet zone derecha (20 dots) deja el sitio libre hasta 250. Con x en 316
+      //     la palabra se metia debajo de ellas: `"REF:" pisa a "barras"`, que es
       //     cierto.
       //   - El 371 (46,375 mm) es porque el precio necesita 85 dots para "$3.00" a 17 de
       //     celda, y con la caja en 363 el texto se dibujaba desde 374 y las cajas se tocaban.
@@ -567,11 +616,11 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     },
     {
       kind: "text",
-      x: dotsFromMm(PRECIO_X_MM),
-      // 23,75 mm: la zona media/baja de las barras (21..30,375), no arriba como antes. Con el
+      x: dotsFromMm(PRICE_X_MM),
+      // 23,75 mm: la zona media/baja de las barras (19..28), no arriba como antes. Con el
       // logo grande, el precio subido a 21 mm quedaba visualmente colgado entre el nombre y el
       // codigo; en la prueba fisica salio mas abajo, en la zona del codigo.
-      y: dotsFromMm(PRECIO_Y_MM),
+      y: dotsFromMm(PRICE_Y_MM),
       format: "^A0N,40,17",
       source: "price",
       // El "$" va aqui y no dentro de `LabelData` porque es una decision de la plantilla, no
@@ -580,12 +629,12 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       prefix: "$",
       // 88 y no 96: la caja acaba en 459 (57,375 mm), dos dots por dentro del interior del
       // marco (461), y a 363 se solapaba con la de "REF:".
-      maxWidthDots: dotsFromMm(PRECIO_W_MM),
+      maxWidthDots: dotsFromMm(PRICE_W_MM),
       maxLines: 1,
       justify: "R",
       autoFit: {
-        maxHeight: dotsFromMm(PRECIO_MAX_H_MM),
-        minHeight: dotsFromMm(PRECIO_MIN_H_MM),
+        maxHeight: dotsFromMm(PRICE_MAX_H_MM),
+        minHeight: dotsFromMm(PRICE_MIN_H_MM),
         widthRatio: 0.42,
       },
     },

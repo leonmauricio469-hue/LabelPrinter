@@ -1,5 +1,5 @@
 import type { LabelData } from "./label.types";
-import { MM_TO_DOTS, DEFAULT_TEMPLATE } from "./label.template";
+import { MM_TO_DOTS, DEFAULT_TEMPLATE, BARCODE_WIDTH_MM, dotsFromMm } from "./label.template";
 import type {
   LabelTemplate,
   BarcodeZone,
@@ -422,26 +422,31 @@ export function buildZpl(
  * ESTA FUNCION ES LA QUE SOSTIENE EL LAYOUT NUEVO, Y HAY QUE LEERLA ANTES DE CAMBIAR UN NUMERO.
  *
  * El codigo de barras y el precio se reparten el ancho a lo largo: codigo a la izquierda,
- * precio a la derecha. El reparto son 345 dots para las barras (el simbolo de 285 a modulo 3,
- * mas las dos zonas quietas de 10X = 30 dots cada una) y el resto para el precio.
+ * precio a la derecha. El reparto son 230 dots para las barras (el simbolo de 190 a modulo 2,
+ * mas las dos zonas quietas de 10X = 20 dots cada una) y el resto para el precio.
  *
- * Por que 345 y no 220-250 como se pidio: EAN-13 son 95 modulos FIJOS y el ancho de modulo
+ * Por que 230 y no 220-250 como se pidio: EAN-13 son 95 modulos FIJOS y el ancho de modulo
  * de ZPL es un entero, asi que el simbolo mide 190 o 285 dots, nunca nada entre medias. Entre
  * 220 y 250 haria falta un modulo de 2,32 a 2,63, que no existe. A 3 dots (0,375 mm) el
  * simbolo cumple el minimo de 0,264 mm de ISO/IEC 15420; a 2 dots (0,250 mm) queda por debajo.
  *
- * O sea: hay dos anchos posibles y ninguno es el pedido. Se eligio el de 3 dots porque el
- * de 2 deja las barras por debajo de la norma, y porque el ancho de una barra no se negocia
- * con la impresora: o el lector la acepta o no la acepta, y no hay forma de saberlo sin
- * probarla con el lector fisico. Ver [[Prueba Legibilidad Barcode]].
+ * Se eligio el de 2 dots el 8/10: la prueba fisica del layout de dos columnas midio las barras
+ * a modulo 3 "demasiado anchas y pegadas a REF", y a 285 dots no queda columna derecha que
+ * valga para REF y PRICE. A 190 dots si: 99 dots de aire entre el simbolo (que acaba en 230) y
+ * el REF (329). Queda la norma un 5 % por debajo, aceptado a cambio de que la etiqueta se lea.
+ * Ver [[Prueba Legibilidad Barcode]].
+ *
+ * El valor sale de `BARCODE_WIDTH_MM` y no de un 230 escrito a mano, por el mismo motivo que
+ * el marco: si el ancho del area del codigo cambia en la plantilla y este numero se queda, el
+ * codigo pasa a imprimirse pegado al precio sin que nada se entere.
  *
  * El ancho de la columna se mide CON las zonas quietas dentro, porque son ellas las que la
- * norma pide y las que se comen el sitio. Una columna de 285 dots con las barras centradas
- * dentro tendria 60 dots de zona quieta, y el codigo se leeria bien; pero `planBarcode()`
- * mide el margen necesario para decidir si cabe, y si le dijeramos 285 cuando el sitio real
- * son 345, el codigo pasaria a imprimirse pegado al precio.
+ * norma pide y las que se comen el sitio. Una columna de 190 dots con las barras centradas
+ * dentro tendria 40 dots de zona quieta, y el codigo se leeria bien; pero `planBarcode()`
+ * mide el margen necesario para decidir si cabe, y si le dijeramos 190 cuando el sitio real
+ * son 230, el codigo pasaria a imprimirse pegado al precio.
  */
-export const COLUMNA_BARRAS_DOTS = 345;
+export const COLUMNA_BARRAS_DOTS = dotsFromMm(BARCODE_WIDTH_MM);
 
 /**
  * El ancho que se queda el precio: el de la etiqueta menos la columna de las barras.

@@ -21,7 +21,20 @@
 import { partirLineas, renderLabel } from "../src/lib/labels/label.render";
 import { resolveZoneText, COLUMNA_BARRAS_DOTS } from "../src/lib/labels/zpl.builder";
 import { buscarProblemas } from "../src/lib/labels/label-solapes";
-import { DEFAULT_TEMPLATE } from "../src/lib/labels/label.template";
+import {
+  DEFAULT_TEMPLATE,
+  dotsFromMm,
+  BARCODE_X_MM,
+  BARCODE_Y_MM,
+  BARCODE_WIDTH_MM,
+  BARCODE_HEIGHT_MM,
+  BARCODE_TEXT_X_MM,
+  BARCODE_TEXT_Y_MM,
+  REFERENCE_X_MM,
+  REFERENCE_Y_MM,
+  PRICE_X_MM,
+  PRICE_Y_MM,
+} from "../src/lib/labels/label.template";
 import type { LabelData } from "../src/lib/labels/label.types";
 import type { TextZone as TZ } from "../src/lib/labels/label.template";
 
@@ -72,8 +85,8 @@ seccion("Zonas: las que se pidieron, y solo esas");
   ok("un marco", cuenta("shape") === 1, JSON.stringify(tipos));
   ok("un logo", cuenta("graphic") === 1);
   ok("unas barras", cuenta("barcode") === 1);
-  ok("el nombre", cuenta("text") === 3, `3 textos: nombre, REF: y precio`);
-  ok("no hay zonas de mas", T.zones.length === 6, `${T.zones.length}`);
+  ok("el nombre", cuenta("text") === 4, `4 textos: nombre, HRI (barcodeData), REF: y precio`);
+  ok("no hay zonas de mas", T.zones.length === 7, `${T.zones.length}`);
 }
 
 // ===================================================================================
@@ -247,25 +260,107 @@ seccion("Dos columnas: barras a la izquierda, precio a la derecha");
 }
 
 // ===================================================================================
-seccion("El alto de las barras y el de la linea de interpretacion");
+seccion("El codigo no invade la columna derecha (la quiet zone manda)");
+// ===================================================================================
+{
+  // El diagnostico del 8/10: con el modulo 3 el simbolo media 285 dots (40..325), la quiet
+  // zone derecha que exige la norma llegaba a 355, y REF en 329 quedaba DENTRO de esa zona
+  // quieta: por eso se veian pegados. A modulo 2 el simbolo mide 190 (40..230), la quiet
+  // zone derecha llega a 250, y REF en 329 queda a 79 dots. Este check es el que faltaba:
+  // `quietOk()` solo mira los bordes de la etiqueta, no lo que hay entre el simbolo y REF.
+  const barras = T.zones.find((z) => z.kind === "barcode");
+  const refT = zona("referenceLabel");
+  const precio = zona("price");
+  ok("el modulo es 2 (decision del 8/10)", barras?.kind === "barcode" && barras.moduleWidth === 2, `${barras?.kind === "barcode" ? barras.moduleWidth : "?"}`);
+
+  const bz = barras?.kind === "barcode" ? barras : undefined;
+  if (bz && refT && refT.x !== undefined) {
+    const simbolo = 95 * bz.moduleWidth;
+    const finQuietDerecha = bz.x + simbolo + 10 * bz.moduleWidth;
+    ok(
+      "REF queda fuera de la quiet zone derecha del simbolo",
+      refT.x >= finQuietDerecha,
+      `REF en ${refT.x} y la quiet zone derecha acaba en ${finQuietDerecha}`,
+    );
+  }
+  if (refT !== undefined && precio !== undefined && refT.x !== undefined) {
+    ok(
+      "REF esta antes del precio",
+      refT.x + (refT.maxWidthDots ?? 0) <= precio.x,
+      `${refT.x}..${refT.x + (refT.maxWidthDots ?? 0)} y ${precio.x}`,
+    );
+  } else {
+    ok("REF esta antes del precio", false, "falta REF o precio");
+  }
+}
+
+// ===================================================================================
+seccion("Las zonas obedecen a las constantes mm (coordenadas declaradas, no cacheadas)");
+// ===================================================================================
+{
+  // El punto 8 del encargo: cada coordenada vive en una constante mm independiente arriba
+  // del template, y la zona se construye con `dotsFromMm()`. Si alguien mueve la constante,
+  // la zona se mueve sola; si alguien toca la zona a mano, esto avisa.
+  const barras = T.zones.find((z) => z.kind === "barcode");
+  ok("las barras usan BARCODE_X_MM", barras?.kind === "barcode" && barras.x === dotsFromMm(BARCODE_X_MM), `${barras?.kind === "barcode" ? barras.x : "?"} y ${dotsFromMm(BARCODE_X_MM)}`);
+  ok("las barras usan BARCODE_Y_MM", barras?.kind === "barcode" && barras.y === dotsFromMm(BARCODE_Y_MM), `${barras?.kind === "barcode" ? barras.y : "?"} y ${dotsFromMm(BARCODE_Y_MM)}`);
+  ok("las barras usan BARCODE_HEIGHT_MM", barras?.kind === "barcode" && barras.heightDots === dotsFromMm(BARCODE_HEIGHT_MM), `${barras?.kind === "barcode" ? barras.heightDots : "?"} y ${dotsFromMm(BARCODE_HEIGHT_MM)}`);
+
+  const hri = zona("barcodeData");
+  ok("el HRI usa BARCODE_TEXT_X_MM", hri?.x === dotsFromMm(BARCODE_TEXT_X_MM), `${hri?.x} y ${dotsFromMm(BARCODE_TEXT_X_MM)}`);
+  ok("el HRI usa BARCODE_TEXT_Y_MM", hri?.y === dotsFromMm(BARCODE_TEXT_Y_MM), `${hri?.y} y ${dotsFromMm(BARCODE_TEXT_Y_MM)}`);
+  ok("la columna de barras usa BARCODE_WIDTH_MM", COLUMNA_BARRAS_DOTS === dotsFromMm(BARCODE_WIDTH_MM), `${COLUMNA_BARRAS_DOTS} y ${dotsFromMm(BARCODE_WIDTH_MM)}`);
+
+  const ref = zona("referenceLabel");
+  ok("REF usa REFERENCE_X_MM", ref?.x === dotsFromMm(REFERENCE_X_MM), `${ref?.x} y ${dotsFromMm(REFERENCE_X_MM)}`);
+  ok("REF usa REFERENCE_Y_MM", ref?.y === dotsFromMm(REFERENCE_Y_MM), `${ref?.y} y ${dotsFromMm(REFERENCE_Y_MM)}`);
+
+  const prec = zona("price") as TZ | undefined;
+  ok("el precio usa PRICE_X_MM", prec?.x === dotsFromMm(PRICE_X_MM), `${prec?.x} y ${dotsFromMm(PRICE_X_MM)}`);
+  ok("el precio usa PRICE_Y_MM", prec?.y === dotsFromMm(PRICE_Y_MM), `${prec?.y} y ${dotsFromMm(PRICE_Y_MM)}`);
+}
+
+// ===================================================================================
+seccion("El alto de las barras y de los numeros human-readable");
 // ===================================================================================
 {
   const barras = T.zones.find((z) => z.kind === "barcode");
   ok("las barras miden entre 65 y 75 dots", barras?.kind === "barcode" && barras.heightDots >= 65 && barras.heightDots <= 75, `${barras?.kind === "barcode" ? barras.heightDots : "?"}`);
-  ok("la linea de interpretacion va dichita a mano", barras?.kind === "barcode" && barras.hriHeightDots === 12);
-  // 9,4 mm de barra. Por debajo de unos 6,6 mm las barras ya no las leian bien los escaneres
+  // 8,5 mm de barra. Por debajo de unos 6,6 mm las barras ya no las leian bien los escaneres
   // de mano, y ese minimo se cruzo en v1.x.
   ok("las barras miden mas de 8 mm", barras!.heightDots >= 64, `${(barras!.heightDots / 8).toFixed(1)} mm`);
 
-  // El codigo entero (barras + linea de interpretacion) tiene que caber dentro de los 35 mm
-  // de alto: en la prueba fisica Mau midio que "la parte inferior del codigo/numeros estaba
-  // practicamente en el limite inferior de la etiqueta". Con las barras en 21 mm, 9,375 de
-  // alto y 1,5 de HRI acaban en 31,875 mm, 3 mm por encima del interior del marco (34 mm).
+  // La linea de interpretacion ya NO cuelga del `^BY`: en la prueba fisica la impresora la
+  // ponia con un hueco propio que el ZPL no controla y los numeros caian fuera de la
+  // etiqueta. Ahora son una zona de texto aparte, con su x y su y propias, y el simbolo va
+  // con la interpretacion apagada: lo que mide el render es lo que se imprime.
+  const hri = zona("barcodeData");
+  ok("la interpretacion del ^BY esta apagada", barras?.kind === "barcode" && barras.interpretationLine === false);
+  ok("los numeros van en su zona de texto", hri !== undefined, "sin zona barcodeData");
+  if (hri) {
+    ok("el texto usa la proporcion del HRI viejo", hri.format === "^A0N,12,7", hri.format);
+    ok("la x del texto es la del simbolo", hri.x === dotsFromMm(BARCODE_TEXT_X_MM), `${hri.x} y ${dotsFromMm(BARCODE_TEXT_X_MM)}`);
+    ok("la y del texto es BARCODE_TEXT_Y_MM", hri.y === dotsFromMm(BARCODE_TEXT_Y_MM), `${hri.y} y ${dotsFromMm(BARCODE_TEXT_Y_MM)}`);
+    ok("la caja del texto mide BARCODE_WIDTH_MM", hri.maxWidthDots === dotsFromMm(BARCODE_WIDTH_MM), `${hri.maxWidthDots} y ${dotsFromMm(BARCODE_WIDTH_MM)}`);
+    // La caja del ^FB es ancha (230) pero el texto dibujado son 13 digitos * 7 dots = 91
+    ok(
+      "el HRI resuelto (13 digitos a 7 dots) no alcanza REF",
+      hri.x + 13 * 7 < dotsFromMm(REFERENCE_X_MM),
+      `acaba en ${hri.x + 13 * 7} y REF empieza en ${dotsFromMm(REFERENCE_X_MM)}`,
+    );
+  }
+
+  // El codigo entero (barras + aire + numeros) tiene que caber dentro de los 35 mm con
+  // margen real: en la prueba fisica Mau midio que "la parte inferior del codigo/numeros
+  // estaba practicamente en el limite inferior de la etiqueta". Con las barras en 21 mm,
+  // 8,5 de alto, 1 mm de aire y 1,5 mm de numeros acaban en 32 mm: 2 mm por encima del
+  // interior del marco (34 mm) y 3 mm del borde del papel (35 mm).
   const bz = barras?.kind === "barcode" ? barras : undefined;
+  const finBloque = hri ? hri.y + 12 : bz ? bz.y + bz.heightDots : 0;
   ok(
-    "barras + HRI caben en el alto de la etiqueta",
-    bz !== undefined && bz.y + bz.heightDots + (bz.hriHeightDots ?? 0) <= 280,
-    bz !== undefined ? `${bz.y}..${bz.y + bz.heightDots + (bz.hriHeightDots ?? 0)}` : "sin zona",
+    "barras + aire + numeros caben con margen al marco",
+    bz !== undefined && finBloque <= 272 - 8,
+    `el bloque acaba en ${finBloque} y el interior del marco en 272; pedido <= 264 (2 mm)`,
   );
 }
 
@@ -304,9 +399,12 @@ seccion("La vista previa y el papel: los mismos numeros");
       r.informe.filter((i) => i.includes("SE PASA")).join(" | "),
     );
     // La caja de las barras tiene que medir lo que dice la plantilla: simbolo y, pegada
-    // al pie SIN hueco, la linea de interpretacion del `^BY`. El render tenia un `hriH = 12`
-    // fijo y un aire de 2 dots: con `^BY1,,9` la previa acababa en 247 y el papel en 242.
-    // La caja no aparece cuando el codigo no se puede imprimir, y ahi no hay nada que medir.
+    // al pie SIN numero, porque la interpretacion del `^BY` esta apagada y los numeros van
+    // en su propia zona de texto. El render dibujaba un `hriH = 12` fijo y un aire de
+    // 2 dots que el firmware no respetaba: con `^BY1,,9` la previa acababa en 247 y el
+    // papel en 242. Ahora no hay hueco del firmware que adivinar: barras hasta el pie, y
+    // numero aparte. La caja no aparece cuando el codigo no se puede imprimir, y ahi no
+    // hay nada que medir.
     const cb = r.cajas.find((c) => c.etiqueta === "barras");
     if (cb && bz?.kind === "barcode") {
       ok(
