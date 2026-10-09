@@ -190,3 +190,18 @@ export const badgeLoteCancClear = `${badge} bg-error-soft text-error`;
 
 /** Badge de fila pendiente: neutra, todavia no se intento. */
 export const badgeLotePendClear = `${badge} bg-canvas text-muted`;
+
+/*
+ * ---- ClearCraft F6: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/** Pestana del workbench del editor (Informe/ZPL/Origen). Inactiva. */
+export const tabClear =
+  "rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-canvas hover:text-strong";
+
+/** Pestana activa del workbench: la que se esta mirando. */
+export const tabClearActive = `${tabClear} bg-primary-soft font-semibold text-primary hover:text-primary`;
+
+/** Bloque monoespaciado (ZPL, informe, resultados verbatim) sobre canvas. */
+export const monoClear =
+  "rounded-md border border-edge bg-canvas p-3 font-mono text-xs leading-relaxed text-strong";

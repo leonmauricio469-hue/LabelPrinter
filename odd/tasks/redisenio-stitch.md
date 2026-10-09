@@ -39,7 +39,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
 - [x] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
 - [x] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
-- [ ] **F6** Editor: re-estilado + reconciliacion con override + variables.
+- [x] **F6** Editor: re-estilado + reconciliacion con override + variables.
 
 ## Aceptacion F0
 - `npm run typecheck` exit 0; `npm run check` 11/11 verdes.
@@ -106,6 +106,17 @@ del writer + spot check del padre antes de cada commit de unidad.
   Tab Lotes + IconStack agregados por el padre. NO verificado: start/pause/resume
   ejecutan de verdad (pendiente usuario). Sin Priorizar (documentado: otro producto).
 - Siguiente paso: **F6**.
+- **F6** (commit `feat(ui): F6 editor reconciliado con biblioteca y pestanas ZPL-Origen` en
+  `consolidacion`): writer delegado. Workbench ClearCraft (comportamiento intacto) +
+  reconciliacion con activa (raw/otra → aviso honesto) + `GET /api/editor/zpl`
+  (ZPL real + Copiar) + Origen con fuentes reales (sin CSV/ERP/RFID/simulacion; `~SD`
+  recortado por no verificable) + Guardar como plantilla (via import JSON) +
+  Imprimir prueba (confirmacion, sin invocar). typecheck 0 (writer + padre), check
+  11/11, `/editor` 200 y ZPL `^XA..^XZ` verificados por el padre, round-trip con
+  biblioteca limpia (seed restaurado). Desvios: Guardar usa import (templates POST no
+  transporta geometria); ZPL refleja lo guardado (aviso en UI si hay sin aplicar).
+- **REDISENIO COMPLETO F0–F6.** Pendiente del usuario: impresiones fisicas
+  (test-print, templateId, start de lote, prueba del editor) y PR hacia `main`.
 
 ## Proximo paso
 F0.

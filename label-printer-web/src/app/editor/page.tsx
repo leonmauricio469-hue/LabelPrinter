@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_TEMPLATE, MM_TO_DOTS, dotsFromMm } from "@/lib/labels/label.template";
+import { DEFAULT_TEMPLATE, MM_TO_DOTS } from "@/lib/labels/label.template";
 import {
   ASIDERES,
   MIN_DOTS,
@@ -14,8 +14,26 @@ import {
 import { cajaEstimada, estirarMarco, type Marco } from "@/lib/labels/label.marco";
 import { graphicDots, scaleGraphic } from "@/lib/labels/gf-graphic";
 import { buscarProblemas } from "@/lib/labels/label-solapes";
-import { buttonGhost, buttonPrimary, buttonQuiet, card, h2, h3, input } from "@/components/ui";
+import {
+  badgeArchivedClear,
+  badgeRawClear,
+  buttonClear,
+  buttonClearSecondary,
+  cardClear,
+  displayTitle,
+  input,
+  monoClear,
+  pillClear,
+} from "@/components/ui";
 import type { LabelZone } from "@/lib/labels/label.template";
+import {
+  EditorTabs,
+  GuardarPlantillaPanel,
+  OrigenTab,
+  PruebaImpresionPanel,
+  ZplTab,
+  type AnyZone,
+} from "@/components/editor-inspector";
 
 /**
  * Editor visual de la plantilla.
@@ -32,9 +50,13 @@ import type { LabelZone } from "@/lib/labels/label.template";
  * El PNG lo pinta `renderLabel()`, que dibuja el ZPL de `buildZpl()`, que es el mismo que
  * va a la impresora. Dibujando en el navegador el editor ensenaria una geometria y la
  * impresora sacaria otra.
+ *
+ * F6: el editor edita la plantilla ACTIVA (`settings.label.templateId`). Solo la
+ * 59x35 estructurada se abre en el workbench: es la unica cuya geometria entiende
+ * el override (`plantilla-override.json` aplica SOLO a esa, ver
+ * `label-override.store.ts`). Con otra activa (raw u otra estructurada) no hay
+ * canvas ni inspector: aviso honesto, ZPL real y prueba real de la activa.
  */
-
-type AnyZone = Record<string, unknown> & { kind: string };
 
 interface Caja {
   etiqueta: string;
@@ -287,13 +309,132 @@ export default function EditorPage() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
+   * La plantilla ACTIVA (`settings.label.templateId` + biblioteca).
+   *
+   * El editor solo abre la 59x35 estructurada: es la unica cuya geometria
+   * entiende el override. La regla es la misma que en la biblioteca F4
+   * (`template-detail.tsx`): estructurada + id `papicar-59x35` + activa.
+   */
+  interface ActivaInfo {
+    id: string;
+    name: string;
+    kind: "estructurada" | "raw";
+    widthMm: number;
+    heightMm: number;
+    dpi: number;
+    category: string;
+    archived: boolean;
+  }
+  const [activa, setActiva] = useState<ActivaInfo | null>(null);
+  const [activaError, setActivaError] = useState<string | null>(null);
+  const [negocio, setNegocio] = useState("PA PICAR");
+  const editable =
+    activa !== null && activa.kind === "estructurada" && activa.id === DEFAULT_TEMPLATE.id;
+
+  /** Productos reales del catalogo, para la muestra de la prueba (la prueba imprime de verdad). */
+  interface Muestra {
+    code: string;
+    name: string;
+    barcode: string;
+    price: number;
+  }
+  const [productos, setProductos] = useState<Muestra[]>([]);
+  const [muestra, setMuestra] = useState("");
+
+  /** Pestanas del bloque inferior: ZPL real y origen de cada zona. */
+  const [tab, setTab] = useState<"zpl" | "origen">("zpl");
+  const [zpl, setZpl] = useState<string | null>(null);
+  const [zplCargando, setZplCargando] = useState(false);
+  const [zplError, setZplError] = useState<string | null>(null);
+  const [zplTick, setZplTick] = useState(0);
+
+  /** Guardar como plantilla: nombre pedido en UI, siempre plantilla nueva. */
+  const [nombrePlantilla, setNombrePlantilla] = useState("");
+  const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
+  const [plantillaCreada, setPlantillaCreada] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [plantillaError, setPlantillaError] = useState<string | null>(null);
+
+  /** Imprimir prueba: gasta 1 etiqueta de verdad. Nunca se invoca solo. */
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [pruebaOk, setPruebaOk] = useState<string | null>(null);
+  const [pruebaError, setPruebaError] = useState<string | null>(null);
+
+  /** Lee la activa, el negocio y las muestras al abrir. Sin esto no se sabe que se edita. */
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const s = (await fetch("/api/settings").then((r) => r.json())) as {
+          label?: { businessName?: unknown; templateId?: unknown };
+        };
+        if (!vivo) return;
+        if (typeof s?.label?.businessName === "string" && s.label.businessName !== "") {
+          setNegocio(s.label.businessName);
+        }
+        const tid =
+          typeof s?.label?.templateId === "string" && s.label.templateId !== ""
+            ? s.label.templateId
+            : DEFAULT_TEMPLATE.id;
+        const t = await fetch(`/api/templates/${encodeURIComponent(tid)}`);
+        if (!vivo) return;
+        if (!t.ok) {
+          const j = (await t.json().catch(() => null)) as { error?: string } | null;
+          setActiva(null);
+          setActivaError(j?.error ?? `La plantilla "${tid}" no existe`);
+          return;
+        }
+        const tpl = (await t.json()) as ActivaInfo;
+        setActiva({
+          id: tpl.id,
+          name: tpl.name,
+          kind: tpl.kind,
+          widthMm: tpl.widthMm,
+          heightMm: tpl.heightMm,
+          dpi: tpl.dpi,
+          category: tpl.category,
+          archived: tpl.archived,
+        });
+        setActivaError(null);
+      } catch (e) {
+        if (vivo) {
+          setActiva(null);
+          setActivaError((e as Error).message);
+        }
+      }
+    })();
+    (async () => {
+      try {
+        const j = (await fetch("/api/editor/preview").then((r) => r.json())) as {
+          productos?: Muestra[];
+        };
+        if (!vivo || !Array.isArray(j?.productos)) return;
+        setProductos(j.productos);
+        const preferida =
+          j.productos.find((p) => p.barcode === "033844007522") ?? j.productos[0];
+        if (preferida) setMuestra(preferida.code);
+      } catch {
+        // Sin muestras no hay prueba de impresion, pero el resto sigue en pie.
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /**
    * Carga el estado guardado al abrir.
+   *
+   * Solo con la 59x35 editable: con otra activa no hay override que cargar y
+   * las zonas en pantalla no significarian nada.
    *
    * Sin esto, recargar la pagina con un override activo ensenaria la plantilla del `.ts` y
    * pareceria que el boton no ha hecho nada, cuando en realidad se sigue imprimiendo con lo
    * guardado. La pantalla tiene que abrir en lo que de verdad se usa.
    */
   useEffect(() => {
+    if (!editable) return;
     let vivo = true;
     (async () => {
       try {
@@ -321,7 +462,7 @@ export default function EditorPage() {
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [editable]);
 
   /**
    * Guarda la geometria en `data/plantilla-override.json`.
@@ -392,6 +533,8 @@ export default function EditorPage() {
   const ctrlPeticion = useRef<AbortController | null>(null);
 
   const pedir = useCallback(async () => {
+    // Sin la 59x35 editable no hay canvas: no se pide ningun render.
+    if (!editable) return;
     ctrlPeticion.current?.abort();
     const mia = new AbortController();
     ctrlPeticion.current = mia;
@@ -433,16 +576,161 @@ export default function EditorPage() {
       // el "calculando..." encima mientras la buena sigue dibujando.
       if (ctrlPeticion.current === mia) setBusy(false);
     }
-  }, [zones, nombre, barcode, precio, zoom]);
+  }, [zones, nombre, barcode, precio, zoom, editable]);
 
   // Cada cambio agenda una peticion. El retardo agrupa el tecleo rapido en una sola llamada.
   useEffect(() => {
+    if (!editable) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(pedir, 180);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [pedir]);
+
+  /**
+   * El ZPL texto de la pestana: lo guardado, con la misma muestra del canvas.
+   *
+   * No sale de las zonas en pantalla sino de `GET /api/editor/zpl` (activa +
+   * override aplicado, misma muestra): con cambios sin aplicar, el texto es el
+   * de lo guardado y se dice. Por eso depende de `aplicado`/`guardado` y no de
+   * cada pulsacion: solo cambia cuando cambia lo guardado o la muestra.
+   */
+  useEffect(() => {
+    if (tab !== "zpl" || !activa) return;
+    let vivo = true;
+    setZplCargando(true);
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const q = new URLSearchParams({
+            productName: nombre,
+            barcode,
+            price: String(precio),
+          });
+          const res = await fetch(`/api/editor/zpl?${q.toString()}`);
+          if (!vivo) return;
+          if (res.ok) {
+            setZpl(await res.text());
+            setZplError(null);
+          } else {
+            const j = (await res.json().catch(() => null)) as { error?: string } | null;
+            setZpl(null);
+            setZplError(j?.error ?? `La app respondio ${res.status}`);
+          }
+        } catch (e) {
+          if (vivo) {
+            setZpl(null);
+            setZplError((e as Error).message);
+          }
+        } finally {
+          if (vivo) setZplCargando(false);
+        }
+      })();
+    }, 300);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [tab, activa, nombre, barcode, precio, aplicado, guardado, zplTick]);
+
+  /**
+   * Guardar como plantilla: la geometria efectiva actual, como plantilla nueva.
+   *
+   * DESVIO DECLARADO: `POST /api/templates` no sirve (solo acepta
+   * `{ name, category?, from }` y copia las zonas guardadas, ignorando lo que
+   * se ve en el canvas; `PUT` solo renombra) y no se pueden extender (fuera de
+   * superficie F6). Se usa `POST /api/templates/import` con `format: "json"`,
+   * endpoint existente sin modificar, que si crea estructuradas con zonas
+   * propias e id nuevo. Lo importado es copia, nunca reemplazo.
+   */
+  async function guardarComoPlantilla() {
+    if (!activa) return;
+    setGuardandoPlantilla(true);
+    setPlantillaError(null);
+    try {
+      const ahora = new Date().toISOString();
+      const res = await fetch("/api/templates/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: "json",
+          content: {
+            id: "editor-temporal",
+            name: nombrePlantilla.trim(),
+            category: activa.category,
+            kind: "estructurada",
+            widthMm: activa.widthMm,
+            heightMm: activa.heightMm,
+            dpi: activa.dpi,
+            zones,
+            zonesWithoutBarcode: DEFAULT_TEMPLATE.zonesWithoutBarcode,
+            archived: false,
+            createdAt: ahora,
+            updatedAt: ahora,
+          },
+        }),
+      });
+      const j = (await res.json()) as { id: string; name: string; error?: string };
+      if (!res.ok) {
+        setPlantillaCreada(null);
+        setPlantillaError(j.error ?? `La app respondio ${res.status}`);
+        return;
+      }
+      setPlantillaCreada({ id: j.id, name: j.name });
+    } catch (e) {
+      setPlantillaCreada(null);
+      setPlantillaError((e as Error).message);
+    } finally {
+      setGuardandoPlantilla(false);
+    }
+  }
+
+  /**
+   * Imprimir prueba: 1 etiqueta de verdad con la activa y un codigo real.
+   *
+   * Nunca se invoca solo: siempre tras `window.confirm` que dice que gasta
+   * papel. El resultado se muestra verbatim (el JSON tal cual responde
+   * `POST /api/labels`).
+   */
+  async function imprimirPrueba() {
+    if (!activa || muestra.trim() === "") return;
+    if (
+      !window.confirm(
+        `La prueba se imprime de verdad y gasta 1 etiqueta con la plantilla ` +
+          `«${activa.name}». ¿Imprimirla?`,
+      )
+    ) {
+      return;
+    }
+    setImprimiendo(true);
+    setPruebaOk(null);
+    setPruebaError(null);
+    try {
+      const res = await fetch("/api/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productCode: muestra,
+          qty: 1,
+          mode: "normal",
+          templateId: activa.id,
+        }),
+      });
+      const j = (await res.json().catch(() => null)) as unknown;
+      const texto =
+        typeof j === "string" ? j : JSON.stringify(j, null, 2);
+      if (!res.ok) {
+        setPruebaError(`La app respondio ${res.status}: ${texto}`);
+        return;
+      }
+      setPruebaOk(texto);
+    } catch (e) {
+      setPruebaError((e as Error).message);
+    } finally {
+      setImprimiendo(false);
+    }
+  }
 
   function editar(i: number, cambio: Record<string, unknown>) {
     setZones((prev) => prev.map((z, j) => (j === i ? { ...z, ...cambio } : z)));
@@ -931,70 +1219,6 @@ export default function EditorPage() {
     [],
   );
 
-  /**
-   * La zona seleccionada como bloque de TypeScript para `label.template.ts`.
-   *
-   * El logo no sale aqui. Su tamano va DENTRO del `^GFA` y no en un campo de la zona, asi que
-   * el reescalado produce un bitmap distinto y no un numero que pegar. Se dice en su lugar, con
-   * la medida nueva, para que quede claro que el cambio no cabe en un objeto literal y hay que
-   * regenerar el dato o usar el boton de aplicar.
-   */
-  const codigo = useMemo(() => {
-    if (!zona) return "";
-    const l: string[] = [];
-    l.push(`    // ${etiquetaDe(zona, sel)}`);
-    if (zona.kind === "shape") {
-      l.push(
-        `    { kind: "shape", x: ${zona.x}, y: ${zona.y}, widthDots: ${zona.widthDots}, ` +
-          `heightDots: ${zona.heightDots}, thicknessDots: ${zona.thicknessDots}` +
-          `${zona.radiusDots ? `, radiusDots: ${zona.radiusDots}` : ""} },`,
-      );
-    } else if (zona.kind === "graphic") {
-      const d = graphicDots(String(zona.gf));
-      l.push(`    // El logo son ${d.dots?.w ?? 0} x ${d.dots?.h ?? 0} dots ahora mismo.`);
-      l.push(`    // Su tamano va dentro del ^GFA, no en la zona, asi que esto no se pega: o se`);
-      l.push(`    // regenera con scripts/generate-logo.ps1, o se deja el boton de aplicar, que`);
-      l.push(`    // guarda el bitmap reescalado entero.`);
-      l.push(`    { kind: "graphic", x: ${zona.x}, y: ${zona.y}, gf: LOGO_GF },`);
-    } else if (zona.kind === "barcode") {
-      l.push(
-        `    { kind: "barcode", x: ${zona.x}, y: ${zona.y}, heightDots: ${zona.heightDots},` +
-          ` interpretationLine: true, source: "barcode",` +
-          ` center: ${zona.center !== false}, moduleWidth: ${zona.moduleWidth}` +
-          `${zona.hriHeightDots !== undefined ? `, hriHeightDots: ${zona.hriHeightDots}` : ""} },`,
-      );
-    } else {
-      const af = zona.autoFit as Record<string, number> | undefined;
-      const partes = [`kind: "text"`, `x: ${zona.x}`, `y: ${zona.y}`, `format: "${zona.format}"`];
-      if (af) {
-        // `maxBlockDots` se emite solo si esta, y no siempre. Es opcional a proposito: lo que
-        // falta es que se EMITA, porque el boton de aplicar escribe este codigo entero en
-        // `label.template.ts`. Si el generador se come un campo, mover una zona en el editor
-        // borra ese campo de la plantilla sin que nadie lo note: el nombre volveria a
-        // minusculas y perderia el tope de alto del bloque, y el codigo seguiria compilando y
-        // la etiqueta seguiria imprimiendose, solo que distinta.
-        partes.push(
-          `autoFit: { maxHeight: ${af.maxHeight}, minHeight: ${af.minHeight},` +
-            ` widthRatio: ${af.widthRatio}` +
-            `${af.maxBlockDots !== undefined ? `, maxBlockDots: ${af.maxBlockDots}` : ""} }`,
-        );
-      }
-      // Sin `else`: `format` ya esta en `partes` desde arriba. Añadirlo otra vez aqui
-      // producia un objeto literal con la clave dos veces, y TypeScript lo rechaza (TS1117)
-      // al pegar el bloque en `label.template.ts`.
-      partes.push(`source: "${zona.source}"`);
-      l.push(`    { ${partes.join(", ")},`);
-      if (zona.prefix) l.push(`      prefix: "${zona.prefix}",`);
-      if (zona.uppercase) l.push(`      uppercase: true,`);
-      if (zona.maxWidthDots !== undefined) l.push(`      maxWidthDots: ${zona.maxWidthDots},`);
-      if (zona.maxLines !== undefined) l.push(`      maxLines: ${zona.maxLines},`);
-      if (zona.justify) l.push(`      justify: "${zona.justify}",`);
-      l[l.length - 1] = l[l.length - 1].replace(/,$/, " },");
-      l[l.length - 1] = l[l.length - 1].replace(/,\s*},$/, " },");
-    }
-    return l.join("\n");
-  }, [zona, sel]);
-
   // La misma regla que usa el endpoint de guardar, desde el mismo modulo. Si aqui se aceptara
   // algo que el servidor luego rechaza con un 422, el boton de aplicar pareceria roto sin que
   // hubiera forma de saber cual de los dos se equivoca.
@@ -1019,24 +1243,139 @@ export default function EditorPage() {
     return preview.informe.filter((l) => /\bNO\b|EN BLANCO/.test(l));
   }, [preview]);
 
-  return (
-    <main className="flex flex-col gap-6">
-      <section className={card + " p-5"}>
-        <h2 className={h2}>Editor de plantilla</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
-          se imprime. Haz clic en cualquier zona y arrastra: se selecciona y se mueve de una,
-          como en Word o PowerPoint. Con el boton de{" "}
-          <strong>Aplicar cambios</strong> el cambio vale para imprimir al instante; el bloque de
-          TypeScript de abajo es para llevarlo al codigo.
-        </p>
-      </section>
+  /**
+   * Cambios en pantalla que la impresora todavia no tiene.
+   *
+   * El aviso de Guardado/Cargado (`aplicadoTexto`) solo vale mientras las zonas
+   * son las guardadas. Si es nulo y hay override, o las zonas ya no son las del
+   * codigo, lo que se ve no es lo que se imprime: el ZPL y la prueba lo dicen.
+   */
+  const hayCambiosSinAplicar =
+    aplicadoTexto === null &&
+    (hayOverride || clavesZonas !== JSON.stringify(DEFAULT_TEMPLATE.zones));
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+  /** Lo que describe la pestana ZPL: plantilla, muestra y de donde sale el texto. */
+  const zplCaptions = useMemo(() => {
+    if (!activa) return [];
+    const c = [
+      `Plantilla activa: «${activa.name}» (${
+        activa.kind === "raw" ? "raw: su ZPL tal cual, sin muestra aplicada" : "estructurada 59x35"
+      }).`,
+      `Muestra: «${nombre}» · ${barcode} · ${precio} · REF: RETAIL · negocio «${negocio}» (el de ajustes).`,
+    ];
+    if (guardado && activa.kind !== "raw") {
+      c.push(`Con el override guardado (${guardado.savedAt}) aplicado encima.`);
+    }
+    return c;
+  }, [activa, nombre, barcode, precio, negocio, guardado]);
+
+  const avisoZplSinAplicar =
+    editable && hayCambiosSinAplicar
+      ? "Hay cambios sin aplicar: este ZPL es de lo guardado. Aplica los cambios para actualizarlo."
+      : null;
+
+  const avisoPruebaSinAplicar =
+    editable && hayCambiosSinAplicar
+      ? "Aplica los cambios antes de probar: la prueba imprime lo guardado, no lo que se ve."
+      : null;
+
+  /** Guardar como plantilla no guarda geometria rota: misma regla que Aplicar. */
+  const motivoBloqueoGuardar =
+    solapes.length > 0
+      ? "No se guarda: con estos valores algo se pisa o se sale de la etiqueta (ver avisos del canvas)."
+      : null;
+
+  return (
+    <main className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className={`${displayTitle} text-2xl`}>Editor de plantilla</h1>
+          <p className="mt-1 text-sm text-muted">
+            El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
+            se imprime. Haz clic en cualquier zona y arrastra: se selecciona y se mueve de una,
+            como en Word o PowerPoint. Con el boton de <strong>Aplicar cambios</strong> el cambio
+            vale para imprimir al instante.
+          </p>
+        </div>
+        {activa && (
+          <div className="flex flex-wrap gap-2">
+            <span className={pillClear}>
+              Activa: {activa.name} · {activa.widthMm} × {activa.heightMm} mm
+            </span>
+            {activa.kind === "raw" && <span className={badgeRawClear}>RAW</span>}
+            {activa.archived && <span className={badgeArchivedClear}>Archivada</span>}
+            {hayOverride && editable && (
+              <span className={pillClear}>
+                Override guardado{guardado ? ` · ${guardado.savedAt}` : ""}
+              </span>
+            )}
+          </div>
+        )}
+      </header>
+
+      {!activa && !activaError && (
+        <p className="text-sm text-muted">Leyendo la plantilla activa...</p>
+      )}
+
+      {activaError && (
+        <p role="alert" className="rounded-card border border-error bg-error-soft px-4 py-3 text-sm text-error">
+          {activaError}
+        </p>
+      )}
+
+      {activa && !editable && !activaError && (
+        <>
+          <section className={`${cardClear} p-5`}>
+            <h2 className="text-lg font-semibold text-strong">No editable</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              El editor solo abre la 59x35 estructurada activa
+              {activa.kind === "raw"
+                ? " (esta es raw: ZPL opaco, no hay geometria que editar)"
+                : " (las coordenadas del editor son de ese rollo y no valen en otro)"}
+              . La activa es «{activa.name}»: elegi una estructurada 59x35 en la biblioteca para
+              editar geometria. El ZPL y la prueba de abajo siguen siendo los reales de la activa.
+            </p>
+            <a href="/plantillas" className={`${buttonClearSecondary} mt-3`}>
+              Ir a la biblioteca
+            </a>
+          </section>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <div className={`${cardClear} p-4`}>
+              <h3 className="mb-3 text-sm font-semibold tracking-tight text-strong">
+                ZPL de «{activa.name}»
+              </h3>
+              <ZplTab
+                texto={zpl}
+                cargando={zplCargando}
+                error={zplError}
+                captions={zplCaptions}
+                avisoSinAplicar={null}
+                onActualizar={() => setZplTick((t) => t + 1)}
+              />
+            </div>
+            <PruebaImpresionPanel
+              productos={productos}
+              muestra={muestra}
+              onMuestra={setMuestra}
+              plantillaNombre={activa.name}
+              ocupado={imprimiendo}
+              puede={muestra.trim() !== "" && productos.length > 0}
+              avisoSinAplicar={null}
+              resultado={pruebaOk}
+              error={pruebaError}
+              onImprimir={() => void imprimirPrueba()}
+            />
+          </div>
+        </>
+      )}
+
+      {activa && editable && (
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_1fr]">
         {/* ------------------------------------------------------------- controles */}
         <section className="flex flex-col gap-4">
-          <div className={card + " p-4"}>
-            <h3 className={`mb-2 ${h3}`}>Zonas</h3>
+          <div className={cardClear + " p-4"}>
+            <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Zonas</h3>
             <div className="flex flex-col gap-1">
               {zones.map((z, i) => {
                 const activa = i === sel;
@@ -1049,10 +1388,10 @@ export default function EditorPage() {
                     onClick={() => setSel(i)}
                     className={`rounded px-2 py-1.5 text-left text-sm ${
                       activa
-                        ? "bg-brand text-white"
+                        ? "bg-primary text-white"
                         : editable
-                          ? "bg-surface-sunken text-ink hover:bg-line"
-                          : "bg-surface text-ink-mute"
+                          ? "bg-canvas text-strong hover:bg-edge"
+                          : "bg-panel text-muted"
                     }`}
                   >
                     {etiquetaDe(z, i)}
@@ -1063,8 +1402,8 @@ export default function EditorPage() {
           </div>
 
           {zona && EDITABLES.has(zona.kind) && (
-            <div className={card + " p-4"}>
-              <h3 className={`mb-3 ${h3}`}>
+            <div className={cardClear + " p-4"}>
+              <h3 className="mb-3 text-sm font-semibold tracking-tight text-strong">
                 {etiquetaDe(zona, sel)}
               </h3>
               <div className="grid grid-cols-2 gap-3">
@@ -1104,7 +1443,7 @@ export default function EditorPage() {
                       </div>
                     );
                   })()}
-                  <p className="mt-2 text-xs leading-relaxed text-ink-mute">
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
                     El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
                     aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
                     dots. Al cambiarlo se reescala manteniendo la proporcion, con vecino mas
@@ -1136,7 +1475,7 @@ export default function EditorPage() {
                     value={Number(zona.moduleWidth)}
                     onChange={(v) => editar(sel, { moduleWidth: v })}
                   />
-                  <p className="mt-2 text-xs leading-relaxed text-ink-mute">
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
                     El minimo de ISO/IEC 15420 son 0,264 mm: 3 dots son 0,375 mm y 2 dots son
                     0,250 mm, por debajo. Con 2 hay que leer en fisico antes de dejarlo.
                   </p>
@@ -1160,19 +1499,19 @@ export default function EditorPage() {
                   {zona.autoFit ? (
                     <>
                       {resuelto && resuelto.texto !== null && (
-                        <div className="mt-3 rounded-md border border-ok-line bg-ok-soft px-3 py-2">
-                          <p className="text-xs font-semibold text-ok">
+                        <div className="mt-3 rounded-md border border-success bg-success-soft px-3 py-2">
+                          <p className="text-xs font-semibold text-success">
                             Con este nombre sale asi
                           </p>
-                          <p className="mt-0.5 font-mono text-xs text-ok">
+                          <p className="mt-0.5 font-mono text-xs text-success">
                             {resuelto.texto}
                           </p>
-                          <p className="mt-1 text-xs text-ok">
+                          <p className="mt-1 text-xs text-success">
                             alto {MM(resuelto.alto).toFixed(2)} mm ({resuelto.alto} dots), ancho
                             de letra {MM(resuelto.ancho).toFixed(2)} mm ({resuelto.ancho} dots)
                           </p>
                           {porQueSeBajo && (
-                            <p className="mt-1 text-xs text-ok">{porQueSeBajo}</p>
+                            <p className="mt-1 text-xs text-success">{porQueSeBajo}</p>
                           )}
                         </div>
                       )}
@@ -1233,21 +1572,23 @@ export default function EditorPage() {
           )}
 
           {/* ------------------------------------------------------ datos de prueba */}
-          <div className={card + " p-4"}>
-            <h3 className={`mb-3 ${h3}`}>Datos de prueba</h3>
-            <label className="mb-1 block text-xs text-ink-soft">Nombre</label>
+          <div className={cardClear + " p-4"}>
+            <h3 className="mb-3 text-sm font-semibold tracking-tight text-strong">
+              Datos de prueba
+            </h3>
+            <label className="mb-1 block text-xs text-muted">Nombre</label>
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               className={input}
             />
-            <label className="mb-1 mt-2 block text-xs text-ink-soft">Codigo de barras</label>
+            <label className="mb-1 mt-2 block text-xs text-muted">Codigo de barras</label>
             <input
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               className={input}
             />
-            <label className="mb-1 mt-2 block text-xs text-ink-soft">Precio</label>
+            <label className="mb-1 mt-2 block text-xs text-muted">Precio</label>
             <input
               type="number"
               step="0.01"
@@ -1255,16 +1596,17 @@ export default function EditorPage() {
               onChange={(e) => setPrecio(Number(e.target.value))}
               className={input}
             />
-            <p className="mt-2 text-xs leading-relaxed text-ink-mute">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               Prueba con un nombre corto y con uno de 50 caracteres. El alto de letra sale
-              distinto en cada caso: esa es la gracia del autoFit.
+              distinto en cada caso: esa es la gracia del autoFit. La pestana ZPL usa esta misma
+              muestra.
             </p>
           </div>
 
           {/* ------------------------------------------------------------ aplicar */}
-          <div className={card + " border-2 border-brand-ink/20 p-4"}>
-            <h3 className={`mb-2 ${h3}`}>Aplicar</h3>
-            <p className="mb-3 text-xs leading-relaxed text-ink-soft">
+          <div className={cardClear + " border-2 border-primary p-4"}>
+            <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Aplicar</h3>
+            <p className="mb-3 text-xs leading-relaxed text-muted">
               Guarda estos valores y a partir de ya imprimen. No toca{" "}
               <code>label.template.ts</code>: se guardan en{" "}
               <code>data/plantilla-override.json</code>, que se aplica encima de la plantilla del
@@ -1272,20 +1614,20 @@ export default function EditorPage() {
             </p>
 
             {aplicadoTexto && (
-              <div className="mb-3 rounded-md border border-ok-line bg-ok-soft px-3 py-2">
-                <p className="text-xs font-semibold text-ok">{aplicadoTexto}</p>
+              <div className="mb-3 rounded-md border border-success bg-success-soft px-3 py-2">
+                <p className="text-xs font-semibold text-success">{aplicadoTexto}</p>
                 {guardado && (
-                  <p className="mt-0.5 font-mono text-[11px] text-ok">
+                  <p className="mt-0.5 font-mono text-[11px] text-success">
                     data/plantilla-override.json · {guardado.savedAt}
                   </p>
                 )}
               </div>
             )}
             {rechazo && (
-              <div className="mb-3 rounded-md border border-danger-line bg-danger-soft px-3 py-2">
-                <p className="text-xs font-semibold text-danger">{rechazo}</p>
+              <div className="mb-3 rounded-md border border-error bg-error-soft px-3 py-2">
+                <p className="text-xs font-semibold text-error">{rechazo}</p>
                 {rechazoDetalle.length > 0 && (
-                  <ul className="mt-1 list-disc pl-4 text-[11px] text-danger">
+                  <ul className="mt-1 list-disc pl-4 text-[11px] text-error">
                     {rechazoDetalle.map((d, i) => (
                       <li key={i}>{d}</li>
                     ))}
@@ -1298,7 +1640,7 @@ export default function EditorPage() {
               type="button"
               onClick={aplicar}
               disabled={aplicando}
-              className={`${buttonPrimary} w-full`}
+              className={`${buttonClear} w-full`}
             >
               {aplicando ? "guardando..." : "Aplicar cambios"}
             </button>
@@ -1308,7 +1650,7 @@ export default function EditorPage() {
                 type="button"
                 onClick={descartar}
                 disabled={aplicando}
-                className={`${buttonQuiet} mt-2 w-full`}
+                className={`${buttonClearSecondary} mt-2 w-full`}
               >
                 Descartar y volver al codigo
               </button>
@@ -1322,35 +1664,38 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* ------------------------------------------------------------ salida */}
-          <div className={card + " p-4"}>
-            <h3 className={`mb-2 ${h3}`}>
-              Valor para label.template.ts
-            </h3>
-            <textarea
-              readOnly
-              value={codigo}
-              rows={8}
-              className="w-full rounded-md border border-line bg-surface-sunken p-2 font-mono text-xs"
-            />
-            <button
-              type="button"
-              onClick={() => navigator.clipboard?.writeText(codigo)}
-              className={`${buttonGhost} mt-2 w-full`}
-            >
-              Copiar
-            </button>
-            <p className="mt-2 text-xs leading-relaxed text-ink-mute">
-              Pega esto en el <code>zones</code> de <code>label.template.ts</code>, en el
-              lugar de la zona que estes moviendo.
-            </p>
-          </div>
+          {/* --------------------------------------- biblioteca e impresion real */}
+          <GuardarPlantillaPanel
+            nombre={nombrePlantilla}
+            onNombre={(v) => {
+              setNombrePlantilla(v);
+              setPlantillaCreada(null);
+            }}
+            ocupado={guardandoPlantilla}
+            puede={nombrePlantilla.trim() !== "" && motivoBloqueoGuardar === null}
+            motivoBloqueo={motivoBloqueoGuardar}
+            resultado={plantillaCreada}
+            error={plantillaError}
+            onGuardar={() => void guardarComoPlantilla()}
+          />
+          <PruebaImpresionPanel
+            productos={productos}
+            muestra={muestra}
+            onMuestra={setMuestra}
+            plantillaNombre={activa?.name ?? ""}
+            ocupado={imprimiendo}
+            puede={muestra.trim() !== "" && productos.length > 0}
+            avisoSinAplicar={avisoPruebaSinAplicar}
+            resultado={pruebaOk}
+            error={pruebaError}
+            onImprimir={() => void imprimirPrueba()}
+          />
         </section>
 
         {/* --------------------------------------------------------------- dibujo */}
         <section className="flex flex-col gap-3">
-          <div className={card + " flex items-center gap-4 px-4 py-2"}>
-            <label className="text-xs text-ink-soft">
+          <div className={cardClear + " flex items-center gap-4 px-4 py-2"}>
+            <label className="text-xs text-muted">
               Zoom
               <input
                 type="range"
@@ -1362,7 +1707,7 @@ export default function EditorPage() {
               />
               <span className="ml-1">{zoom}x</span>
             </label>
-            <label className="text-xs text-ink-soft">
+            <label className="text-xs text-muted">
               <input
                 type="checkbox"
                 checked={mostrarCajas}
@@ -1371,22 +1716,22 @@ export default function EditorPage() {
               />
               ver cajas
             </label>
-            <span className="text-xs text-ink-mute">
+            <span className="text-xs text-muted">
               Clic en cualquier zona para seleccionarla y arrastrarla en el mismo gesto; tira de
               los puntos blancos de las esquinas o los bordes para cambiarle el tamano. Flechas =
               mover 1 dot, con Mayus 1 mm; Escape = deshacer. Vale para el logo, los textos y
               las barras. <strong>El marco no</strong>: es el margen del papel y se calcula
               solo desde el ancho de la etiqueta.
             </span>
-            <span className="text-xs text-ink-mute">
+            <span className="text-xs text-muted">
               {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
               {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots
             </span>
-            {busy && <span className="text-xs text-brand">calculando...</span>}
+            {busy && <span className="text-xs text-primary">calculando...</span>}
           </div>
 
           {error && (
-            <p className="rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger">
+            <p className="rounded-card border border-error bg-error-soft px-3 py-2 text-sm text-error">
               {error}
             </p>
           )}
@@ -1407,7 +1752,7 @@ export default function EditorPage() {
           {preview && (
             <div
               ref={lienzoRef}
-              className="relative inline-block touch-none select-none rounded-lg border border-line-strong bg-white p-2 shadow-card"
+              className="relative inline-block touch-none select-none rounded-lg border border-edge bg-white p-2 shadow-card"
               onPointerDown={empezarGesto}
               onPointerMove={moverPuntero}
               onPointerUp={terminarGesto}
@@ -1434,7 +1779,7 @@ export default function EditorPage() {
                     <div
                       key={i}
                       data-caja={i}
-                      className="pointer-events-none absolute border border-dashed border-brand/55"
+                      className="pointer-events-none absolute border border-dashed border-primary/55"
                       style={{
                         left: `${c.x0 * zoom}px`,
                         top: `${c.y0 * zoom}px`,
@@ -1452,7 +1797,7 @@ export default function EditorPage() {
                     <div
                       key={`zona-${i}`}
                       data-zona={i}
-                      className="absolute cursor-move border border-transparent hover:border-brand"
+                      className="absolute cursor-move border border-transparent hover:border-primary"
                       style={{
                         left: `${m.x0 * zoom}px`,
                         top: `${m.y0 * zoom}px`,
@@ -1467,7 +1812,7 @@ export default function EditorPage() {
                 {marcoSel && (
                   <div
                     data-marco
-                    className="absolute cursor-move border-2 border-brand"
+                    className="absolute cursor-move border-2 border-primary"
                     style={{
                       left: `${marcoSel.x0 * zoom}px`,
                       top: `${marcoSel.y0 * zoom}px`,
@@ -1475,7 +1820,7 @@ export default function EditorPage() {
                       height: `${(marcoSel.y1 - marcoSel.y0) * zoom}px`,
                     }}
                   >
-                    <span className="absolute -top-4 left-0 whitespace-nowrap bg-brand px-1 text-[10px] text-white">
+                    <span className="absolute -top-4 left-0 whitespace-nowrap bg-primary px-1 text-[10px] text-white">
                       {zona ? etiquetaDe(zona, sel) : ""} · x{Math.round(marcoSel.x0)}-
                       {Math.round(marcoSel.x1)} y{Math.round(marcoSel.y0)}-{Math.round(marcoSel.y1)}
                       {asasMarco.length > 0 ? " · arrastra o estira" : " · arrastra"}
@@ -1485,7 +1830,7 @@ export default function EditorPage() {
                         key={a}
                         data-asa={a}
                         title={TITULO_ASIDERA[a]}
-                        className={`absolute h-3 w-3 rounded-sm border border-brand bg-white ${
+                        className={`absolute h-3 w-3 rounded-sm border border-primary bg-white ${
                           CURSA_ASIDERA[a]
                         }`}
                         style={{
@@ -1505,8 +1850,8 @@ export default function EditorPage() {
           )}
 
           {preview && (
-            <div className={card + " p-4"}>
-              <h3 className={`mb-2 ${h3}`}>Informe</h3>
+            <div className={cardClear + " p-4"}>
+              <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Informe</h3>
 
               {/* Fallos de dibujado, arriba y en grande.
                   Lo que dice "NO" o "EN BLANCO" es algo que falta: una zona que no se ha
@@ -1514,14 +1859,14 @@ export default function EditorPage() {
                   se leeria como un dato mas entre otros, y justo estos son los que no se
                   pueden perder de vista. */}
               {avisos.length > 0 && (
-                <ul className="mb-3 list-disc space-y-1 rounded-md border border-danger-line bg-danger-soft px-3 py-2 pl-6 text-xs text-danger">
+                <ul className="mb-3 list-disc space-y-1 rounded-md border border-error bg-error-soft px-3 py-2 pl-6 text-xs text-error">
                   {avisos.map((a, i) => (
                     <li key={i}>{a}</li>
                   ))}
                 </ul>
               )}
 
-              <pre className="whitespace-pre-wrap font-mono text-xs text-ink-soft">
+              <pre className={`${monoClear} whitespace-pre-wrap`}>
                 {[
                   `symbologia: ${preview.symbology ?? "-"}`,
                   `datos impresos: ${preview.datosImpresos ?? "-"}`,
@@ -1533,8 +1878,25 @@ export default function EditorPage() {
               </pre>
             </div>
           )}
+
+          <EditorTabs
+            tab={tab}
+            onTab={setTab}
+            zpl={
+              <ZplTab
+                texto={zpl}
+                cargando={zplCargando}
+                error={zplError}
+                captions={zplCaptions}
+                avisoSinAplicar={avisoZplSinAplicar}
+                onActualizar={() => setZplTick((t) => t + 1)}
+              />
+            }
+            origen={<OrigenTab zones={zones} etiquetaDe={etiquetaDe} />}
+          />
         </section>
       </div>
+      )}
     </main>
   );
 }
