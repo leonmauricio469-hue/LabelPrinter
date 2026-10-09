@@ -441,7 +441,7 @@ seccion("La justificacion del ^FB: lo que dice la plantilla, lo que se dibuja");
 
   const precio = zona("price") as TZ;
   const rp = renderLabel(T, datos({ price: 3 }));
-  const cp = rp.cajas.find((c) => c.etiqueta === "texto" && c.texto === "$3.00");
+  const cp = rp.cajas.find((c) => c.etiqueta === "texto" && c.texto === "3.00");
   ok("el precio se dibuja", cp !== undefined);
   if (cp) {
     ok(

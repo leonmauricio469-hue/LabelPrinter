@@ -315,18 +315,21 @@ export const BARCODE_HEIGHT_MM = 8.5;
 export const BARCODE_TEXT_X_MM = 5;
 export const BARCODE_TEXT_Y_MM = 30.5;
 
-// Precio y REF: columna derecha, alineados con la zona media/baja del codigo (21..32 mm) y
-// con el pie en 28,75 mm. Los decimales son exactos a 8 dots/mm: 371 = 46,375 mm, 329 =
-// 41,125 mm. El precio acaba en 459 dots (57,375 mm), 2 dots dentro del interior del marco,
-// y el REF queda a la izquierda del precio, cerca, como salio en la prueba fisica.
+// Precio y REF: columna derecha, con el PIE alineado con la zona INFERIOR del codigo. Las
+// barras van de 21 a 29,5 mm, asi que el pie de los dos cae en 29,5 mm: el precio arranca a
+// 24,5 mm (tope de 5 mm de alto) y el REF a 27 mm (2,5 mm). Antes el pie quedaba en 28,75 mm,
+// 0,75 mm por encima del fondo del codigo. Los decimales son exactos a 8 dots/mm: 371 =
+// 46,375 mm, 329 = 41,125 mm. El precio acaba en 459 dots (57,375 mm), 2 dots dentro del
+// interior del marco, y el REF queda a la izquierda del precio, cerca, como salio en la
+// prueba fisica.
 export const PRICE_X_MM = 46.375;
-export const PRICE_Y_MM = 23.75;
+export const PRICE_Y_MM = 24.5;
 const PRICE_W_MM = 11;
 export const PRICE_MAX_H_MM = 5;
 export const PRICE_MIN_H_MM = 2.25;
 
 export const REFERENCE_X_MM = 41.125;
-export const REFERENCE_Y_MM = 26.25;
+export const REFERENCE_Y_MM = 27;
 const REF_W_MM = 5;
 const REF_H_MM = 2.5;
 
@@ -396,8 +399,8 @@ const LOGO_V1_8_GF = "gf" in LOGO_V1_8 ? LOGO_V1_8.gf : LOGO_GF;
 //   y  30,5..32  "390000099999", los numeros human-readable COMO TEXTO PROPIO, 12 dots
 //                (el bloque entero del codigo acaba en 32 mm, 2 mm por encima del
 //                interior del marco de 34 mm y 3 mm del borde del papel)
-//   y  23,75..28,75  precio, hasta 5 mm de alto, columna derecha (zona media/baja del codigo)
-//   y  26,25..28,75  "REF:", 2,5 mm, al pie del numero (misma linea de base)
+//   y  24,5..29,5  precio, hasta 5 mm de alto, columna derecha (pie sobre el fondo del codigo)
+//   y  27..29,5    "REF:", 2,5 mm, al pie del numero (misma linea de base)
 //   y  34        borde interior
 //
 // El logo y el nombre NO se tocan ni aunque el nombre crezca: el logo acaba en 14 mm y el
@@ -575,13 +578,13 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       maxLines: 1,
       justify: "L",
     },
-    // 6. Precio y referencia, columna DERECHA, alineados con la zona media/baja del codigo.
+    // 6. Precio y referencia, columna DERECHA, con el pie alineado al FONDO del codigo.
     //
     //    "REF:" a 20 dots y el numero a 40, con la PIE de la palabra a la altura de la del
-    //    numero: el precio acaba en 230 y el REF tambien (26,25 + 2,5 = 28,75 mm), que es la
-    //    misma linea de base. Asi se leen como "REF: 3.00" y no como dos textos sueltos, y
-    //    quedan en la zona media/baja del codigo como salio en la prueba fisica (las barras
-    //    van de 19 a 28 mm y esto cubre de 23,75 a 28,75).
+    //    numero: el precio acaba en 236 y el REF tambien (27 + 2,5 = 29,5 mm), que es el
+    //    mismo fondo que el codigo (21 + 8,5 = 29,5 mm). Asi se leen como "REF: 5.00" y no
+    //    como dos textos sueltos, y su pie coincide con el de las barras en vez de quedar
+    //    0,75 mm por encima como antes.
     //
     //    Los dos con `justify: "R"` y acabando en 459 (el margen derecho, con 2 dots de aire
     //    al interior del marco). Un precio de "1234.56" ocupa 7 caracteres y uno de "3.00"
@@ -608,7 +611,7 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       //     ahi la quiet zone derecha (20 dots) deja el sitio libre hasta 250. Con x en 316
       //     la palabra se metia debajo de ellas: `"REF:" pisa a "barras"`, que es
       //     cierto.
-      //   - El 371 (46,375 mm) es porque el precio necesita 85 dots para "$3.00" a 17 de
+      //   - El 371 (46,375 mm) es porque el precio necesita 68 dots para "5.00" a 17 de
       //     celda, y con la caja en 363 el texto se dibujaba desde 374 y las cajas se tocaban.
       maxWidthDots: dotsFromMm(REF_W_MM),
       maxLines: 1,
@@ -617,16 +620,16 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
     {
       kind: "text",
       x: dotsFromMm(PRICE_X_MM),
-      // 23,75 mm: la zona media/baja de las barras (19..28), no arriba como antes. Con el
-      // logo grande, el precio subido a 21 mm quedaba visualmente colgado entre el nombre y el
-      // codigo; en la prueba fisica salio mas abajo, en la zona del codigo.
+      // 24,5 mm: el pie de la columna derecha cae en 29,5 mm, el fondo del codigo (21 + 8,5).
+      // Antes arrancaba a 23,75 y el pie quedaba 0,75 mm por encima de las barras. Con
+      // `autoFit` el bloque solo baja del tope cuando el precio es largo, asi que la
+      // alineacion se cumple a la altura maxima (5 mm), que es el caso normal.
       y: dotsFromMm(PRICE_Y_MM),
       format: "^A0N,40,17",
       source: "price",
-      // El "$" va aqui y no dentro de `LabelData` porque es una decision de la plantilla, no
-      // del producto. La plantilla de 50 x 25 mm tambien lo llevaba y asi sigue en el
-      // mostrador: quitarlo seria un cambio de aspecto que nadie ha pedido.
-      prefix: "$",
+      // SIN "$": el simbolo de moneda no va en la etiqueta. Lo pedia la spec ("no incluir $
+      // si el formato configurado no lo requiere") y se decidio no dejarlo configurable: el
+      // precio sale pelado, "5.00". `LabelData` solo lleva el numero.
       // 88 y no 96: la caja acaba en 459 (57,375 mm), dos dots por dentro del interior del
       // marco (461), y a 363 se solapaba con la de "REF:".
       maxWidthDots: dotsFromMm(PRICE_W_MM),
@@ -703,7 +706,7 @@ export const DEFAULT_TEMPLATE: LabelTemplate = {
       y: dotsFromMm(SIN_PRECIO_Y_MM),
       format: "^A0N,52,22",
       source: "price",
-      prefix: "$",
+      // SIN "$", igual que en la etiqueta con codigo: el precio sale pelado, "5.00".
       maxWidthDots: ANCHO_DOTS - MARGEN_IZQ_DOTS - MARGEN_DER_DOTS,
       maxLines: 1,
       justify: "C",

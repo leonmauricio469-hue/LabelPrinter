@@ -185,7 +185,7 @@ const NOMBRES = [
  */
 const LARGO_POR_FUENTE: Record<string, number> = {
   productName: 0, // se rellena con el nombre que se esta probando
-  price: 8, // "$1234.56", el precio mas largo que se ha visto en el catalogo, con el signo
+  price: 7, // "1234.56", el precio mas largo que se ha visto en el catalogo, sin signo
   reference: 12,
   referenceLabel: 4, // "REF:"
   barcodeData: 13,
