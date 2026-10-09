@@ -7,6 +7,7 @@ import path from "node:path";
 import { stripBom, describeJsonError } from "../data/json-file";
 import { DEFAULT_TEMPLATE, templateById } from "./label.template";
 import type { LabelTemplate, LabelZone } from "./label.template";
+import { getTemplate, toLabelTemplate } from "./templates.store";
 
 /**
  * Geometria de la etiqueta guardada desde `/editor`.
@@ -32,6 +33,7 @@ import type { LabelTemplate, LabelZone } from "./label.template";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const OVERRIDE_FILE = path.join(DATA_DIR, "plantilla-override.json");
+const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
 export interface TemplateOverride {
   /** Para que un override de una plantilla no se aplique a otra si mañana hay una segunda. */
@@ -107,14 +109,37 @@ export async function readOverride(): Promise<TemplateOverride | null> {
  * Plantilla con el override aplicado, si lo hay.
  *
  * A diferencia de `templateById()`, que es sincrona y pura (la usan el cliente y los scripts),
- * esta es asincrona porque toca disco. La usa la ruta de impresion.
+ * esta es asincrona porque toca disco. La usan la ruta de impresion y la de preview.
  *
- * El id se compara con el de la plantilla pedida: un override guardado para
- * `papicar-59x35` no se aplica a otra plantilla, porque las coordenadas de una valen en su
- * rollo y no en el de al lado.
+ * Sin argumentos devuelve la ACTIVA (`settings.json -> label.templateId`, que es lo que la
+ * pantalla de plantillas setea con "Usar"): el comportamiento actual intacto. Con
+ * `templateId` resuelve esa de la biblioteca (primero el store, luego el codigo por
+ * compatibilidad con ids viejos).
+ *
+ * LIMITE F4, A PROPOSITO: el override del editor (`plantilla-override.json`) aplica SOLO a
+ * la 59x35. No se extiende a multi-plantilla: las coordenadas de un rollo no valen en el
+ * de al lado, y aplicar la geometria del editor a otra plantilla seria imprimir corrido
+ * sin avisar. El id se compara con el de la plantilla pedida, como antes.
+ *
+ * Si la pedida es raw, FALLA honestamente: el motor estructurado no cubre ZPL opaco. El
+ * que imprime raw es `POST /api/labels` por su camino propio, verbatim.
  */
-export async function templateForPrint(id: string | undefined | null): Promise<LabelTemplate> {
-  const base = templateById(id);
+export async function templateForPrint(id?: string | null): Promise<LabelTemplate> {
+  const wanted = id ?? (await activeTemplateId());
+  const stored = await getTemplate(wanted);
+  if (stored) {
+    // Raw: `toLabelTemplate()` lanza con el motivo. No se devuelve nada a medias.
+    const base = toLabelTemplate(stored);
+    const o = await readOverride();
+    if (!o || o.templateId !== base.id) return base;
+    return {
+      ...base,
+      zones: o.zones,
+      zonesWithoutBarcode: o.zonesWithoutBarcode ?? base.zonesWithoutBarcode,
+    };
+  }
+
+  const base = templateById(wanted);
   const o = await readOverride();
   if (!o || o.templateId !== base.id) return base;
 
@@ -123,6 +148,25 @@ export async function templateForPrint(id: string | undefined | null): Promise<L
     zones: o.zones,
     zonesWithoutBarcode: o.zonesWithoutBarcode ?? base.zonesWithoutBarcode,
   };
+}
+
+/**
+ * La plantilla activa, sin importar `settings.store`.
+ *
+ * Se lee `settings.json` aqui a mano porque ese store usa el alias `@/*`, que no existe
+ * en `tsconfig.preview.json`: importarlo desde `src/lib/labels/**` romperia `npm run
+ * check`. Solo se lee `label.templateId` con el mismo default que `DEFAULT_SETTINGS`;
+ * el resto de settings lo sigue decidiendo su store.
+ */
+async function activeTemplateId(): Promise<string> {
+  try {
+    const raw = await fs.readFile(SETTINGS_FILE, "utf8");
+    const parsed = JSON.parse(stripBom(raw)) as { label?: { templateId?: unknown } };
+    const tid = parsed.label?.templateId;
+    return typeof tid === "string" && tid !== "" ? tid : DEFAULT_TEMPLATE.id;
+  } catch {
+    return DEFAULT_TEMPLATE.id;
+  }
 }
 
 /** Si hay override, y de que plantilla. Lo usa `/settings` para no callarse un cambio. */

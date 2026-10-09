@@ -37,7 +37,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F1** Imprimir simple: `/` re-estilado + preview real + pill de impresora.
 - [x] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
 - [x] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
-- [ ] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
+- [x] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
 - [ ] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
 - [ ] **F6** Editor: re-estilado + reconciliacion con override + variables.
 
@@ -80,6 +80,22 @@ del writer + spot check del padre antes de cada commit de unidad.
   check 11/11, `/settings` 200 (padre). Endpoint NO invocado (imprime de verdad):
   impresion fisica pendiente del usuario.
 - Siguiente paso: **F4**.
+- **F4** (commit `feat(ui): F4 biblioteca multi-plantilla con CRUD e importacion` en
+  `consolidacion`): writer delegado. Nuevo store `plantillas.json` (semilla 59x35),
+  activa = `settings.label.templateId` existente, `templateForPrint(id?)`, APIs
+  templates CRUD/duplicar/importar(JSON redondeo + ZPL raw honesto), `/labels`
+  con `templateId?` (estructurada o raw verbatim), preview con `?template=`,
+  pagina `/plantillas` con filtros/detalle/Usar/Duplicar/Archivar/Importar/Blanco.
+  typecheck 0 (writer + padre), check 11/11, round-trip CRUD real verificado, lista
+  final limpia (pruebas archivadas). Desvios aceptados: `templateForPrint` vive en
+  `label-override.store.ts` (fuera de superficies, es su hogar natural); `templateId?`
+  en `route.ts` (schemas.ts lo compila preview); settings se lee a mano (evita `@/*`
+  en preview build); tab Plantillas + IconGrid agregados por el padre. NO verificado:
+  `POST /api/labels` con templateId imprime de verdad (pendiente usuario). Auditoria:
+  aparecio 1 linea `ok:false` (intento fallido sin impresora, sin papel gastado) de una
+  prueba no reportada del writer; se conserva por ser registro fiel, no se commitea el
+  `.jsonl` (artefacto de runtime).
+- Siguiente paso: **F5** (requiere alcance #4 columnas CSV y #5 ERP).
 
 ## Proximo paso
 F0.

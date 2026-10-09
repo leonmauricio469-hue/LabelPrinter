@@ -29,6 +29,7 @@ export const NAV_LINKS = [
   { href: "/fast", label: "Rapido", icon: IconBolt },
   { href: "/history", label: "Historial", icon: IconClock },
   { href: "/editor", label: "Editor", icon: IconRuler },
+  { href: "/plantillas", label: "Plantillas", icon: IconGrid },
   { href: "/settings", label: "Ajustes", icon: IconGear },
 ] as const;
 
@@ -126,6 +127,18 @@ function IconGear({ className = "" }: IconProps) {
       strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
       <circle cx="8" cy="8" r="2.3" />
       <path d="M8 1.6v1.5M8 12.9v1.5M14.4 8h-1.5M3.1 8H1.6M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1M12.5 12.5l-1.1-1.1M4.6 4.6 3.5 3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconGrid({ className = "" }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
+      strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
+      <rect x="2" y="2" width="5.2" height="5.2" rx="1.2" />
+      <rect x="8.8" y="2" width="5.2" height="5.2" rx="1.2" />
+      <rect x="2" y="8.8" width="5.2" height="5.2" rx="1.2" />
+      <rect x="8.8" y="8.8" width="5.2" height="5.2" rx="1.2" />
     </svg>
   );
 }

@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { readSettings } from "@/lib/settings/settings.store";
 import { templateForPrint } from "@/lib/labels/label-override.store";
+import { getTemplate } from "@/lib/labels/templates.store";
+import { TEMPLATES } from "@/lib/labels/label.template";
 import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots, problemaDeMedio } from "@/lib/labels/zpl.builder";
 import { dotsFromMm } from "@/lib/labels/label.template";
 import { QUIET_FACTOR } from "@/lib/labels/barcode-plan";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 import { appendPrintRecord, type PrintRecord } from "@/lib/audit/audit.store";
-import { printRequestSchema, type PrintRequestInput } from "@/lib/validation/schemas";
+import { printRequestSchema } from "@/lib/validation/schemas";
 import type { LabelData } from "@/lib/labels/label.types";
 import type { Product } from "@/lib/products/product.types";
+
+/**
+ * `POST /api/labels`: como `printRequestSchema`, mas `templateId` opcional (F4).
+ *
+ * El schema vive aqui y no en `validation/schemas.ts` a proposito: ese archivo lo
+ * compilan los scripts con `tsconfig.preview.json` y no se toca en F4. La extension es
+ * aditiva: sin `templateId` el cuerpo valida igual que antes.
+ */
+const printWithTemplateSchema = printRequestSchema.extend({
+  templateId: z.string().min(1).max(64).optional(),
+});
+
+type PrintWithTemplateInput = z.infer<typeof printWithTemplateSchema>;
 
 /**
  * Ciclo de impresion completo, en el orden que fija [[Convenciones de Codigo]]:
@@ -19,6 +35,12 @@ import type { Product } from "@/lib/products/product.types";
  *
  * El request trae `productCode`, no los datos: el precio sale del catalogo, nunca del
  * cliente, para que no se pueda imprimir una etiqueta con un precio inventado.
+ *
+ * F4: `templateId` opcional. Sin el, comportamiento actual al milimetro (plantilla
+ * activa de settings). Con el, esa plantilla de la biblioteca: si es estructurada, el
+ * flujo es identico al actual con esa plantilla; si es raw, su ZPL se envia verbatim
+ * por el mismo transporte y se audita con el `code` del producto igual (es impresion
+ * real, no test).
  */
 export async function POST(req: Request) {
   let body: unknown;
@@ -28,14 +50,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
 
-  const parsed = printRequestSchema.safeParse(body);
+  const parsed = printWithTemplateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Solicitud invalida", details: parsed.error.flatten() },
       { status: 400 },
     );
   }
-  const input: PrintRequestInput = parsed.data;
+  const input: PrintWithTemplateInput = parsed.data;
 
   const products = getProductRepository();
   let product: Product | null;
@@ -68,7 +90,32 @@ export async function POST(req: Request) {
   // la ruta entera. Ademas aplica encima la geometria que se haya guardado desde `/editor`
   // (`data/plantilla-override.json`), que es como un cambio hecho en pantalla llega a la
   // impresora sin recompilar. Ver `label-override.store.ts`.
-  const template = await templateForPrint(settings.label.templateId);
+  //
+  // F4: con `templateId` explicito no hay caida silenciosa: si no existe ni en la
+  // biblioteca ni en el codigo, es 404. Sin el, la activa de settings, como siempre.
+  const wantedId = input.templateId ?? settings.label.templateId;
+  if (input.templateId) {
+    const existe =
+      (await getTemplate(input.templateId)) ??
+      TEMPLATES.find((t) => t.id === input.templateId);
+    if (!existe) {
+      return NextResponse.json(
+        { error: `La plantilla "${input.templateId}" no existe` },
+        { status: 404 },
+      );
+    }
+  }
+
+  // Camino raw: la plantilla trae su ZPL opaco y se envia verbatim por el mismo
+  // transporte. No hay construccion, ni adaptacion, ni vista previa: lo que hay en el
+  // archivo es lo que sale. Se audita con el `code` del producto igual que una
+  // impresion estructurada, porque papel gastado es historial.
+  const rawTemplate = await getTemplate(wantedId);
+  if (rawTemplate && rawTemplate.kind === "raw" && rawTemplate.zpl) {
+    return await printRaw(settings, product, input, rawTemplate.zpl, rawTemplate.name, rawTemplate.widthMm);
+  }
+
+  const template = await templateForPrint(wantedId);
 
   // El medio tiene que admitir el diseño, y esto se comprueba ANTES de construir el ZPL.
   //
@@ -174,6 +221,71 @@ export async function POST(req: Request) {
       ? { symbology: plan.symbology, data: plan.data, modules: plan.modules }
       : null,
     avisos,
+  });
+}
+
+/**
+ * Imprime una plantilla raw: su ZPL verbatim, una copia por etiqueta pedida.
+ *
+ * Cada copia es el bloque tal cual (los bloques `^XA ... ^XZ` los delimita la Zebra,
+ * igual que en `buildZplBatch()`). La unica comprobacion es la del medio, con el ancho
+ * declarado de la plantilla: un ZPL opaco tambien se recorta en silencio con `^PW`.
+ * Sin `barcode` en la respuesta (no hay plan: no se sabe ni la symbologia) y con un
+ * aviso que lo dice, para que nadie confunda "salio" con "salio adaptada".
+ */
+async function printRaw(
+  settings: Awaited<ReturnType<typeof readSettings>>,
+  product: Product,
+  input: PrintWithTemplateInput,
+  zpl: string,
+  templateName: string,
+  widthMm: number,
+) {
+  const mediaWidthDots = dotsFromMm(settings.printer.mediaWidthMm);
+  if (mediaWidthDots < dotsFromMm(widthMm)) {
+    return NextResponse.json(
+      {
+        error:
+          `No se imprime: el medio cargado mide ${settings.printer.mediaWidthMm} mm y la ` +
+          `plantilla "${templateName}" mide ${widthMm} mm. Con un medio mas estrecho que la ` +
+          `etiqueta, ^PW recorta y no escala: la etiqueta saldria cortada por la derecha, en silencio.`,
+        medio: {
+          mediaWidthMm: settings.printer.mediaWidthMm,
+          disenoWidthMm: widthMm,
+        },
+      },
+      { status: 422 },
+    );
+  }
+
+  const trabajo = Array.from({ length: input.qty }, () => zpl).join("\n");
+  const transport = createPrinterTransport(settings.printer);
+  const result = await transport.send(trabajo);
+
+  const auditBase = {
+    code: product.code,
+    name: product.name,
+    qty: input.qty,
+    mode: input.mode,
+  } as const;
+
+  if (!result.ok) {
+    await safeAudit({ ...auditBase, ok: false, error: result.error });
+    return NextResponse.json({ error: result.error }, { status: 502 });
+  }
+
+  const record = await safeAudit({ ...auditBase, ok: true });
+
+  return NextResponse.json({
+    ok: true,
+    printedAt: record?.ts ?? new Date().toISOString(),
+    jobId: record?.jobId,
+    qty: input.qty,
+    product,
+    barcode: null,
+    avisos: [
+      `La plantilla "${templateName}" es ZPL directo (raw): se envio tal cual, sin adaptacion ni vista previa.`,
+    ],
   });
 }
 

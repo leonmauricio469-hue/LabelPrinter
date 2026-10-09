@@ -149,3 +149,22 @@ export const thClear = "px-3 py-2.5 font-medium";
 
 /** Fila seleccionada en la tabla del historial. */
 export const rowSelectedClear = "bg-primary-soft";
+
+/*
+ * ---- ClearCraft F4: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/** Tarjeta de plantilla: como `cardClear`, con hover para las que se pueden elegir. */
+export const cardTemplateClear = `${cardClear} transition duration-150 hover:shadow-pop`;
+
+/** Tarjeta de la plantilla activa: borde primario, para que se vea de un vistazo. */
+export const cardTemplateActiveClear = `${cardClear} border-2 border-primary`;
+
+/** Badge de plantilla activa. SOLO para la que imprime. */
+export const badgeActiveClear = `${badge} bg-primary-soft text-primary`;
+
+/** Badge de plantilla raw. Aviso honesto, no error: lo raw es valido, solo sin previa. */
+export const badgeRawClear = `${badge} bg-warn-soft text-warn`;
+
+/** Badge de archivada. Tono neutro: archivada no es rota, es guardada. */
+export const badgeArchivedClear = `${badge} bg-canvas text-muted`;

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
 import { templateForPrint } from "@/lib/labels/label-override.store";
+import { getTemplate } from "@/lib/labels/templates.store";
+import { TEMPLATES } from "@/lib/labels/label.template";
 import { barcodeZoneOf, planForZone, problemaDeMedio, quietZoneDots } from "@/lib/labels/zpl.builder";
 import { dotsFromMm } from "@/lib/labels/label.template";
 import { QUIET_FACTOR } from "@/lib/labels/barcode-plan";
@@ -30,11 +32,16 @@ import type { Product } from "@/lib/products/product.types";
  *   imprimir.
  * - 422 cuando el medio cargado es mas estrecho que el diseño, igual que al
  *   imprimir (`^PW` recortaria en silencio).
+ *
+ * F4: `?template=<id>` opcional. Si es estructurada, el PNG es el de esa plantilla (con
+ * el override del editor solo si es la 59x35, igual que al imprimir). Si es raw, 422
+ * honesto: no hay vista previa, se envia tal cual.
  */
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const code = new URL(req.url).searchParams.get("code")?.trim() ?? "";
+  const params = new URL(req.url).searchParams;
+  const code = params.get("code")?.trim() ?? "";
   if (!code) {
     return NextResponse.json({ error: 'Falta el parametro "code"' }, { status: 400 });
   }
@@ -59,7 +66,38 @@ export async function GET(req: Request) {
   }
 
   const settings = await readSettings();
-  const template = await templateForPrint(settings.label.templateId);
+
+  // Con `?template=` explicito no hay caida silenciosa: si no existe ni en la
+  // biblioteca ni en el codigo, es 404. Sin el, la activa de settings, como siempre.
+  const templateParam = params.get("template")?.trim() || undefined;
+  if (templateParam) {
+    const stored = await getTemplate(templateParam);
+    if (stored && stored.kind === "raw") {
+      return NextResponse.json(
+        {
+          error:
+            `La plantilla "${stored.name}" es ZPL directo (raw): no tiene vista previa, ` +
+            `se envia tal cual a la impresora.`,
+        },
+        { status: 422 },
+      );
+    }
+    if (!stored && !TEMPLATES.some((t) => t.id === templateParam)) {
+      return NextResponse.json(
+        { error: `La plantilla "${templateParam}" no existe` },
+        { status: 404 },
+      );
+    }
+  }
+
+  let template: Awaited<ReturnType<typeof templateForPrint>>;
+  try {
+    template = await templateForPrint(templateParam ?? settings.label.templateId);
+  } catch (err) {
+    // El unico fallo honesto de `templateForPrint()`: la pedida es raw. No hay PNG que
+    // enseñar de un ZPL opaco.
+    return NextResponse.json({ error: (err as Error).message }, { status: 422 });
+  }
 
   // La misma comprobacion que antes de gastar papel: con un medio mas estrecho
   // que la etiqueta, `^PW` recorta en silencio y el PNG mentiria mostrando una
