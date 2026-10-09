@@ -54,8 +54,10 @@ import type { QueueStatus } from "@/lib/printing/queue.status.types";
  * - Pill de estado del header: la MISMA composicion honesta de
  *   `PrinterStatusBanner` (`Impresora/Bloqueada: {message}{ · N en cola}`),
  *   sobre el MISMO `GET /api/printer/status` que ya se leia.
- * - Nav Imprimir (esta pagina, sin link) / Editor (`/editor`) / Ajustes
- *   (`/settings`): rutas reales con `Link` (guia Next `dist/docs/.../link.md`).
+ * - Nav Imprimir (esta pagina, sin link) / Editor (`/editor`): rutas reales
+ *   con `Link` (guia Next `dist/docs/.../link.md`). `/settings` no duplica
+ *   tab aqui: se alcanza desde `AppNav`, el boton Configurar del shell, el
+ *   drawer y la URL directa.
  * - COLA: N JOBS: el `JobCount` existente de `GET /api/printers` + cola
  *   configurada de settings. Sin conteo, caption honesto.
  * - Soporte: modal con version REAL del package (`GET /api/editor/preview`,
@@ -727,9 +729,6 @@ export function CentroImpresion({
           </span>
           <Link href="/editor" className={modeTabClear}>
             Editor
-          </Link>
-          <Link href="/settings" className={modeTabClear}>
-            Ajustes
           </Link>
         </nav>
         <span className={`${pillClear} ml-auto font-mono`} title="Trabajos en la cola configurada (GET /api/printers)">
