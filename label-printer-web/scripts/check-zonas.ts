@@ -538,7 +538,7 @@ console.log("El medio tiene que admitir el diseño");
   for (const m of delAutoFit.matchAll(/^\s{10}([a-zA-Z][a-zA-Z0-9]*):/gm)) declarados.add(m[1]);
 
   const conosidos = new Set([
-    "kind", "x", "y", "format", "source", "prefix", "uppercase", "maxWidthDots",
+    "kind", "x", "y", "format", "source", "text", "prefix", "uppercase", "maxWidthDots",
     "maxLines", "justify", "autoFit", "maxHeight", "minHeight", "widthRatio", "maxBlockDots",
   ]);
   for (const campo of declarados) {

@@ -13,7 +13,7 @@
 import { cajaEstimada, desplazarMarco, estirarMarco, type Marco } from "../src/lib/labels/label.marco";
 import { MIN_DOTS } from "../src/lib/labels/label.resize";
 import { LOGO_GF } from "../src/lib/labels/pa-picar-logo";
-import type { BarcodeZone, GraphicZone, TextZone } from "../src/lib/labels/label.template";
+import type { BarcodeZone, GraphicZone, TextZone, TextZoneData } from "../src/lib/labels/label.template";
 
 let pruebas = 0;
 let fallos = 0;
@@ -38,7 +38,7 @@ const caja = (m: Marco | null): string =>
 
 const CTX = { anchoSimbolo: 0 };
 
-const texto = (patch: Partial<TextZone> = {}): TextZone => ({
+const texto = (patch: Partial<TextZoneData> = {}): TextZone => ({
   kind: "text",
   x: 13,
   y: 72,

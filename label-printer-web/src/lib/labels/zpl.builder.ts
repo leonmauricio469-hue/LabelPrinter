@@ -270,15 +270,20 @@ export function resolveZoneText(
 
 function textFor(zone: TextZone, data: LabelData, plan: BarcodePlan): string {
   const raw =
-    zone.source === "header"
-      ? (zone.header ?? data.businessName)
-      : zone.source === "referenceLabel"
-        ? "REF:"
-        : zone.source === "barcodeData"
-          ? (plan.printable ? plan.data : "")
-          : zone.source === "price"
-            ? data.price.toFixed(2)
-            : String(data[zone.source]);
+    zone.source === "fixed"
+      ? // Texto libre del operador (F8a): el literal tal cual. Sin mayusculas forzadas: lo
+        // fijo sale como se escribe; `uppercase` es una decision de legibilidad del catalogo
+        // (el nombre en grande se lee de lejos) y no aplica al literal.
+        zone.text
+      : zone.source === "header"
+        ? (zone.header ?? data.businessName)
+        : zone.source === "referenceLabel"
+          ? "REF:"
+          : zone.source === "barcodeData"
+            ? (plan.printable ? plan.data : "")
+            : zone.source === "price"
+              ? data.price.toFixed(2)
+              : String(data[zone.source]);
 
   // El plegado va aqui y no en la zona: cualquier texto que llegue a `^FD` pasa por aqui,
   // este o no el que la plantilla quiera.
@@ -290,7 +295,12 @@ function textFor(zone: TextZone, data: LabelData, plan: BarcodePlan): string {
   //
   // Y va dentro de `textFor()`, no en `emit()`, para que `resolveAutoFit()` mida exactamente
   // lo que se va a imprimir.
+  //
+  // Lo fijo (`source: "fixed"`) solo se pliega, sin `uppercase` aunque la zona lo traiga:
+  // sale como se escribe. El plegado si vale igual (seguridad ZPL: la GX420t no tiene el
+  // glifo), y `autoFit`, `justify` y `maxWidth` tambien: son del pipeline, no de la fuente.
   const plegado = foldField(raw);
+  if (zone.source === "fixed") return `${zone.prefix ?? ""}${plegado}`;
   return `${zone.prefix ?? ""}${zone.uppercase ? plegado.toUpperCase() : plegado}`;
 }
 

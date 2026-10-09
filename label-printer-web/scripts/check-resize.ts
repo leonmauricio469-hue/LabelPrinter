@@ -12,7 +12,7 @@
 import { redimensionar, ASIDERES, altoDeFuente, anchoDeFuente } from "../src/lib/labels/label.resize";
 import { graphicDots } from "../src/lib/labels/gf-graphic";
 import { LOGO_GF } from "../src/lib/labels/pa-picar-logo";
-import type { BarcodeZone, GraphicZone, LabelZone, ShapeZone, TextZone } from "../src/lib/labels/label.template";
+import type { BarcodeZone, GraphicZone, LabelZone, ShapeZone, TextZone, TextZoneData } from "../src/lib/labels/label.template";
 
 let pruebas = 0;
 let fallos = 0;
@@ -40,7 +40,7 @@ const marco = (patch: Partial<ShapeZone> = {}): ShapeZone => ({
   ...patch,
 });
 
-const texto = (patch: Partial<TextZone> = {}): TextZone => ({
+const texto = (patch: Partial<TextZoneData> = {}): TextZone => ({
   kind: "text",
   x: 64,
   y: 92,

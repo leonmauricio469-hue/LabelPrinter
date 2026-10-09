@@ -26,6 +26,40 @@ import type { LabelZone } from "./label.template";
  *
  * `check-zonas.ts` vigila que el esquema y la plantilla no se separen.
  */
+
+/** Tope del contenido literal de una zona de texto fijo (F8a), en caracteres. */
+export const TEXTO_FIJO_MAX = 60;
+
+/**
+ * `text` solo vale con `source: "fixed"`, y con el es obligatorio.
+ *
+ * Va como refinamiento y no como union discriminada porque `source` es abierto (cualquier
+ * `keyof LabelData` mas las fijas): discriminar obligaria a listar cada fuente y se
+ * quedaria viejo al añadir una. El tipo (`TextZoneFixed`) ya cierra la pareja en
+ * compilacion; esto la cierra en la API, que es por donde entran las zonas del editor.
+ */
+function refinamientoTextoFijo(
+  zona: { source: string; text?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (zona.source === "fixed") {
+    if (zona.text === undefined || zona.text.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "una zona de texto fijo necesita su contenido en text",
+        path: ["text"],
+      });
+    }
+    return;
+  }
+  if (zona.text !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "text solo vale con source fixed",
+      path: ["text"],
+    });
+  }
+}
 export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
   z.discriminatedUnion("kind", [
     z.object({
@@ -34,6 +68,9 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
       y: z.number().int().min(-2000).max(4000),
       format: z.string().min(1).max(64),
       source: z.string().min(1).max(64),
+      // Contenido literal SOLO para source fixed (F8a). Tope 60 caracteres: el texto fijo
+      // viaja literal en el ^FD, y mas no cabe en 59 mm a un alto legible.
+      text: z.string().min(1).max(TEXTO_FIJO_MAX).optional(),
       prefix: z.string().max(16).optional(),
       uppercase: z.boolean().optional(),
       maxWidthDots: z.number().int().min(0).max(8000).optional(),
@@ -47,7 +84,7 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
           maxBlockDots: z.number().int().min(4).max(4000).optional(),
         })
         .optional(),
-    }),
+    }).superRefine(refinamientoTextoFijo),
     z.object({
       kind: z.literal("barcode"),
       x: z.number().int().min(-2000).max(4000),

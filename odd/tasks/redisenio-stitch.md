@@ -40,6 +40,8 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
 - [x] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
 - [x] **F6** Editor: re-estilado + reconciliacion con override + variables.
+- [ ] **F8** Editor vectorial acotado (por objetos, 1 a 1):
+  - [x] **F8a** Texto libre fijo (agregar/borrar/editar contenido en canvas).
 
 ## Aceptacion F0
 - `npm run typecheck` exit 0; `npm run check` 11/11 verdes.
@@ -117,6 +119,16 @@ del writer + spot check del padre antes de cada commit de unidad.
   transporta geometria); ZPL refleja lo guardado (aviso en UI si hay sin aplicar).
 - **REDISENIO COMPLETO F0–F6.** Pendiente del usuario: impresiones fisicas
   (test-print, templateId, start de lote, prueba del editor) y PR hacia `main`.
+- **F8a** (commit `feat(editor): F8a texto libre fijo en canvas` en `consolidacion`):
+  writer delegado. `source:"fixed"` + `text` (1–60) en tipos y schema; builder emite
+  tal cual (ASCII, sin mayusculas); toolbox agrega, propiedades editan contenido,
+  Eliminar solo fixed (core protegidas). typecheck 0 (writer + padre), check 11/11,
+  round-trip real (apply/preview/zpl con la fija, override restaurado). Hallazgo fino:
+  cada zona de texto debe emitir su `^FB` propio (hereda el anterior en la impresora).
+  Desvios aceptados: 3 scripts de check adaptados (paridad de schema + union de tipos).
+  Limpieza: `plantillas.json` volvio a seed (test F4 desarchivado por mano desconocida,
+  copia en temp; confirmar que no fue el usuario).
+- Siguiente paso: **F8b** (a definir: lineas/rectangulos u otro objeto).
 
 ## Proximo paso
 F0.

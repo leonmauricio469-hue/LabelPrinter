@@ -44,6 +44,8 @@ const FUENTE_TEXTO: Record<string, string> = {
     "Digitos reales del simbolo: los que se imprimen (con el 0 delante de los UPC-A y el digito corregido). Varia por producto.",
   referenceLabel: "Texto fijo «REF:». No varia por producto.",
   header: "Cabecera fija o nombre del negocio. No varia por producto.",
+  fixed:
+    "Texto libre escrito por el operador. No varia por producto: sale tal cual (plegado a ASCII, sin mayusculas forzadas).",
 };
 
 export function OrigenTab({

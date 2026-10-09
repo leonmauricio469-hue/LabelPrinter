@@ -156,6 +156,7 @@ const TITULOS: Record<string, string> = {
   referenceLabel: "REF:",
   reference: "referencia",
   barcode: "codigo de barras",
+  fixed: "texto libre",
 };
 
 /** Los identificadores de las zonas fijas, para que la lista no diga "zona 0". */
@@ -746,6 +747,49 @@ export default function EditorPage() {
 
   function editarFuenteAncho(i: number, mm: number) {
     setZones((prev) => prev.map((z, j) => (j === i ? conAnchoDeFuente(z, mm) : z)));
+  }
+
+  /**
+   * Agrega una zona de texto fijo (F8a): contenido literal del operador, como "OFERTA".
+   *
+   * Posicion por defecto arriba a la izquierda (x 13, y 40 dots): al lado del logo, que
+   * empieza en x 128, y por encima del nombre, que empieza en y 120. Tamano como el nombre
+   * (`^A0N,48,20`, 6 mm de letra): se lee de lejos igual que el. La caja (`maxWidthDots`
+   * 112) llega del borde interior (13) al logo (128) con 3 dots de aire, y `maxLines: 2`
+   * como el nombre: si el texto no cabe en una linea se parte en dos, y si ni asi cabe o
+   * pisa algo, Aplicar lo rechaza con 422 honesto.
+   *
+   * La caja propia es obligada y no un adorno: sin `^FB` la zona heredaria el `^FB` de la
+   * zona anterior (`^FB` no caduca con el campo, en la impresora tampoco) y el texto
+   * saldria partido y alineado como otro. Todas las zonas de texto de la plantilla traen
+   * la suya; la fija tambien.
+   */
+  function agregarTextoLibre() {
+    const nueva: AnyZone = {
+      kind: "text",
+      x: 13,
+      y: 40,
+      format: "^A0N,48,20",
+      source: "fixed",
+      text: "TEXTO",
+      maxWidthDots: 112,
+      maxLines: 2,
+      justify: "L",
+    };
+    setZones((prev) => [...prev, nueva]);
+    setSel(zones.length);
+  }
+
+  /**
+   * Borra la zona seleccionada. Solo las fijas (F8a) se pueden borrar: las 7 de serie son
+   * la estructura de la etiqueta (marco, logo, nombre, barras, digitos, REF y precio) y sin
+   * ellas no hay etiqueta que imprimir. El boton solo se pinta para las fijas, asi que esto
+   * no necesita comprobar nada mas.
+   */
+  function eliminarZonaFija(i: number) {
+    const resto = zones.filter((_, j) => j !== i);
+    setZones(resto);
+    setSel(primeraEditable(resto));
   }
 
   /**
@@ -1376,7 +1420,19 @@ export default function EditorPage() {
         <section className="flex flex-col gap-4">
           <div className={cardClear + " p-4"}>
             <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Zonas</h3>
-            <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={agregarTextoLibre}
+              className={`${buttonClearSecondary} w-full`}
+            >
+              Texto libre
+            </button>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted">
+              Agrega un texto fijo (&quot;TEXTO&quot;) arriba a la izquierda: sale tal cual se
+              escribe y no varia por producto. Arrastralo donde haga falta; solo los textos
+              libres se pueden borrar.
+            </p>
+            <div className="mt-2 flex flex-col gap-1">
               {zones.map((z, i) => {
                 const activa = i === sel;
                 const editable = EDITABLES.has(z.kind);
@@ -1482,6 +1538,40 @@ export default function EditorPage() {
                 </>
               ) : zona.kind === "text" ? (
                 <>
+                  {zona.source === "fixed" && (
+                    <>
+                      <div className="mt-3">
+                        <label
+                          htmlFor="editor-texto-fijo"
+                          className="mb-1 block text-xs text-muted"
+                        >
+                          Contenido
+                        </label>
+                        <input
+                          id="editor-texto-fijo"
+                          value={String(zona.text ?? "")}
+                          maxLength={60}
+                          onChange={(e) => editar(sel, { text: e.target.value })}
+                          className={input}
+                        />
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                          Texto fijo: sale tal cual (plegado a ASCII, sin mayusculas forzadas).
+                          Maximo 60 caracteres.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => eliminarZonaFija(sel)}
+                        className={`${buttonClearSecondary} mt-3 w-full`}
+                      >
+                        Eliminar esta zona
+                      </button>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                        Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y
+                        precio) no se pueden borrar: son la estructura de la etiqueta.
+                      </p>
+                    </>
+                  )}
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Num
                       label="alto letra (mm)"

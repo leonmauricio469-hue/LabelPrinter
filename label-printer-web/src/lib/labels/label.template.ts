@@ -8,26 +8,11 @@ export function dotsFromMm(mm: number): number {
   return Math.round(mm * MM_TO_DOTS);
 }
 
-export interface TextZone {
+export interface TextZoneBase {
   kind: "text";
   x: number;
   y: number;
   format: string;
-  /**
-   * De donde sale el texto.
-   *
-   * `keyof LabelData` son los campos del producto. Los otros tres los resuelve `buildZpl()`:
-   *
-   *   "header"        -> `zone.header` o el nombre del negocio
-   *   "referenceLabel"-> la palabra "REF:" fija, sin el valor
-   *   "barcodeData"   -> los datos REALES del simbolo, desde `plan.data`
-   *
-   * "barcodeData" existe porque `data.barcode` no siempre es lo que se imprime: a un UPC-A de
-   * 12 digitos se le antepone un 0, y a los 6 productos con el digito de control malo se les
-   * corrige. Si una zona de texto sacara el numero del producto y no del plan, el codigo de
-   * barras y el numero de debajo dirian cosas distintas.
-   */
-  source: keyof LabelData | "header" | "referenceLabel" | "barcodeData";
   header?: string;
   prefix?: string;
   /**
@@ -46,6 +31,8 @@ export interface TextZone {
    *
    * No cambia la longitud, asi que no altera el `autoFit`: solo cambia los glifos, que en la
    * fuente de la impresora ocupan lo mismo en mayuscula que en minuscula.
+   *
+   * No vale para `source: "fixed"`: lo fijo sale como se escribe (`textFor()` lo salta).
    */
   uppercase?: boolean;
   /** ancho maximo en dots; activa ^FB para ajustar el texto en varias lineas */
@@ -97,6 +84,51 @@ export interface TextZone {
     maxBlockDots?: number;
   };
 }
+
+/**
+ * De donde sale el texto.
+ *
+ * `keyof LabelData` son los campos del producto. Los otros los resuelve `buildZpl()`:
+ *
+ *   "header"        -> `zone.header` o el nombre del negocio
+ *   "referenceLabel"-> la palabra "REF:" fija, sin el valor
+ *   "barcodeData"   -> los datos REALES del simbolo, desde `plan.data`
+ *   "fixed"         -> el literal de `zone.text`, escrito por el operador (F8a)
+ *
+ * "barcodeData" existe porque `data.barcode` no siempre es lo que se imprime: a un UPC-A de
+ * 12 digitos se le antepone un 0, y a los 6 productos con el digito de control malo se les
+ * corrige. Si una zona de texto sacara el numero del producto y no del plan, el codigo de
+ * barras y el numero de debajo dirian cosas distintas.
+ *
+ * "fixed" es el primer objeto vectorial del editor (F8a): contenido literal del operador,
+ * como "OFERTA". No varia por producto y sale tal cual se escribe (plegado a ASCII por
+ * seguridad ZPL, sin mayusculas forzadas). Solo vale con `text`, y `text` solo vale con el.
+ */
+export interface TextZoneData extends TextZoneBase {
+  source: keyof LabelData | "header" | "referenceLabel" | "barcodeData";
+  /** Sin contenido propio: el texto sale del producto o de la plantilla, nunca de `text`. */
+  text?: never;
+}
+
+export interface TextZoneFixed extends TextZoneBase {
+  source: "fixed";
+  /**
+   * Contenido literal del operador, como "OFERTA". Tope 60 caracteres (lo impone el esquema):
+   * el texto fijo viaja literal en el `^FD`, y mas de 60 no cabe en una etiqueta de 59 mm a
+   * un alto legible; lo mas largo que eso es dato de producto, no literal.
+   */
+  text: string;
+}
+
+/**
+ * Zona de texto: o saca el texto del producto/plantilla, o trae su propio literal.
+ *
+ * Es union y no un `text?` suelto a proposito: si `text` valiera con cualquier `source`, un
+ * `text` olvidado en una zona de precio conviviria con el precio sin que nada dijera cual
+ * manda (`textFor()` tendria dos verdades). Asi el tipo ya dice que el literal solo existe
+ * con `source: "fixed"`.
+ */
+export type TextZone = TextZoneData | TextZoneFixed;
 
 export type BarcodeSymbology = "ean13" | "code128";
 
