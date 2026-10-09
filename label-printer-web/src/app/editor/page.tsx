@@ -2059,12 +2059,12 @@ export default function EditorPage() {
                     ? "bg-canvas text-strong"
                     : "bg-canvas text-muted";
               return (
-                <li key={i}>
+                <li key={i} className="flex items-stretch">
                   <button
                     type="button"
                     disabled={!EDITABLES.has(z.kind)}
                     onClick={() => setSel(i)}
-                    className={esSel ? layerActiveClear : layerRowClear}
+                    className={`${esSel ? layerActiveClear : layerRowClear} min-w-0 flex-1`}
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-strong">
@@ -2078,6 +2078,20 @@ export default function EditorPage() {
                       {esSel ? "ACTIVO" : rol}
                     </span>
                   </button>
+                  {/* Borrar capa (solo libres): mismo handler del panel, sin
+                      confirmacion extra — el undo lo deshace. Las de serie no
+                      muestran el boton: son estructura. */}
+                  {esBorrable(z, i) && (
+                    <button
+                      type="button"
+                      onClick={() => eliminarZonaLibre(i)}
+                      title={`Eliminar capa ${etiquetaDe(z, i)}`}
+                      aria-label={`Eliminar capa ${etiquetaDe(z, i)}`}
+                      className="shrink-0 px-2 text-base font-bold leading-none text-muted hover:bg-error-soft hover:text-error"
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               );
             })}

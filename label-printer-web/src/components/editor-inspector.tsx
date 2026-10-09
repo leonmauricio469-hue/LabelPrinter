@@ -116,11 +116,6 @@ export function ZplTab({
   avisoSinAplicar: string | null;
   onActualizar: () => void;
 }) {
-  const [copiado, setCopiado] = useState(false);
-  useEffect(() => {
-    setCopiado(false);
-  }, [texto]);
-
   return (
     <div>
       {captions.map((c, i) => (
@@ -139,26 +134,15 @@ export function ZplTab({
           {error}
         </p>
       )}
+      {/* El volcado ZPL crudo no se muestra: ruido para el operador. Quedan los
+          captions (contexto real) y Actualizar. El texto sigue disponible via
+          GET /api/editor/zpl para soporte. */}
       {texto !== null && !error && (
-        <>
-          <pre className={`${monoClear} mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all`}>
-            {texto}
-          </pre>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(texto).then(() => setCopiado(true));
-              }}
-              className={buttonClearSecondary}
-            >
-              {copiado ? "Copiado." : "Copiar"}
-            </button>
-            <button type="button" onClick={onActualizar} className={buttonClearSecondary}>
-              Actualizar
-            </button>
-          </div>
-        </>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={onActualizar} className={buttonClearSecondary}>
+            Actualizar
+          </button>
+        </div>
       )}
     </div>
   );
