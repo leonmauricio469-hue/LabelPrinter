@@ -21,14 +21,13 @@ import { usePathname } from "next/navigation";
  * `LINKS` sigue siendo `as const` porque `href` es literal: si un dia alguien pone una
  * plantilla, Next y el tipado lo veran aqui.
  *
- * F13: nav a 3 tabs (Imprimir `/`, Editor `/editor`, Ajustes `/settings`).
+ * F13: nav a 2 tabs (Imprimir `/`, Editor `/editor`). Ajustes vive solo en Configurar (`/settings`).
  * Buscar/Rapido/Historial/Plantillas/Lotes viven como tabs internos de `/`
  * (`?tab=`); `/teclado` sigue fuera del nav, como herramienta de diagnostico.
  */
 export const NAV_LINKS = [
   { href: "/", label: "Imprimir", icon: IconScan, primary: true },
   { href: "/editor", label: "Editor", icon: IconRuler },
-  { href: "/settings", label: "Ajustes", icon: IconGear },
 ] as const;
 
 export function AppNav() {

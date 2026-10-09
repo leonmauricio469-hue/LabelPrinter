@@ -51,7 +51,14 @@ Operador de mostrador con escáner en mano necesita sugerencias mientras tipea s
   - T2: borrado solo el `Link href="/settings"` de la nav de ventanas + comentario `:57-58` actualizado; `/settings` sigue en `app-nav.tsx:31` y `app-shell.tsx:92`. Commit `e7c9c64`.
   - Excepción TDD: `package.json` sin script `test` y sin config vitest/jest/playwright runnable (playwright solo aparece como dependencia transitiva en `package-lock.json`); no se creó `product-search.test.tsx`.
   - T3: doc actualizado. Commit `68f929a`.
-  - T3-parent: assess + spot check + cierre. Commit pendiente (este edit).
+  - T3-parent: assess + spot check + cierre. Commit `1f75379`.
+- 2026-10-09: T4 quitar Ajustes global (barra ambiente). Explorer confirma Configurar (`app-shell.tsx:91-96`) siempre visible y drawer reuse NAV_LINKS. Cambio: `app-nav.tsx:28-32` saca línea `/settings`, comentario F13 a 2 tabs. `/settings` sigue vía Configurar + URL directa + refs. Typecheck exit 0.
+
+## Tasks (cont.)
+- [x] **T4** Quitar Ajustes de barra ambiente — `app-nav.tsx` sin `/settings`, tabs+drawer heredan, Configurar queda como único acceso visible.
+  - Route: direct inline (1 file mecánico, sin research pendiente).
+  - Acceptance: tabs muestran solo Imprimir/Editor; `/settings` abre por Configurar y directo.
+  - Checks: typecheck exit 0 + grep sin Link /settings en nav + status limpio salvo este cambio.
 
 ## Verification evidence
 - Writer: `npm --prefix label-printer-web run typecheck`: exit 0, sin errores (post T1+T2).
