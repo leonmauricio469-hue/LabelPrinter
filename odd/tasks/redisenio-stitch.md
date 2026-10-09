@@ -38,7 +38,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
 - [x] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
 - [x] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
-- [ ] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
+- [x] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
 - [ ] **F6** Editor: re-estilado + reconciliacion con override + variables.
 
 ## Aceptacion F0
@@ -96,6 +96,16 @@ del writer + spot check del padre antes de cada commit de unidad.
   prueba no reportada del writer; se conserva por ser registro fiel, no se commitea el
   `.jsonl` (artefacto de runtime).
 - Siguiente paso: **F5** (requiere alcance #4 columnas CSV y #5 ERP).
+- **F5** (commit `feat(ui): F5 lotes con CSV, mapeo y ejecucion con progreso` en
+  `consolidacion`): writer delegado. Store `lotes.json` + parser CSV (coma/punto-coma,
+  comillas, resolucion por fila con el lookup real), APIs import/CRUD/control
+  (start/pause/resume/cancel/retry, 409 si otro activo, reconcilia huerfanos),
+  pagina `/lotes` en 3 pasos (subir → mapear → crear) + detalle con progreso y
+  reintento de fallidos. typecheck 0 (writer + padre), check 11/11, round-trip sin
+  imprimir verificado (import/crear/cancelar, store restaurado, historial intacto).
+  Tab Lotes + IconStack agregados por el padre. NO verificado: start/pause/resume
+  ejecutan de verdad (pendiente usuario). Sin Priorizar (documentado: otro producto).
+- Siguiente paso: **F6**.
 
 ## Proximo paso
 F0.

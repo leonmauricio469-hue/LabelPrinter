@@ -168,3 +168,25 @@ export const badgeRawClear = `${badge} bg-warn-soft text-warn`;
 
 /** Badge de archivada. Tono neutro: archivada no es rota, es guardada. */
 export const badgeArchivedClear = `${badge} bg-canvas text-muted`;
+
+/*
+ * ---- ClearCraft F5: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/** Badge de lote en espera: neutro, todavia no toco la impresora. */
+export const badgeLoteEsperaClear = `${badge} bg-canvas text-muted`;
+
+/** Badge de lote en curso: primario, esta imprimiendo ahora. */
+export const badgeLoteCursoClear = `${badge} bg-primary-soft text-primary`;
+
+/** Badge de lote pausado: aviso, frenado entre etiquetas, retomable. */
+export const badgeLotePausaClear = `${badge} bg-warn-soft text-warn`;
+
+/** Badge de lote finalizado: exito, la cola se agoto. SOLO para ese estado. */
+export const badgeLoteFinClear = `${badge} bg-success-soft text-success`;
+
+/** Badge de lote cancelado: el operador lo aborto. */
+export const badgeLoteCancClear = `${badge} bg-error-soft text-error`;
+
+/** Badge de fila pendiente: neutra, todavia no se intento. */
+export const badgeLotePendClear = `${badge} bg-canvas text-muted`;

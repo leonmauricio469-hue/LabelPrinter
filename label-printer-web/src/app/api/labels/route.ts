@@ -28,19 +28,49 @@ const printWithTemplateSchema = printRequestSchema.extend({
 type PrintWithTemplateInput = z.infer<typeof printWithTemplateSchema>;
 
 /**
- * Ciclo de impresion completo, en el orden que fija [[Convenciones de Codigo]]:
+ * Entrada del ciclo de impresion, ya validada. Es lo que `POST /api/labels` saca del
+ * cuerpo con zod, y lo que la ruta de control de lotes (F5) arma desde cada fila.
+ */
+export interface ImpresionInput {
+  productCode: string;
+  qty: number;
+  mode: "normal" | "fast";
+  templateId?: string;
+}
+
+/**
+ * Lo que devuelve el ciclo: o la impresion salio (con lo mismo que la ruta
+ * responde en el 200), o no salio (con el estado HTTP que la ruta responderia).
  *
- *   validar (zod) -> buscar producto (repository) -> generar ZPL (builder)
- *   -> enviar (transport) -> registrar (audit) -> responder
+ * Existe para F5: los lotes imprimen por este MISMO ciclo —validar, buscar,
+ * plantilla, transporte, auditoria— y no por una copia. `POST /api/labels` es un
+ * envoltorio delgado sobre esto: valida el cuerpo y traduce el resultado a
+ * `NextResponse`, sin logica propia.
+ */
+export type ResultadoImpresion =
+  | {
+      ok: true;
+      printedAt: string;
+      jobId?: string;
+      qty: number;
+      product: Product;
+      barcode: { symbology: string; data: string; modules: number } | null;
+      avisos: string[];
+    }
+  | {
+      ok: false;
+      /** El estado que `POST /api/labels` responderia por este fallo. */
+      status: 404 | 422 | 500 | 502;
+      error: string;
+      medio?: { mediaWidthMm: number; disenoWidthMm: number };
+    };
+
+/**
+ * `POST /api/labels`: valida el cuerpo con zod y lo pasa por `ejecutarImpresion()`.
  *
- * El request trae `productCode`, no los datos: el precio sale del catalogo, nunca del
- * cliente, para que no se pueda imprimir una etiqueta con un precio inventado.
- *
- * F4: `templateId` opcional. Sin el, comportamiento actual al milimetro (plantilla
- * activa de settings). Con el, esa plantilla de la biblioteca: si es estructurada, el
- * flujo es identico al actual con esa plantilla; si es raw, su ZPL se envia verbatim
- * por el mismo transporte y se audita con el `code` del producto igual (es impresion
- * real, no test).
+ * La respuesta es la de siempre: 200 con lo impreso, o 400 (cuerpo invalido), 404
+ * (producto o plantilla), 422 (medio), 500 (fallo interno o catalogo corrupto), 502
+ * (la impresora no respondio). Ver `ejecutarImpresion()` para el ciclo.
  */
 export async function POST(req: Request) {
   let body: unknown;
@@ -59,6 +89,40 @@ export async function POST(req: Request) {
   }
   const input: PrintWithTemplateInput = parsed.data;
 
+  const resultado = await ejecutarImpresion(input);
+  if (!resultado.ok) {
+    return NextResponse.json(
+      resultado.medio ? { error: resultado.error, medio: resultado.medio } : { error: resultado.error },
+      { status: resultado.status },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    printedAt: resultado.printedAt,
+    jobId: resultado.jobId,
+    qty: resultado.qty,
+    product: resultado.product,
+    barcode: resultado.barcode,
+    avisos: resultado.avisos,
+  });
+}
+
+/**
+ * El ciclo de impresion completo, en el orden que fija [[Convenciones de Codigo]]:
+ * validar (zod, ya hecho por quien llama) -> buscar producto (repository) ->
+ * generar ZPL (builder) -> enviar (transport) -> registrar (audit) -> responder.
+ *
+ * El request trae `productCode`, no los datos: el precio sale del catalogo, nunca del
+ * cliente, para que no se pueda imprimir una etiqueta con un precio inventado.
+ *
+ * F4: `templateId` opcional. Sin el, comportamiento actual al milimetro (plantilla
+ * activa de settings). Con el, esa plantilla de la biblioteca: si es estructurada, el
+ * flujo es identico al actual con esa plantilla; si es raw, su ZPL se envia verbatim
+ * por el mismo transporte y se audita con el `code` del producto igual (es impresion
+ * real, no test).
+ */
+export async function ejecutarImpresion(input: ImpresionInput): Promise<ResultadoImpresion> {
   const products = getProductRepository();
   let product: Product | null;
   try {
@@ -69,14 +133,15 @@ export async function POST(req: Request) {
   } catch (err) {
     // Un catalog.json corrupto es un 500 con el motivo, no un "producto no encontrado":
     // son dos fallos distintos y el operador debe poder distinguirlos.
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return { ok: false, status: 500, error: (err as Error).message };
   }
 
   if (!product) {
-    return NextResponse.json(
-      { error: `Codigo "${input.productCode}" no esta en el catalogo` },
-      { status: 404 },
-    );
+    return {
+      ok: false,
+      status: 404,
+      error: `Codigo "${input.productCode}" no esta en el catalogo`,
+    };
   }
 
   const settings = await readSettings();
@@ -99,10 +164,11 @@ export async function POST(req: Request) {
       (await getTemplate(input.templateId)) ??
       TEMPLATES.find((t) => t.id === input.templateId);
     if (!existe) {
-      return NextResponse.json(
-        { error: `La plantilla "${input.templateId}" no existe` },
-        { status: 404 },
-      );
+      return {
+        ok: false,
+        status: 404,
+        error: `La plantilla "${input.templateId}" no existe`,
+      };
     }
   }
 
@@ -130,16 +196,15 @@ export async function POST(req: Request) {
   const mediaWidthDots = dotsFromMm(settings.printer.mediaWidthMm);
   const problemaMedio = problemaDeMedio(template, mediaWidthDots);
   if (problemaMedio) {
-    return NextResponse.json(
-      {
-        error: `No se imprime: ${problemaMedio}`,
-        medio: {
-          mediaWidthMm: settings.printer.mediaWidthMm,
-          disenoWidthMm: template.widthMm,
-        },
+    return {
+      ok: false,
+      status: 422,
+      error: `No se imprime: ${problemaMedio}`,
+      medio: {
+        mediaWidthMm: settings.printer.mediaWidthMm,
+        disenoWidthMm: template.widthMm,
       },
-      { status: 422 },
-    );
+    };
   }
 
   const data: LabelData = {
@@ -176,15 +241,14 @@ export async function POST(req: Request) {
     const quiet = quietZoneDots(template, barcodeZone, plan);
     const minQuiet = QUIET_FACTOR * barcodeZone.moduleWidth;
     if (quiet < minQuiet) {
-      return NextResponse.json(
-        {
-          error:
-            `Fallo interno: el plan dijo que "${plan.data}" cabe, pero la zona quieta ` +
-            `queda en ${quiet} dots y la norma pide ${minQuiet}. La plantilla y ` +
-            `\`planBarcode()\` han dejado de estar de acuerdo.`,
-        },
-        { status: 500 },
-      );
+      return {
+        ok: false,
+        status: 500,
+        error:
+          `Fallo interno: el plan dijo que "${plan.data}" cabe, pero la zona quieta ` +
+          `queda en ${quiet} dots y la norma pide ${minQuiet}. La plantilla y ` +
+          `\`planBarcode()\` han dejado de estar de acuerdo.`,
+      };
     }
   }
 
@@ -203,7 +267,9 @@ export async function POST(req: Request) {
     // Un fallo de impresion tambien se registra: sin esto, el historial solo diria
     // "imprimio bien" y noaria falta de las veces que la impresora no respondio.
     await safeAudit({ ...auditBase, ok: false, error: result.error });
-    return NextResponse.json({ error: result.error }, { status: 502 });
+    // El `??` es defensa contra un transporte que devuelva `ok: false` sin motivo:
+    // los dos transportes reales siempre traen mensaje, asi que no cambia nada.
+    return { ok: false, status: 502, error: result.error ?? "la impresora no respondio" };
   }
 
   // El papel ya salio. Si el registro del historial falla (disco lleno, permisos) la
@@ -211,7 +277,7 @@ export async function POST(req: Request) {
   // error al operador que ya tiene la etiqueta en la mano.
   const record = await safeAudit({ ...auditBase, ok: true });
 
-  return NextResponse.json({
+  return {
     ok: true,
     printedAt: record?.ts ?? new Date().toISOString(),
     jobId: record?.jobId,
@@ -221,7 +287,7 @@ export async function POST(req: Request) {
       ? { symbology: plan.symbology, data: plan.data, modules: plan.modules }
       : null,
     avisos,
-  });
+  };
 }
 
 /**
@@ -236,26 +302,25 @@ export async function POST(req: Request) {
 async function printRaw(
   settings: Awaited<ReturnType<typeof readSettings>>,
   product: Product,
-  input: PrintWithTemplateInput,
+  input: ImpresionInput,
   zpl: string,
   templateName: string,
   widthMm: number,
-) {
+): Promise<ResultadoImpresion> {
   const mediaWidthDots = dotsFromMm(settings.printer.mediaWidthMm);
   if (mediaWidthDots < dotsFromMm(widthMm)) {
-    return NextResponse.json(
-      {
-        error:
-          `No se imprime: el medio cargado mide ${settings.printer.mediaWidthMm} mm y la ` +
-          `plantilla "${templateName}" mide ${widthMm} mm. Con un medio mas estrecho que la ` +
-          `etiqueta, ^PW recorta y no escala: la etiqueta saldria cortada por la derecha, en silencio.`,
-        medio: {
-          mediaWidthMm: settings.printer.mediaWidthMm,
-          disenoWidthMm: widthMm,
-        },
+    return {
+      ok: false,
+      status: 422,
+      error:
+        `No se imprime: el medio cargado mide ${settings.printer.mediaWidthMm} mm y la ` +
+        `plantilla "${templateName}" mide ${widthMm} mm. Con un medio mas estrecho que la ` +
+        `etiqueta, ^PW recorta y no escala: la etiqueta saldria cortada por la derecha, en silencio.`,
+      medio: {
+        mediaWidthMm: settings.printer.mediaWidthMm,
+        disenoWidthMm: widthMm,
       },
-      { status: 422 },
-    );
+    };
   }
 
   const trabajo = Array.from({ length: input.qty }, () => zpl).join("\n");
@@ -271,12 +336,12 @@ async function printRaw(
 
   if (!result.ok) {
     await safeAudit({ ...auditBase, ok: false, error: result.error });
-    return NextResponse.json({ error: result.error }, { status: 502 });
+    return { ok: false, status: 502, error: result.error ?? "la impresora no respondio" };
   }
 
   const record = await safeAudit({ ...auditBase, ok: true });
 
-  return NextResponse.json({
+  return {
     ok: true,
     printedAt: record?.ts ?? new Date().toISOString(),
     jobId: record?.jobId,
@@ -286,7 +351,7 @@ async function printRaw(
     avisos: [
       `La plantilla "${templateName}" es ZPL directo (raw): se envio tal cual, sin adaptacion ni vista previa.`,
     ],
-  });
+  };
 }
 
 /** Registra la impresion sin propagar el fallo: el papel ya salio, el historial es un extra. */

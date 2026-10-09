@@ -30,6 +30,7 @@ export const NAV_LINKS = [
   { href: "/history", label: "Historial", icon: IconClock },
   { href: "/editor", label: "Editor", icon: IconRuler },
   { href: "/plantillas", label: "Plantillas", icon: IconGrid },
+  { href: "/lotes", label: "Lotes", icon: IconStack },
   { href: "/settings", label: "Ajustes", icon: IconGear },
 ] as const;
 
@@ -139,6 +140,17 @@ function IconGrid({ className = "" }: IconProps) {
       <rect x="8.8" y="2" width="5.2" height="5.2" rx="1.2" />
       <rect x="2" y="8.8" width="5.2" height="5.2" rx="1.2" />
       <rect x="8.8" y="8.8" width="5.2" height="5.2" rx="1.2" />
+    </svg>
+  );
+}
+
+function IconStack({ className = "" }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
+      strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
+      <path d="M8 2.2 13.5 5 8 7.8 2.5 5Z" />
+      <path d="M2.5 8.2 8 11l5.5-2.8" />
+      <path d="M2.5 11.2 8 14l5.5-2.8" />
     </svg>
   );
 }
