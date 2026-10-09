@@ -53,7 +53,9 @@ del writer + spot check del padre antes de cada commit de unidad.
   preflight) + puntero con escala medida (`pxPorDot`), no asumida.
 - [x] **F9-sel** Click-away/Deselect: clic al vacio y Escape deseleccionan; arranque sin
   seleccion; cajas de referencia apagadas por defecto.
-- [ ] **F10** Rollout: mismo tratamiento al resto de las pantallas, una por una.
+- [x] **F10-wide** Shell full-bleed global (misma estructura del editor en todas;
+  se acabaron los oceanos de gris). typecheck 0, 8 rutas en 200.
+- [ ] **F10** Rollout fino por pantalla (si hiciera falta mas alla del ancho).
 - [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
   barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
 
@@ -171,6 +173,9 @@ del writer + spot check del padre antes de cada commit de unidad.
   NO verificado: IMPRIMIR AHORA (imprime). `plantillas.json` trae "version 1" de mano
   desconocida: sin commitear hasta confirmar usuario.
 - Siguiente paso: **F12** (Ajustes rebuild).
+- **F10-wide** (commit `fix(ui): shell full-bleed global, misma estructura del editor`
+  en `consolidacion`): `anchoCromo` siempre `max-w-none`. typecheck 0, 8 rutas en 200.
+- Siguiente paso: **definir alcance de pantallas** (pregunta al usuario) + **F12**.
 - **F9-fix** (commit `fix(editor): rebuild full-bleed con header unico y gate estructural`
   en `consolidacion`): writer delegado. Shell wide solo para `/editor`, header propio
   volado (1 nav, 1 pill), dots calculados en cliente (la API solo da mm), ayudas en

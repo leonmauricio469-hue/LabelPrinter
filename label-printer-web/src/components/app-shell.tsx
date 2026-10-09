@@ -21,12 +21,10 @@ import { buttonClearSecondary, displayTitle } from "@/components/ui";
  *   - Drawer lateral con LOS MISMOS 5 links (`NAV_LINKS`, una sola fuente).
  *     Sin grupos inventados: nada de "Colas de Impresion" ni "Registros
  *     ZPL/EPL". `/teclado` queda fuera del nav, como hoy.
- *   - El contenido (`children`) conserva la columna `max-w-3xl` del layout
- *     anterior para que las paginas rindan identico; solo el cromo es nuevo.
- *   - F9-fix: `/editor` sale a full-bleed SOLO el (`esAncha` por
- *     `pathname`): cromo y contenido pasan a `max-w-none` en esa ruta. Las
- *     demas pantallas siguen en `max-w-3xl`. El workbench marca su
- *     contenedor con la clase `editor-fullbleed` (ver `ui.ts`/`globals.css`).
+ *   - F10-wide: TODAS las pantallas van a full-bleed (`max-w-none`, misma
+ *     estructura del editor): la columna `max-w-3xl` dejaba oceanos de gris en
+ *     los dashboards (se vio en `/` vs `/editor`). Cada pagina ordena su ancho
+ *     interior como su mockup.
  *
  * Lo que NO hay a proposito: zoom global, undo/redo global, telemetria,
  * botones sin destino real.
@@ -35,15 +33,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const pathname = usePathname();
 
-  /**
-   * F9-fix: pagina ancha SOLO para el editor.
-   *
-   * El workbench (capas + lienzo + inspector) no entra en 768 px. En
-   * `/editor` (y subrutas) el cromo y el contenido van a `max-w-none`;
-   * el resto de rutas conserva `max-w-3xl` intacto.
-   */
-  const esAncha = pathname === "/editor" || (pathname?.startsWith("/editor/") ?? false);
-  const anchoCromo = esAncha ? "max-w-none" : "max-w-3xl";
+  // F10-wide: cromo y contenido siempre a `max-w-none` (misma estructura del
+  // editor en todas las pantallas). `pathname` sigue usandose abajo (drawer, menu).
+  const anchoCromo = "max-w-none";
 
   // Al navegar se cierra el drawer: el cambio de ruta ya es la confirmacion.
   useEffect(() => {
