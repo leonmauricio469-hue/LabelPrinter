@@ -17,8 +17,14 @@ import type { Product } from "@/lib/products/product.types";
  * imprimia `products[0]` de cualquier coincidencia, asi que un escaneo leido a medias
  * imprimia la etiqueta del producto equivocado, en silencio y con el precio equivocado.
  * Aqui eso es un aviso, no una impresion. Ver `[[Prueba Coincidencias]]`.
+ *
+ * F13: cuerpo de `/fast` movido tal cual al tab Rapido del hub (`/`). Adaptacion: de
+ * `export default function FastPage` a `export function SeccionRapido` (vive sin `page`;
+ * el titulo lo pone la tab del hub). Logica, endpoints y estados intactos. El `<main>`
+ * se conserva: el shell espera que cada contenido traiga el suyo y el hub solo monta
+ * un tab a la vez.
  */
-export default function FastPage() {
+export function SeccionRapido() {
   const [last, setLast] = useState<Product | null>(null);
   const { state, print, notify } = usePrint();
   // Sube con cada impresion para que el estado de la impresora se vuelva a consultar: es el

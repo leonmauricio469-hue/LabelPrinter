@@ -36,8 +36,15 @@ const segOff = `${segBase} border-edge bg-panel text-strong hover:bg-canvas`;
  *
  * Todo sale de `GET /api/history`: nada se inventa, nada se estima. Los KPIs
  * se cuentan del set cargado y el caption dice cuantos son.
+ *
+ * F13: cuerpo de `/history` movido tal cual al tab Historial del hub (`/`).
+ * Adaptacion: de `export default function HistoryPage` a
+ * `export function SeccionHistorial` (vive sin `page`; el titulo lo pone la tab
+ * del hub). Logica, endpoints y estados intactos. El `<main>` se conserva: el
+ * shell espera que cada contenido traiga el suyo y el hub solo monta un tab a
+ * la vez.
  */
-export default function HistoryPage() {
+export function SeccionHistorial() {
   const [records, setRecords] = useState<HistoryRecord[] | null>(null);
   const [state, setState] = useState<PrintState>({ kind: "idle" });
 

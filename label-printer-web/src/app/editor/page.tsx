@@ -1995,7 +1995,7 @@ export default function EditorPage() {
               . La activa es «{activa.name}»: elegi una estructurada 59x35 en la biblioteca para
               editar geometria. El ZPL y la prueba de abajo siguen siendo los reales de la activa.
             </p>
-            <a href="/plantillas" className={`${buttonClearSecondary} mt-3`}>
+            <a href="/?tab=plantillas" className={`${buttonClearSecondary} mt-3`}>
               Ir a la biblioteca
             </a>
           </section>

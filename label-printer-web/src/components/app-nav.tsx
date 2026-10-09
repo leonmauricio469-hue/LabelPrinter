@@ -21,16 +21,13 @@ import { usePathname } from "next/navigation";
  * `LINKS` sigue siendo `as const` porque `href` es literal: si un dia alguien pone una
  * plantilla, Next y el tipado lo veran aqui.
  *
- * F0: se exporta como `NAV_LINKS` para que `AppShell` (tabs + drawer) use la misma
- * lista. Una sola fuente de rutas, sin grupos inventados.
+ * F13: nav a 3 tabs (Imprimir `/`, Editor `/editor`, Ajustes `/settings`).
+ * Buscar/Rapido/Historial/Plantillas/Lotes viven como tabs internos de `/`
+ * (`?tab=`); `/teclado` sigue fuera del nav, como herramienta de diagnostico.
  */
 export const NAV_LINKS = [
-  { href: "/", label: "Normal", icon: IconScan, primary: true },
-  { href: "/fast", label: "Rapido", icon: IconBolt },
-  { href: "/history", label: "Historial", icon: IconClock },
+  { href: "/", label: "Imprimir", icon: IconScan, primary: true },
   { href: "/editor", label: "Editor", icon: IconRuler },
-  { href: "/plantillas", label: "Plantillas", icon: IconGrid },
-  { href: "/lotes", label: "Lotes", icon: IconStack },
   { href: "/settings", label: "Ajustes", icon: IconGear },
 ] as const;
 
@@ -93,25 +90,6 @@ function IconScan({ className = "" }: IconProps) {
   );
 }
 
-function IconBolt({ className = "" }: IconProps) {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
-      strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
-      <path d="M8.8 1.8 3.4 9h3.4l-.6 5.2L12.6 7H9.2l-.4-5.2Z" />
-    </svg>
-  );
-}
-
-function IconClock({ className = "" }: IconProps) {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
-      strokeWidth="1.75" strokeLinecap="round" aria-hidden className={className}>
-      <circle cx="8" cy="8" r="6.2" />
-      <path d="M8 4.6V8l2.3 1.5" />
-    </svg>
-  );
-}
-
 function IconRuler({ className = "" }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
@@ -132,25 +110,4 @@ function IconGear({ className = "" }: IconProps) {
   );
 }
 
-function IconGrid({ className = "" }: IconProps) {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
-      strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
-      <rect x="2" y="2" width="5.2" height="5.2" rx="1.2" />
-      <rect x="8.8" y="2" width="5.2" height="5.2" rx="1.2" />
-      <rect x="2" y="8.8" width="5.2" height="5.2" rx="1.2" />
-      <rect x="8.8" y="8.8" width="5.2" height="5.2" rx="1.2" />
-    </svg>
-  );
-}
-
-function IconStack({ className = "" }: IconProps) {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor"
-      strokeWidth="1.75" strokeLinejoin="round" aria-hidden className={className}>
-      <path d="M8 2.2 13.5 5 8 7.8 2.5 5Z" />
-      <path d="M2.5 8.2 8 11l5.5-2.8" />
-      <path d="M2.5 11.2 8 14l5.5-2.8" />
-    </svg>
-  );
-}
+/* F13: IconGrid e IconStack se van con sus tabs (Plantillas/Lotes viven en `/`). */

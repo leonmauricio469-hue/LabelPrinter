@@ -235,7 +235,7 @@ export function GuardarPlantillaPanel({
       {resultado && (
         <p className="mt-2 rounded-md border border-success bg-success-soft px-3 py-2 text-xs text-success">
           Guardada «{resultado.name}» ({resultado.id}).{" "}
-          <a href="/plantillas" className="underline">
+          <a href="/?tab=plantillas" className="underline">
             Ver en la biblioteca
           </a>
         </p>

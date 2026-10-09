@@ -18,7 +18,7 @@ import { buttonClearSecondary, displayTitle } from "@/components/ui";
  *     trabajos en cola salen de `/api/printer/status`, cero numeros
  *     inventados (sin temperaturas, sin % de ribbon, sin telemetria).
  *   - Tabs = `AppNav` tal cual, sin retocar: las rutas y el activo no cambian.
- *   - Drawer lateral con LOS MISMOS 5 links (`NAV_LINKS`, una sola fuente).
+ *   - Drawer lateral con LOS MISMOS links (`NAV_LINKS`, una sola fuente: 3 desde F13).
  *     Sin grupos inventados: nada de "Colas de Impresion" ni "Registros
  *     ZPL/EPL". `/teclado` queda fuera del nav, como hoy.
  *   - F10-wide: TODAS las pantallas van a full-bleed (`max-w-none`, misma

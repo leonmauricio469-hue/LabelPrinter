@@ -134,8 +134,14 @@ function ThumbFila({ code, templateId }: { code: string; templateId?: string }) 
  * mapear columnas a codigo/cantidad con conteo de resueltas y vista de las 5
  * primeras, 3) crear el lote. Debajo, la lista de lotes con su estado y el
  * detalle con botones segun estado. Sin "Priorizar": un lote activo por vez.
+ *
+ * F13: cuerpo de `/lotes` movido tal cual al tab Lotes del hub (`/`).
+ * Adaptacion: de `export default function LotesPage` a
+ * `export function SeccionLotes` (vive sin `page`; el titulo lo pone la tab del
+ * hub). Logica, endpoints y estados intactos. El `<main>` se conserva: el shell
+ * espera que cada contenido traiga el suyo y el hub solo monta un tab a la vez.
  */
-export default function LotesPage() {
+export function SeccionLotes() {
   const [archivo, setArchivo] = useState<{ filename: string; content: string; encoding: string } | null>(null);
   const [hasHeader, setHasHeader] = useState(true);
   const [colCodigo, setColCodigo] = useState(0);

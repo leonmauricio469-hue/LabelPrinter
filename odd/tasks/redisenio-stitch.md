@@ -55,6 +55,8 @@ del writer + spot check del padre antes de cada commit de unidad.
   seleccion; cajas de referencia apagadas por defecto.
 - [x] **F10-wide** Shell full-bleed global (misma estructura del editor en todas;
   se acabaron los oceanos de gris). typecheck 0, 8 rutas en 200.
+- [x] **F13** Imprimir unificada: Buscar+Rapido+Historial+Plantillas+Lotes en una sola
+  pantalla (re-composicion verificada linea por linea); nav a 3 tabs.
 - [ ] **F10** Rollout fino por pantalla (si hiciera falta mas alla del ancho).
 - [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
   barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
@@ -183,6 +185,15 @@ del writer + spot check del padre antes de cada commit de unidad.
   11/11, gate estructural re-corridos por el padre (1 nav, fullbleed presente,
   0 dots vacios). Logica y contratos intactos.
 - Siguiente paso: **tus ojos** en `/editor` + **F10** rollout al resto.
+- **F13** (commit `feat(ui): F13 Imprimir unificada, nav a 3 tabs` en `consolidacion`):
+  writer delegado (el primer intento pego rate-limit tras dejar el trabajo hecho; el
+  segundo lo verifico linea por linea). 4 paginas movidas a secciones (paridad 0
+  lineas faltantes salvo plantillas: era Server Component, se alimenta por endpoints),
+  4 page.tsx borrados, nav a 3, hrefs rotos del editor corregidos, comentario rancio
+  del shell actualizado por el padre. Scanner unico verificado (montaje excluyente).
+  typecheck 0 (writer + padre), check 11/11, `/?tab=` x5 en 200, 4 rutas en 404,
+  endpoints iguales. Cero logica nueva, cero cambios en lib/api/data.
+- Siguiente paso: **F12** (Ajustes rebuild).
 - **F9-sel** (commit `fix(editor): click-away y arranque sin seleccion` en
   `consolidacion`): `sel` inicial -1 (verificado null-safe en marco/panel/teclado),
   clic al vacio y Escape deseleccionan (sin gesto ni undo), cajas de referencia OFF

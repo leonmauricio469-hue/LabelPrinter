@@ -38,8 +38,10 @@ import type { QueueStatus } from "@/lib/printing/queue.status.types";
  *
  * Lo que hay, todo real:
  *
- * - Navegacion de modos: Rapido -> `/fast`, Lotes via CSV -> `/lotes`,
- *   Busqueda = esta pagina (sin link, `aria-current`).
+ * - Navegacion de modos: Rapido -> `/?tab=rapido`, Lotes via CSV ->
+ *   `/?tab=lotes`, Busqueda = esta seccion (sin link, `aria-current`). F13: el
+ *   centro vive en el tab Buscar del hub (`/`), asi que los modos apuntan a tabs,
+ *   no a rutas.
  * - Pill PLANTILLA ACTIVA: nombre + mm de la plantilla que resuelve el
  *   `templateId` guardado. SIN metodo termico: settings no guarda ninguno y
  *   el mockup dice "(Termal Directo)" sin fuente. No se inventa.
@@ -424,18 +426,18 @@ export function CentroImpresion() {
 
   return (
     <main className="flex flex-col gap-5">
-      {/* Modos: navegacion real. Busqueda es esta pagina, sin link. */}
+      {/* Modos: tabs del hub. Busqueda es esta seccion, sin link. */}
       <nav
         aria-label="Modos de impresion"
         className={`${cardClear} flex flex-wrap items-center gap-1 p-2`}
       >
-        <Link href="/fast" className={modeTabClear}>
+        <Link href="/?tab=rapido" className={modeTabClear}>
           Rapido / Escaner USB
         </Link>
         <span aria-current="page" className={modeTabActiveClear}>
           Busqueda Catalogo
         </span>
-        <Link href="/lotes" className={modeTabClear}>
+        <Link href="/?tab=lotes" className={modeTabClear}>
           Lotes via CSV
         </Link>
       </nav>
@@ -635,15 +637,15 @@ export function CentroImpresion() {
           <h2 className="text-sm font-bold tracking-wide text-strong">
             HISTORIAL RECIENTE
           </h2>
-          <Link href="/history" className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}>
+          <Link href="/?tab=historial" className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}>
             Ver todo
           </Link>
         </div>
         {recientes === null ? (
           <p className={`${hint} mt-2`}>
             No se pudo leer el historial reciente. Sigue en{" "}
-            <Link href="/history" className="underline underline-offset-2">
-              /history
+            <Link href="/?tab=historial" className="underline underline-offset-2">
+              Historial
             </Link>
             .
           </p>
