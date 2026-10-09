@@ -3,11 +3,18 @@
 import { useCallback, useState } from "react";
 import { ScannerInput } from "@/components/scanner-input";
 import { ProductCard } from "@/components/product-card";
+import { ProductPreview } from "@/components/product-preview";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { PrintStatus } from "@/components/print-status";
-import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import { lookupProducts, usePrint } from "@/components/use-print";
-import { buttonGhost, buttonPrint, card, hint, input, label } from "@/components/ui";
+import {
+  buttonClearPrint,
+  buttonClearSecondary,
+  cardClear,
+  hint,
+  input,
+  label,
+} from "@/components/ui";
 import { MIN_BUSQUEDA } from "@/lib/products/product.lookup";
 import type { Product } from "@/lib/products/product.types";
 
@@ -22,8 +29,6 @@ export default function Home() {
   const [qty, setQty] = useState(1);
   const [searching, setSearching] = useState(false);
   const { state, print, notify, reset } = usePrint();
-  // Ver `/fast`: tras cada impresion el estado de la cola ya cambio, asi que se consulta.
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const busy = searching || state.kind === "busy";
 
@@ -102,16 +107,13 @@ export default function Home() {
   const doPrint = useCallback(async () => {
     if (!selected) return;
     const ok = await print(selected.code, qty, "normal");
-    setRefreshKey((k) => k + 1);
     // Se deja el producto en pantalla: el operador suele querer repetir la tirada.
     if (ok) setQty(1);
   }, [print, qty, selected]);
 
   return (
     <main className="flex flex-col gap-5">
-      {/* Aqui si se muestra siempre: el operador va a confirmar antes de gastar papel, asi
-          que ver el estado de la impresora antes de confirmar es util. */}
-      <PrinterStatusBanner refreshKey={refreshKey} />
+      {/* El pill de impresora vive en el AppShell: aqui no se duplica. */}
 
       <ScannerInput
         enabled={!busy}
@@ -132,7 +134,7 @@ export default function Home() {
         Enter llega solo, y un boton azul compitiendo con IMPRIMIR hace que haya dos
         cosas rojas en pantalla cuando solo una gasta papel.
       */}
-      <section className={card + " p-5"}>
+      <section className={`${cardClear} p-5`}>
         <label htmlFor="term" className={label}>
           Codigo de barras o codigo de producto
         </label>
@@ -156,7 +158,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={busy || term.trim() === ""}
-            className={buttonGhost + " h-12 shrink-0"}
+            className={`${buttonClearSecondary} h-12 shrink-0`}
           >
             {searching ? "Buscando..." : "Buscar"}
           </button>
@@ -174,8 +176,8 @@ export default function Home() {
       */}
       {matches.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="flex items-baseline gap-2 text-sm font-semibold text-ink-soft">
-            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-bold tabular-nums text-brand-ink">
+          <h2 className="flex items-baseline gap-2 text-sm font-semibold text-strong">
+            <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-bold tabular-nums text-primary">
               {matches.length}
             </span>
             Elige el producto
@@ -198,15 +200,18 @@ export default function Home() {
       )}
 
       {selected && (
-        <section className="flex flex-col gap-5 rounded-xl border-2 border-brand-ink/15 bg-surface p-5 shadow-pop">
+        <section className={`${cardClear} flex flex-col gap-5 p-5`}>
           <ProductCard product={selected} selected />
+
+          {/* El mismo ZPL que saldria por la impresora, rasterizado en el servidor. */}
+          <ProductPreview code={selected.code} />
 
           {/*
             La unica zona donde se gasta papel. Se separa del resto con una linea y se le
             da todo el ancho al boton: el stepper a la izquierda, la accion a la derecha,
-            y el boton NO se mueve al cambiar la cantidad (min-w en `buttonPrint`).
+            y el boton NO se mueve al cambiar la cantidad (min-w en `buttonClearPrint`).
           */}
-          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-edge pt-4">
             <div>
               <span className={label}>Cantidad de etiquetas</span>
               <div className="mt-2">
@@ -219,7 +224,7 @@ export default function Home() {
                 type="button"
                 onClick={clearAll}
                 disabled={busy}
-                className={buttonGhost}
+                className={buttonClearSecondary}
               >
                 Limpiar
               </button>
@@ -227,7 +232,7 @@ export default function Home() {
                 type="button"
                 onClick={doPrint}
                 disabled={busy}
-                className={buttonPrint}
+                className={buttonClearPrint}
                 aria-busy={busy}
               >
                 {busy ? "Imprimiendo..." : `IMPRIMIR ×${qty}`}

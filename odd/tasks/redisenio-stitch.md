@@ -34,7 +34,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 
 - [x] **F0** Fundaciones: tokens ClearCraft en `globals.css`, fuentes, `AppShell`
   (topbar + tabs + drawer con contenido real), navegacion de las 6 rutas actuales.
-- [ ] **F1** Imprimir simple: `/` re-estilado + preview real + pill de impresora.
+- [x] **F1** Imprimir simple: `/` re-estilado + preview real + pill de impresora.
 - [ ] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
 - [ ] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
 - [ ] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
@@ -55,6 +55,15 @@ del writer + spot check del padre antes de cada commit de unidad.
   instancia extra de `PrinterStatusBanner` (un sondeo mas cada 20 s); extraer el hook
   queda como mejora futura, no bloquea.
 - Siguiente paso: **F1**.
+- **F1** (commit `feat(ui): F1 pantalla Imprimir con preview del ZPL real` en
+  `consolidacion`): writer delegado. Nuevo `GET /api/labels/preview?code=` (mismo lookup
+  y plantilla que al imprimir, sin imprimir ni auditar) + `ProductPreview` (aspecto
+  472:280, estados honesto/cargando/error real). typecheck exit 0 (writer + padre),
+  `npm run check` 11/11 (writer), `/` 200, preview 200 `image/png` (writer + padre),
+  inexistente 404 (writer + padre). Desvio documentado: el preview devuelve 200 (no 422)
+  para barcodes no imprimibles, igual que la impresion (etiqueta sin barras + aviso).
+  Ademas se quito el `PrinterStatusBanner` duplicado de `/` (el pill vive en el shell).
+- Siguiente paso: **F2**.
 
 ## Proximo paso
 F0.

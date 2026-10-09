@@ -112,3 +112,18 @@ export const pillClear = "inline-flex items-center gap-2 rounded-pill border bor
 
 /** Titulo con la display (Plus Jakarta Sans): marca y encabezados del shell. */
 export const displayTitle = "font-display font-bold tracking-tight text-strong";
+
+/*
+ * ---- ClearCraft F1: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/**
+ * El boton de IMPRIMIR en ClearCraft.
+ *
+ * Primario royal (`bg-primary`) con la metrica estable de `buttonPrint`: `min-w`
+ * para que no se encoja ni se ensanche entre 1 y 6 etiquetas (un boton que cambia
+ * de ancho hace que el segundo clic caiga fuera) y altura mayor que el resto
+ * porque es el unico que gasta papel.
+ */
+export const buttonClearPrint =
+  `${buttonClear} min-w-[9.5rem] px-8 py-3.5 text-base font-bold tracking-wide disabled:active:translate-y-0`;
