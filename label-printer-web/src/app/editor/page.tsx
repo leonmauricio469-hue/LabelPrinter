@@ -374,14 +374,17 @@ export default function EditorPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sel, setSel] = useState<number>(() =>
-    primeraEditable(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]),
-  );
+  // Sin seleccion inicial (-1): la arranca el operador con un clic y el clic al
+  // vacio la apaga (click-away). Nada aparece preseleccionado.
+  const [sel, setSel] = useState<number>(-1);
   const [nombre, setNombre] = useState("BADIA JALAPEÑO 2 OZ");
   const [barcode, setBarcode] = useState("033844007522");
   const [precio, setPrecio] = useState(5.68);
   const [zoom, setZoom] = useState(3);
-  const [mostrarCajas, setMostrarCajas] = useState(true);
+  // Cajas de referencia apagadas por defecto: con todo pintado parecian
+  // preselecciones. El marco de la seleccion sigue siendo la unica caja visible;
+  // el toggle las enciende para auditar geometria.
+  const [mostrarCajas, setMostrarCajas] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [aplicado, setAplicado] = useState<{ texto: string; clave: string } | null>(null);
   const [rechazo, setRechazo] = useState<string | null>(null);
@@ -679,7 +682,7 @@ export default function EditorPage() {
         if (!j.activo || !Array.isArray(j.zones)) return;
         const cargadas = structuredClone(j.zones) as unknown as AnyZone[];
         setZones(cargadas);
-        setSel(primeraEditable(cargadas));
+        // Sin auto-seleccion al cargar: la arranca el operador (ver estado inicial).
         // Lo cargado es otro punto de partida, no una edicion: la pila de
         // undo empieza aqui.
         baseHistorial(cargadas);
@@ -1637,7 +1640,12 @@ export default function EditorPage() {
     } else if (zonaEl) {
       indice = Number(zonaEl.dataset.zona);
     }
-    if (indice === null || Number.isNaN(indice)) return;
+    if (indice === null || Number.isNaN(indice)) {
+      // Clic al vacio (click-away): deselecciona para ver la etiqueta limpia. No es
+      // un gesto (sin captura, sin commit de undo): solo se apaga el marco.
+      setSel(-1);
+      return;
+    }
 
     const z = zones[indice];
     const base = marcos[indice];
@@ -1735,7 +1743,15 @@ export default function EditorPage() {
 
       if (e.key === "Escape") {
         const g = gesto.current;
-        if (!g && !estirando) return;
+        if (!g && !estirando) {
+          // Sin gesto en curso, Escape deselecciona para ver la etiqueta limpia.
+          // No es un commit de undo: la geometria no cambia.
+          if (sel !== -1) {
+            e.preventDefault();
+            setSel(-1);
+          }
+          return;
+        }
         e.preventDefault();
         if (raf.current != null) {
           cancelAnimationFrame(raf.current);

@@ -47,6 +47,8 @@ del writer + spot check del padre antes de cada commit de unidad.
   colapsables) + gate estructural de layout.
 - [x] **F9-zoom** Fix desfase con zoom: imagen a tamano exacto (`maxWidth:none` vs
   preflight) + puntero con escala medida (`pxPorDot`), no asumida.
+- [x] **F9-sel** Click-away/Deselect: clic al vacio y Escape deseleccionan; arranque sin
+  seleccion; cajas de referencia apagadas por defecto.
 - [ ] **F10** Rollout: mismo tratamiento al resto de las pantallas, una por una.
 - [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
   barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
@@ -163,6 +165,10 @@ del writer + spot check del padre antes de cada commit de unidad.
   11/11, gate estructural re-corridos por el padre (1 nav, fullbleed presente,
   0 dots vacios). Logica y contratos intactos.
 - Siguiente paso: **tus ojos** en `/editor` + **F10** rollout al resto.
+- **F9-sel** (commit `fix(editor): click-away y arranque sin seleccion` en
+  `consolidacion`): `sel` inicial -1 (verificado null-safe en marco/panel/teclado),
+  clic al vacio y Escape deseleccionan (sin gesto ni undo), cajas de referencia OFF
+  por defecto. typecheck 0, `/editor` 200.
 - **F9-zoom** (commit `fix(editor): cajas exactas a todo zoom (maxWidth:none + escala medida)`
   en `consolidacion`): causa raiz = preflight `img{max-width:100%}` encogia la imagen y
   los overlays iban a `*zoom` nominal (1x bien, 6x roto). Fix en `page.tsx` + cursor
