@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { PrinterStatusBanner } from "@/components/printer-status-banner";
 import {
-  buttonGhost,
-  buttonPrimary,
-  card,
-  h2,
+  buttonClear,
+  buttonClearSecondary,
+  buttonWarn,
+  cardClear,
+  displayTitle,
   hint,
   input,
   label as labelClass,
+  pillClear,
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
 import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
@@ -35,13 +37,13 @@ const note = "rounded-md border border-line bg-surface-sunken px-3 py-3 text-xs 
 /** `input` compartido con el separacion respecto de la etiqueta de arriba. */
 const inputClass = `mt-1.5 ${input}`;
 
-/** Configuracion de impresora y etiqueta. Escribe `settings.json`. */
+/** Dispositivos (F3): la GX420 y su etiqueta, sobre la piel ClearCraft. Escribe `settings.json`. */
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [printers, setPrinters] = useState<string[]>([]);
   const [state, setState] = useState<PrintState>({ kind: "idle" });
   // El estado de la cola se relee despues de guardar (puede haber cambiado el nombre) y
-  // despues de la prueba de conexion.
+  // despues de cada prueba.
   const [refreshKey, setRefreshKey] = useState(0);
   // Si `/editor` ha guardado una geometria, esta pagina es el unico sitio donde el operador
   // se entera antes de imprimir. Sin este aviso, alguien que nunca abra el editor imprimiria
@@ -94,7 +96,7 @@ export default function SettingsPage() {
             message: `No se pudo listar las impresoras: ${data.error}. Escribe el nombre de la cola a mano.`,
           });
         }
-      } catch (err) {
+      } catch {
         // La lista es una comodidad: si falla se puede seguir escribiendo a mano.
         setPrinters([]);
       }
@@ -155,6 +157,38 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Etiqueta de diagnostico: imprime DE VERDAD (texto + barras) por el transporte
+  // configurado. Gasta 1 etiqueta y no se registra en el historial: es hardware,
+  // no una venta. Por eso pide confirmacion antes.
+  const testPrint = useCallback(async () => {
+    if (!window.confirm("La etiqueta de prueba se imprime de verdad y gasta 1 etiqueta. ¿Imprimirla?")) {
+      return;
+    }
+    setState({ kind: "busy", message: "Imprimiendo etiqueta de prueba..." });
+    try {
+      const res = await fetch("/api/printer/test-print", { method: "POST" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        destino?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setState({ kind: "error", message: data.error ?? `Error ${res.status}` });
+        setRefreshKey((k) => k + 1);
+        return;
+      }
+      setState({
+        kind: "ok",
+        message:
+          `Etiqueta de prueba enviada a ${data.destino ?? "la impresora"}. ` +
+          `Si no sale nada, mira el estado de arriba, que es el que dice si hay papel.`,
+      });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      setState({ kind: "error", message: (err as Error).message });
+    }
+  }, []);
+
   if (!settings) {
     return (
       <main className="flex flex-col items-center gap-3 py-16 text-ink-mute">
@@ -185,8 +219,17 @@ export default function SettingsPage() {
 
   return (
     <main className="flex flex-col gap-5">
-      <section className={card + " flex flex-col gap-4 p-5"}>
-        <h2 className={h2}>Impresora</h2>
+      <section className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className={`${displayTitle} text-lg`}>Dispositivos</h2>
+        {/* Una sola impresora en toda la pantalla: la GX420 (decision de alcance) y el
+            transporte que tiene configurado ahora mismo, que sale de settings, no se inventa. */}
+        <span className={`${pillClear} bg-primary-soft text-primary`}>
+          GX420 · {isUsb ? "USB" : "Red"}
+        </span>
+      </section>
+
+      <section className={`${cardClear} flex flex-col gap-4 p-5`}>
+        <h3 className={`${displayTitle} text-base`}>Impresora</h3>
 
         {/* Aqui si se ven las banderas crudas: es la pagina donde se diagnostica, y todavia
             no esta verificado que el driver de la Zebra rellene todas. El numero en crudo es
@@ -329,24 +372,32 @@ export default function SettingsPage() {
           ) : null}
         </div>
 
+        <p className={hint}>
+          La etiqueta de prueba imprime de verdad (texto + lineas) por la conexion de arriba y
+          gasta 1 etiqueta. No se registra en el historial: es hardware, no una venta.
+        </p>
+
         {/*
           Guardar va al final y es el unico primario de la pantalla. Antes estaba pegado a
           "Probar conexion" con el mismo peso visual, y las dos acciones no son equivalentes:
           una escribe en disco y la otra solo consulta. Un operador que quiere salvar una
           configuracion valida tenia que elegir entre dos botones del mismo tamano.
         */}
-        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-          <button type="button" onClick={test} className={buttonGhost}>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-4">
+          <button type="button" onClick={test} className={buttonClearSecondary}>
             Probar conexion
           </button>
-          <button type="button" onClick={save} className={buttonPrimary}>
+          <button type="button" onClick={testPrint} className={buttonWarn}>
+            Imprimir etiqueta de prueba
+          </button>
+          <button type="button" onClick={save} className={buttonClear}>
             Guardar
           </button>
         </div>
       </section>
 
-      <section className={card + " flex flex-col gap-4 p-5"}>
-        <h2 className={h2}>Etiqueta</h2>
+      <section className={`${cardClear} flex flex-col gap-4 p-5`}>
+        <h3 className={`${displayTitle} text-base`}>Etiqueta</h3>
 
         <div className={note}>
           <p>

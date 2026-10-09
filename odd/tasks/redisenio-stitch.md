@@ -36,7 +36,7 @@ del writer + spot check del padre antes de cada commit de unidad.
   (topbar + tabs + drawer con contenido real), navegacion de las 6 rutas actuales.
 - [x] **F1** Imprimir simple: `/` re-estilado + preview real + pill de impresora.
 - [x] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
-- [ ] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
+- [x] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
 - [ ] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
 - [ ] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
 - [ ] **F6** Editor: re-estilado + reconciliacion con override + variables.
@@ -72,6 +72,14 @@ del writer + spot check del padre antes de cada commit de unidad.
   `/history` 200 y API con shape verificado (padre). Sin ZPL guardado (no existe en el
   registro), sin telemetria.
 - Siguiente paso: **F3**.
+- **F3** (commit `feat(ui): F3 dispositivos con etiqueta de prueba real` en
+  `consolidacion`): writer delegado. Settings re-estilado (todos los controles
+  intactos, una sola impresora, sin discovery ni telemetria) + nuevo
+  `POST /api/printer/test-print` (ZPL diagnostico minimo con `^PW` real, via el mismo
+  transporte, sin auditar) + boton con confirmacion. typecheck 0 (writer + padre),
+  check 11/11, `/settings` 200 (padre). Endpoint NO invocado (imprime de verdad):
+  impresion fisica pendiente del usuario.
+- Siguiente paso: **F4**.
 
 ## Proximo paso
 F0.
