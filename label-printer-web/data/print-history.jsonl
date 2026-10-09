@@ -16,3 +16,36 @@
 {"ts":"2026-09-29T20:02:13.047Z","jobId":"ae408e56-d29a-43ce-b6ac-60b50010f40d","code":"619","name":"CAFE AMANECER 500 GR RES/PLUS","qty":1,"ok":true,"mode":"normal"}
 {"ts":"2026-09-29T20:08:58.987Z","jobId":"d0de54c7-71ed-4064-b62a-febe4917bf3f","code":"2597","name":"TRIDENT CINNAMON 14 STICKS-","qty":1,"ok":true,"mode":"normal"}
 {"ts":"2026-09-29T20:09:45.178Z","jobId":"f9548bda-4fc6-4dca-a3d5-13c7b22c707e","code":"771","name":"CHICLET DOUBLEMINT 5 STICKS","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T14:15:21.629Z","jobId":"fe1b2d54-59b6-4b6a-ad99-ecf228daf8df","code":"475","name":"BADIA JALAPEÑO 2 OZ","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T14:15:24.169Z","jobId":"b6ddadf2-270e-4e1c-9389-c1fb02abae32","code":"583","name":"BOMBONES DE CHOCOLATE SURTIDOS ST MORITZ 120 G","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T14:15:26.298Z","jobId":"3f9463af-69f8-4505-9f65-42e5cefd4d3b","code":"239","name":"7 ESPECIES 150 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T14:15:28.504Z","jobId":"5375cb5e-1e29-4fc2-87cc-3dc07f51eab5","code":"291","name":"ACETAMINOPHEN EXTRA STRENGTH 500CAP-500G","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T16:39:48.143Z","jobId":"fd054122-93d4-49bc-b37e-ddf101691a25","code":"445","name":"AZUCAR MONTALBAN CAFETIN","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T16:41:06.848Z","jobId":"774d6afc-3de6-4d23-b9b1-4eccda5cc611","code":"443","name":"AZUCAR DE COCO KALDINI 500 G","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T16:41:49.326Z","jobId":"7e86f990-3b9e-4338-97aa-f45b8cd21307","code":"314","name":"AL FAKHER 250GR TWO APPLE","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-09-30T17:00:48.613Z","jobId":"93c91dee-cea0-40a8-b799-f9c5d9e5bc45","code":"442","name":"AZUCAR AURORA 1 KG","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T15:11:38.873Z","jobId":"bceb4080-d024-44af-b75a-1b8d73628872","code":"49","name":"PETIT CAFÉ","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T15:12:01.553Z","jobId":"f2ec804a-b9be-4552-a087-e267172c51cc","code":"630","name":"CAFE DE ESPECIALIDAD ORIGIN 250 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T15:19:16.919Z","jobId":"8381b0cf-a72a-498d-82f8-94a466f4c0c0","code":"650","name":"CAFE TOSTADO Y MOLIDO 400 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T15:56:21.534Z","jobId":"6e05fe61-993d-45c6-8c68-c0edd006401c","code":"650","name":"CAFE TOSTADO Y MOLIDO 400 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T16:01:09.714Z","jobId":"519ff08e-acdc-4d6f-bce2-8336254743e7","code":"650","name":"CAFE TOSTADO Y MOLIDO 400 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T18:18:17.058Z","jobId":"c2dc740f-ecee-4d54-b05f-a81fe1d4833d","code":"475","name":"BADIA JALAPEÑO 2 OZ","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T18:18:25.109Z","jobId":"63662c30-2236-47a8-83c6-b192cc383a2b","code":"475","name":"BADIA JALAPEÑO 2 OZ","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T18:18:50.399Z","jobId":"1e9e8f9a-55b6-478c-b9c7-84d4bfc3d8f3","code":"475","name":"BADIA JALAPEÑO 2 OZ","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T18:18:51.917Z","jobId":"d89e63a0-265e-4d40-8c7f-e69d4a3043be","code":"1","name":"AMERICANO","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T19:15:17.557Z","jobId":"0b9c2042-d6ba-46cb-af77-30477265e96b","code":"442","name":"AZUCAR AURORA 1 KG","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T19:17:13.407Z","jobId":"ada9905c-c423-4735-a1b2-50c7de6870f0","code":"442","name":"AZUCAR AURORA 1 KG","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T19:26:00.625Z","jobId":"d0c4af77-0762-48af-af28-3d005a3c208f","code":"1849","name":"MINTY SABOR NARANJA 14 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-01T21:08:14.119Z","jobId":"fab35e6c-8531-4fa3-a38d-4131de53fbf7","code":"442","name":"AZUCAR AURORA 1 KG","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-06T13:58:28.560Z","jobId":"5c05de30-c86d-41e2-b079-f53fce230495","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-06T14:48:59.870Z","jobId":"5f7fc872-75ae-4761-bfec-d869cee71a30","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":6,"ok":true,"mode":"normal"}
+{"ts":"2026-10-06T16:24:04.709Z","jobId":"374b8f92-aa04-4101-a14d-920b314b2298","code":"2586","name":"TORTA IMPERIAL DELAVIUDA 200 GR","qty":1,"ok":true,"mode":"fast"}
+{"ts":"2026-10-06T18:54:40.715Z","jobId":"a72a2105-7bdb-4b0c-9cb0-9d03d0b6b963","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-06T19:36:31.808Z","jobId":"030750ba-9146-41bc-9e1e-94f9535c3d22","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-07T16:57:04.871Z","jobId":"d8edbb38-b0bd-4c5e-a00e-2232db6f84af","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-07T18:17:56.019Z","jobId":"6c03b724-c40f-4897-8d04-c26ac3f6f148","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-07T21:08:41.387Z","jobId":"ef4e48b4-c827-4047-9177-38c6249c1e53","code":"1849","name":"MINTY SABOR NARANJA 14 GR","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-08T15:07:42.516Z","jobId":"79658566-78a6-4d7f-9dd4-47c20fec77bf","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-08T15:08:33.006Z","jobId":"d366baaa-de4f-472c-bf9a-2ce8d1832aef","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"fast"}
+{"ts":"2026-10-08T15:14:32.926Z","jobId":"3f35e11c-2f6b-4a23-b450-fa53d6fc5e4c","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}
+{"ts":"2026-10-08T15:16:33.229Z","jobId":"473ae633-d098-47e6-b97d-00e816d92dae","code":"440","name":"AVENA ORASI CERO AZUCAR 1L","qty":1,"ok":true,"mode":"normal"}

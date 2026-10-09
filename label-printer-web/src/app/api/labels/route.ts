@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { readSettings } from "@/lib/settings/settings.store";
-import { DEFAULT_TEMPLATE } from "@/lib/labels/label.template";
-import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots } from "@/lib/labels/zpl.builder";
+import { templateForPrint } from "@/lib/labels/label-override.store";
+import { buildZplBatch, barcodeZoneOf, planForZone, quietZoneDots, problemaDeMedio } from "@/lib/labels/zpl.builder";
+import { dotsFromMm } from "@/lib/labels/label.template";
+import { QUIET_FACTOR } from "@/lib/labels/barcode-plan";
 import { createPrinterTransport } from "@/lib/printing/printer.transport";
 import { getProductRepository } from "@/lib/products/product.catalog.repository";
 import { appendPrintRecord, type PrintRecord } from "@/lib/audit/audit.store";
@@ -56,6 +58,43 @@ export async function POST(req: Request) {
   }
 
   const settings = await readSettings();
+
+  // La plantilla sale de `settings.label.templateId`. Antes era `DEFAULT_TEMPLATE` fijo, y
+  // `widthMm`/`heightMm` no los leia nadie: cambiar el tamano de etiqueta en /settings no
+  // hacia nada.
+  //
+  // `templateForPrint()` es asincrona y cae en la de 59 x 35 mm si el id no existe, para que un
+  // `settings.json` de antes de v1.3 (con `papicar-50x25`) siga imprimiendo en vez de tumbar
+  // la ruta entera. Ademas aplica encima la geometria que se haya guardado desde `/editor`
+  // (`data/plantilla-override.json`), que es como un cambio hecho en pantalla llega a la
+  // impresora sin recompilar. Ver `label-override.store.ts`.
+  const template = await templateForPrint(settings.label.templateId);
+
+  // El medio tiene que admitir el diseño, y esto se comprueba ANTES de construir el ZPL.
+  //
+  // Se podría comprobar despues, mirando el ZPL, y no se comprueba asi a proposito: el ZPL
+  // no dice que ha recortado. `^PW` lleva el numero del medio y el resto de comandos llevan
+  // coordenadas del diseño, y que los dos no cuadren es cosa de quien los lee, no de la
+  // impresora. La impresora no protesta, el trabajo sale de la cola como entregado, y la
+  // etiqueta llega al papel con el lado derecho cortado.
+  //
+  // Un 422 con el numero que hay que cambiar es la unica forma de que esto se entere antes de
+  // gastar papel. Ver `problemaDeMedio()`.
+  const mediaWidthDots = dotsFromMm(settings.printer.mediaWidthMm);
+  const problemaMedio = problemaDeMedio(template, mediaWidthDots);
+  if (problemaMedio) {
+    return NextResponse.json(
+      {
+        error: `No se imprime: ${problemaMedio}`,
+        medio: {
+          mediaWidthMm: settings.printer.mediaWidthMm,
+          disenoWidthMm: template.widthMm,
+        },
+      },
+      { status: 422 },
+    );
+  }
+
   const data: LabelData = {
     productName: product.name,
     barcode: product.barcode,
@@ -68,8 +107,8 @@ export async function POST(req: Request) {
   // Antes esto era un 422, y con el catalogo real eso habria sido un error en el 62% de los
   // productos. No lo es: un UPC-A, un codigo alfanumerico o un codigo que no cabe son datos
   // del sistema de origen, no un fallo de quien pulsa. Se imprime igual y se avisa.
-  const barcodeZone = barcodeZoneOf(DEFAULT_TEMPLATE);
-  const plan = barcodeZone ? planForZone(DEFAULT_TEMPLATE, barcodeZone, product.barcode) : null;
+  const barcodeZone = barcodeZoneOf(template);
+  const plan = barcodeZone ? planForZone(template, barcodeZone, product.barcode) : null;
 
   const avisos: string[] = [];
   if (plan?.printable && plan.correctedFrom) {
@@ -87,8 +126,8 @@ export async function POST(req: Request) {
   // ancho de modulo de la plantilla. Si salta, es un fallo interno y se responde 500 con el
   // motivo: un 422 diria al operador que su codigo esta mal, y no es verdad.
   if (barcodeZone && plan?.printable) {
-    const quiet = quietZoneDots(DEFAULT_TEMPLATE, barcodeZone, plan);
-    const minQuiet = 10 * barcodeZone.moduleWidth;
+    const quiet = quietZoneDots(template, barcodeZone, plan);
+    const minQuiet = QUIET_FACTOR * barcodeZone.moduleWidth;
     if (quiet < minQuiet) {
       return NextResponse.json(
         {
@@ -102,7 +141,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const zpl = buildZplBatch(DEFAULT_TEMPLATE, data, input.qty);
+  const zpl = buildZplBatch(template, data, input.qty, { mediaWidthDots });
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(zpl);
 

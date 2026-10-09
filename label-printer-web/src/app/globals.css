@@ -1,1 +1,199 @@
 @import "tailwindcss";
+
+/*
+ * Sistema de diseno de LabelPrinter.
+ *
+ * Por que existe este bloque: antes no habia tokens, solo `neutral-100/200/900` repartidos
+ * a mano por 7 paginas. El resultado era correcto pero plano y sin jerarquia, y cualquier
+ * cambio de color era buscar y reemplazar en 231 sitios. Con tokens el color es una
+ * decision tomada una vez.
+ *
+ * LA REGLA QUE MANDA SOBRE TODO LO DEMAS
+ *
+ * Esta app la opera una persona de pie, escaneando un producto tras otro durante horas.
+ * El diseno se juzga por si hace mas rapido ese ciclo, no por como se ve en una captura.
+ * De ahi salen tres decisiones que NO son esteticas:
+ *
+ *   1. El color primario es de CONTRASTE ALTO. El boton de imprimir tiene que verse desde
+ *      el otro lado del mostrador, no ser un azul bonito.
+ *   2. Los focus rings son visibles SIEMPRE. El operador navega con el teclado y con el
+ *      escaner, que es un teclado; un focus de 2px invisible significa no saber donde estas.
+ *   3. Nada de transiciones largas. Una animacion de 300 ms entre escaneo y respuesta es
+ *      media segunda por etiqueta durante toda la jornada.
+ *
+ * SCOPING
+ *
+ * Los tokens son del tema: `bg-app`, `text-ink`, `border-line`. Los colores semanticos
+ * (ok / warn / danger) se usan SOLO para feedback de estado, nunca para decoracion, porque
+ * un rojo que no es un error deja de significar error.
+ */
+
+@theme {
+  /* ---- Superficies: del fondo al papel ---- */
+  --color-app: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eceff4;
+  --color-surface-raised: #fbfcfd;
+
+  /* ---- Tinta: texto sobre cualquier superficie clara ---- */
+  --color-ink: #10141a;
+  --color-ink-soft: #414b58;
+  --color-ink-mute: #6b7684;
+
+  /* ---- Lineas ---- */
+  --color-line: #dfe4ea;
+  --color-line-strong: #c3cad3;
+
+  /* ---- Primario: el boton que mas importa ---- */
+  --color-brand: #1d4ed8;
+  --color-brand-hover: #1e40af;
+  --color-brand-soft: #eaf0ff;
+  --color-brand-ink: #1e3a8a;
+
+  /* ---- Semanticos: SOLO feedback ---- */
+  --color-ok: #15803d;
+  --color-ok-soft: #e8f6ec;
+  --color-ok-line: #a7dcb8;
+
+  --color-warn: #a15c07;
+  --color-warn-soft: #fdf3e3;
+  --color-warn-line: #f0c578;
+
+  --color-danger: #b42318;
+  --color-danger-soft: #fdeceb;
+  --color-danger-line: #f3b0ab;
+
+  --color-busy: #1d4ed8;
+  --color-busy-soft: #eaf0ff;
+  --color-busy-line: #b9cbfa;
+
+  /* ---- Radios ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* ---- Sombras: suaves, una sola capa. Sin elevation teatral. ---- */
+  --shadow-card: 0 1px 2px rgb(16 20 26 / 0.04), 0 1px 3px rgb(16 20 26 / 0.05);
+  --shadow-pop: 0 4px 12px rgb(16 20 26 / 0.08), 0 2px 4px rgb(16 20 26 / 0.05);
+
+  /* ---- Tipografia ---- */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /*
+   * Animaciones. Dos y ninguna mas.
+   *
+   * En Tailwind v4 los keyframes declarados dentro de `@theme` se emiten solo si algo usa
+   * la variable, asi que nombrarlas en vez de pegar `animate-[...]` a mano hace que no
+   * viaje CSS muerto a la pagina.
+   *
+   * Los tiempos son cortos a proposito: `scan` marca que la app esta viva sin pedir
+   * atencion, y `pop` confirma que algo cambio. Ninguna pasa de 200ms salvo el barrido,
+   * que es la unica que tiene que durar para percibirse.
+   */
+  --animate-scan: scan 1.4s ease-in-out infinite;
+  --animate-pop: pop 200ms ease-out;
+
+  @keyframes scan {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(300%);
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/*
+ * Base. Todo lo que sigue son reglas de plataforma, no clases utilitarias: afectan a los
+ * elementos nativos que Tailwind no cubre (autofill, spinner del number, scrollbar) o que
+ * hay que fijar una vez (que el body no sea negro aunque el sistema lo este).
+ */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-app);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Con el escaner mapeado a teclado, que no haya scroll horizontal aunque se abuse. */
+  overflow-x: hidden;
+}
+
+/*
+ * Focus visible. Es la decision de accesibilidad mas importante del archivo.
+ *
+ * Se pone aqui, una vez, y no se repite nunca mas en los componentes: si cada boton tiene
+ * su propio ring, hay 31 oportunidades de olvidar alguno y un operador que navega con el
+ * escaner se pierde. El anillo usa el primario para que se vea sobre cualquier fondo.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* El autofill de Chrome pinta amarillo y rompe cualquier tarjeta de fondo blanco. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-ink);
+  /* Cubre el amarillo con el fondo en vez de pelear con el color de texto. */
+  box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/*
+ * El spinner nativo del input[type=number] no respeta la altura de los steppers de
+ * cantidad, que son los controles grandes del flujo. Se le da la mitad de cada uno para
+ * que no quede desalineado ni se coma el ancho.
+ */
+input[type="number"]::-webkit-inner-spin-button {
+  opacity: 0.35;
+  height: 1.5rem;
+}
+
+/* Scrollbar discreta: la tabla de historial es larga y la barra gruesa distrae. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+/*
+ * Movimiento reducido.
+ *
+ * No es una cortesia: hay gente a la que el barrido de escaneo le mareta de verdad, y
+ * Windows activa "reducir animaciones" por defecto en varias configuraciones. Las
+ * transiciones de 150ms no se tocan porque esas no se perciben como movimiento, solo se
+ * anulan las que se desplazan o parpadean.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan,
+  .animate-pop,
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

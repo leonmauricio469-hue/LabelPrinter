@@ -167,8 +167,10 @@ Objetivo: ciclo real escanear -> buscar -> imprimir.
 
 Objetivo: robustez y gestion del catalogo dentro de la app.
 
-> **El editor de plantillas se hace al final**, por decision del operador: la etiqueta tiene
-> que quedar como se quiere antes de construir la herramienta que la dibuja.
+> **El editor de plantillas se hacia al final** por decision del operador: la etiqueta tiene
+> que quedar como se quiere antes de construir la herramienta que la dibuja. Se respeto el
+> orden. Cuando por fin se supo como queria la etiqueta, se hizo el editor, y la consecuencia
+> practica es que tocar la geometria es un rato de arrastrar y no un rato de editar numeros.
 
 Orden de trabajo decidido el 2026-09-29, empezando por un fallo de correccion y no por una
 pantalla nueva:
@@ -180,13 +182,40 @@ pantalla nueva:
       **Codificado y comprobado por software el 2026-09-29**, pero **sin la prueba fisica**
       que lo cierra: hay que quitar el papel o apagarla y confirmar que la app se entera.
       Ver [[Prueba Estado Impresora]].
+- [x] **Plantilla de 59 x 35 mm** y **editor de geometria en `/editor`**, con todo el
+      contenido movible y redimensionable y un boton de "Aplicar cambios". Ver
+      [[Plantilla 59x35 y Editor]]. **Sin prueba fisica**: no se ha impreso ni una.
 - [ ] Gestion del catalogo local desde la web (CRUD de productos en `catalog.json`)
 - [ ] Busqueda manual por nombre (requisito pendiente)
 - [ ] Correr como servicio de Windows (PM2 / nssm)
 - [ ] Pruebas en el puesto real de trabajo
-- [ ] Editor de plantillas (diseno de la etiqueta en vivo) -- **ultimo, a proposito**
 
 **Definicion de hecho**: la app se usa a diario por el operador. En curso.
+
+### Lo primero, antes que nada de esta lista
+
+1. **Poner el rollo de la GK420t a 59 mm** y decidir que ancho de rollo hay en el puesto:
+   59 mm, 62 mm, o bajar la etiqueta a 50. Sin esto no se puede probar nada de la etiqueta.
+   Si el rollo sigue a 50 mm, `^PW472` no escala, **corta** por la derecha, y el recorte es
+   silencioso: el ZPL es valido, la impresora no protesta, y lo que sale es una etiqueta a la
+   que le falta un trozo por el lado derecho.
+
+   **v1.7 dejo el campo listo para esto**: `/settings` -> "Ancho del rollo (mm)". Pone el valor
+   y el `^PW` sale de ahi. Si el rollo es mas estrecho que los 59 mm del diseno, la app
+   **se niega a imprimir** con un 422 que trae los dos numeros, porque `^PW` recorta sin
+   avisar. El valor guardado ahora es **59**, que es una suposicion puesta para no bloquear;
+   hay que cambiarlo por el real.
+2. **Imprimir una etiqueta y mirarla**: entera o cortada, con el radio del marco a 2 mm o
+   a 1 mm, con la `N` de `ANON` o sin ella.
+
+   **v1.7 ya imprimio dos** (producto `475`, EAN-13, y producto `1`, codigo interno). Las dos
+   salieron con HTTP 200. **Nadie las ha mirado todavia**: un 200 quiere decir que el spooler
+   acepto el trabajo, no que las barras escaneen.
+3. **Escanear el EAN-13** con el lector. Si no lee, hay que bajar el ancho de modulo a 2.
+4. **Escanear un producto con codigo interno** para decidir lo de los 261 productos que salen
+   sin barras. Si el lector acepta 0,250 mm, se baja el ancho de modulo a 2 y los 261 productos
+   recobran su codigo. Es la decision mas importante de las cuatro, porque un producto de
+   papel sin codigo de barras no se puede vender ni devolver.
 
 ### Decisiones tomadas al abrir la fase
 
@@ -217,8 +246,9 @@ pantalla nueva:
 
 ### Lo que Carro todavia no ataca
 
-- El **aspecto** de la etiqueta y el **editor de plantillas**, ambos al final por decision
-  del operador.
+- El **ajuste fino** del aspecto de la etiqueta. El editor y la plantilla ya estan; lo que falta
+  es la prueba fisica que decida como se quiere ver de verdad. Ver
+  [[Plantilla 59x35 y Editor]].
 - La integracion con **XETUX**, que sigue en suspenso.
 
 

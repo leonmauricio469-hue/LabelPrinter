@@ -85,35 +85,79 @@ export default function FastPage() {
 
   const waiting = state.kind === "idle" || state.kind === "ok" || state.kind === "info";
 
+  /**
+   * Tono del cartel.
+   *
+   * El cartel es lo unico que el operador mira en este modo: no lee, se fija. Por eso el
+   * color cambia con el resultado y no es siempre gris — verde cuando salio, rojo cuando
+   * no, y el gris neutro solo mientras espera. Antes el cartel era gris en las tres
+   * situaciones y la unica pista del exito era la franja verde de abajo, que es texto.
+   *
+   * El `key` del bloque de resultado fuerza el re-montado en cada impresion para que la
+   * animacion de entrada arranque de nuevo: sin eso, dos etiquetas seguidas con el mismo
+   * producto no se distinguen y parece que no imprimio nada.
+   */
+  const signTone =
+    state.kind === "error"
+      ? "border-danger-line bg-danger-soft text-danger"
+      : state.kind === "busy"
+        ? "border-busy-line bg-busy-soft text-brand-ink"
+        : state.kind === "ok"
+          ? "border-ok-line bg-ok-soft text-ok"
+          : "border-line bg-surface text-ink";
+
   return (
-    <main className="flex flex-1 flex-col gap-6">
+    <main className="flex flex-1 flex-col gap-5">
       {/* En este modo solo aparece cuando algo no anda bien: la pantalla es un cartel grande
           y con la impresora lista ese aviso solo distrae. */}
       <PrinterStatusBanner hideWhenReady refreshKey={refreshKey} />
 
       <ScannerInput enabled onScan={handleScan} />
 
-      <section className="flex flex-1 flex-col items-center justify-center gap-6 rounded-lg border border-neutral-200 bg-white p-8 text-center shadow-sm">
-        <h2 className="text-lg font-semibold tracking-wide text-neutral-500">
-          MODO IMPRESION RAPIDA
+      {/*
+        El cartel. Ocupa lo que queda de pantalla a proposito: en este modo no hay nada mas
+        que mirar, y cuanto mas grande sea el resultado menos tiene que acercarse el
+        operador para confirmar que salio lo que escaneo.
+      */}
+      <section
+        className={`flex min-h-[22rem] flex-1 flex-col items-center justify-center gap-5 rounded-xl border-2 p-8 text-center shadow-card transition-colors duration-200 ${signTone}`}
+      >
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+          Impresion rapida
         </h2>
 
-        {waiting ? (
-          <p className="text-2xl font-bold text-neutral-900">
-            ESCANEA EL PRODUCTO
-            <span className="mt-3 block animate-pulse text-4xl tracking-[0.3em]">
-              ████████████████
-            </span>
+        {state.kind === "busy" ? (
+          <p className="animate-pulse text-3xl font-black uppercase tracking-wide sm:text-4xl">
+            Imprimiendo...
           </p>
+        ) : waiting ? (
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-3xl font-black uppercase tracking-wide text-ink sm:text-4xl">
+              Escanea el producto
+            </p>
+            {/* Barra de escaneo: sustituye a los bloques `█`, que eran un caracter de
+                texto contando como animacion y se movian con la fuente. */}
+            <div aria-hidden className="h-2 w-64 max-w-full overflow-hidden rounded-full bg-surface-sunken">
+              <div className="h-full w-1/3 animate-scan rounded-full bg-brand" />
+            </div>
+            <p className="text-sm font-medium text-ink-mute">
+              Cada escaneo imprime una etiqueta
+            </p>
+          </div>
         ) : (
-          <p className="text-2xl font-bold text-neutral-900">
-            {last ? last.name : "ESCANEA EL PRODUCTO"}
+          <div
+            key={`${last?.code ?? "x"}-${state.kind}`}
+            className="flex animate-pop flex-col items-center gap-3"
+          >
+            <p className="max-w-full text-2xl font-bold leading-tight text-ink sm:text-3xl">
+              {last ? last.name : "Escanea el producto"}
+            </p>
             {last && (
-              <span className="mt-2 block text-5xl font-black text-neutral-900">
+              <p className="text-5xl font-black tabular-nums text-ink sm:text-6xl">
                 ${last.price.toFixed(2)}
-              </span>
+              </p>
             )}
-          </p>
+          </div>
         )}
 
         <PrintStatus

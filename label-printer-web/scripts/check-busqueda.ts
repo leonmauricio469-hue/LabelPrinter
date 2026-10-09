@@ -21,6 +21,7 @@ import {
 } from "../src/lib/products/product.lookup";
 import type { Product } from "../src/lib/products/product.types";
 import type { ProductRepository } from "../src/lib/products/product.repository";
+import { foldAscii } from "../src/lib/labels/ascii.fold";
 
 const CATALOGO = process.argv[2] ?? "data/catalog.json";
 
@@ -42,8 +43,13 @@ function cargar(): Fila[] {
 
 const filas = cargar();
 
-/** La misma normalizacion que usa `product.catalog.repository.ts`. */
-const norm = (v: string) => v.replace(/[\s-]/g, "").toLowerCase();
+/**
+ * La misma normalizacion que usa `product.catalog.repository.ts`.
+ *
+ * Importa `foldAscii()` en vez de reimplementarlo: si el repositorio cambia la politica, este
+ * script tiene que enterarse al compilar, no seguir mintiendo en verde.
+ */
+const norm = (v: string) => foldAscii(v).replace(/[\s-]/g, "").toLowerCase();
 
 function repoEnMemoria(datos: Fila[]): ProductRepository {
   return {
@@ -243,6 +249,59 @@ async function main(): Promise<void> {
 
     const r2 = await consultar("AMERICANO");
     ok(r2.match === "partial" && r2.products.length === 1, `"AMERICANO" (de mostrador) encuentra uno solo`, `${r2.match}, ${r2.products.length}`);
+  }
+
+  // -------------------------------------------------------------------------------------
+  console.log("\n### Buscar por nombre sin tilde: el operador no escribe con acentos");
+  // -------------------------------------------------------------------------------------
+  {
+    // Sin plegar acentos en `normalize()`, "JALAPENO" no encuentra "JALAPENO con enye":
+    // el `includes` compara "jalapeno" contra "jalapeno" y falla, y la pantalla dice
+    // "no esta en el catalogo" de un producto que si esta. Es el fallo mas caro de los
+    // que no dan error, porque el operador no tiene forma de saber que el producto existe.
+    const conAcento = filas.filter((p) => /[\u0080-\uffff]/.test(p.name));
+    ok(
+      conAcento.length > 0,
+      `el catalogo tiene ${conAcento.length} productos con algo que plegar (esta prueba no sirve de nada si son 0)`,
+      String(conAcento.length),
+    );
+
+    // Se toma cada nombre acentuado, se le quitan SOLO los acentos (no se le cambia nada mas)
+    // y se comprueba que se sigue encontrando. Si el nombre es corto de mas, se le anade
+    // el code, que es un termino valido y ya no depende de la busqueda por subcadena.
+    let noEncontrados = 0;
+    const ejemplos: string[] = [];
+    for (const p of conAcento) {
+      // Se le quita al nombre lo mismo que le quitaria `foldAscii()`: los acentos y el
+      // apostrofo latin. No se simula a mano, se usa la funcion, que es lo que hara el
+      // operador de verdad cuando pulse una tecla sin tilde.
+      const sinAcento = foldAscii(p.name);
+      if (sinAcento === p.name) continue;
+      const r = await consultar(sinAcento);
+      const aparece = r.products.some((x) => x.code === p.code);
+      if (!aparece) {
+        noEncontrados++;
+        if (ejemplos.length < 6) ejemplos.push(`"${sinAcento}" (producto ${p.code}) dio ${r.match}`);
+      }
+    }
+    ok(
+      noEncontrados === 0,
+      `buscar los ${conAcento.length} nombres SIN tilde encuentra el mismo producto`,
+      `${noEncontrados} no encontrados: ${ejemplos.join("; ")}`,
+    );
+
+    // Y al reves: escribir CON tilde tiene que funcionar tambien, que es lo que hara el
+    // que esta acostumbrado a escribir con tilde.
+    let sinTildeFallan = 0;
+    for (const p of conAcento.slice(0, 60)) {
+      const r = await consultar(p.name);
+      if (!r.products.some((x) => x.code === p.code)) sinTildeFallan++;
+    }
+    ok(
+      sinTildeFallan === 0,
+      "y escribir CON tilde tambien encuentra el producto",
+      `${sinTildeFallan} de 60 fallaron`,
+    );
   }
 
   // -------------------------------------------------------------------------------------

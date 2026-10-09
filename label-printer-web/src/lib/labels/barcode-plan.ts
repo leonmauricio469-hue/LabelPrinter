@@ -83,7 +83,7 @@ export type BarcodeImprimible = {
 export type BarcodePlan = BarcodeImprimible | BarcodeNoImprimible;
 
 export interface BarcodePlanOptions {
-  /** Ancho de la etiqueta en dots. 50 mm a 8 dots/mm = 400. */
+  /** Ancho de la etiqueta en dots. 59 mm a 8 dots/mm = 472. */
   labelWidthDots: number;
   moduleWidthDots?: number;
   quietFactor?: number;
@@ -190,12 +190,32 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
  * digito de control UCC, que se pone a `N` porque el dato ya viene con su digito puesto: si
  * la impresora lo anade otra vez, salen dos y el codigo no lee.
  */
-export function barcodeFormat(plan: BarcodeImprimible, heightDots: number, interpretation = true): string {
+/**
+ * Comando `^BY` + comando de simbolo.
+ *
+ * `^BY` reinicia TODO lo que no se le pase. El `h` (alto de la linea de interpretacion) cae en
+ * el valor por defecto, que segun el manual de ZPL II es la altura de fuente VIGENTE en ese
+ * momento, no 10 veces el ancho de modulo. Y la fuente vigente es la ultima que se emitio antes.
+ *
+ * Asi se solapaba en la plantilla de 50 x 25 mm (v1.2): la fuente vigente era `^A0N,24` del
+ * precio, las barras iban de y 96 a 168, la linea de interpretacion de 168 a 192, y la
+ * referencia de 186 a 198. Se pisan 6 dots.
+ *
+ * `hriHeight` lo fija y quita el solape. La plantilla de 59 x 35 mm lo dice (12 dots). Si una
+ * zona no lo dice, se emite `^BY` a secas y la linea cae donde le toque.
+ */
+export function barcodeFormat(
+  plan: BarcodeImprimible,
+  heightDots: number,
+  interpretation = true,
+  hriHeight?: number,
+): string {
   const linea = interpretation ? "Y" : "N";
+  const by = hriHeight === undefined ? `^BY${plan.moduleWidth}` : `^BY${plan.moduleWidth},,${hriHeight}`;
   if (plan.symbology === "ean13") {
-    return `^BY${plan.moduleWidth}\n^BEN,${heightDots},${linea},N`;
+    return `${by}\n^BEN,${heightDots},${linea},N`;
   }
-  return `^BY${plan.moduleWidth}\n^BCN,${heightDots},${linea},N,N`;
+  return `${by}\n^BCN,${heightDots},${linea},N,N`;
 }
 
 /**
