@@ -282,3 +282,19 @@ export const modeTabClear =
 
 /** Modo activo (esta pagina): fondo primario suave, sin link. */
 export const modeTabActiveClear = `${modeTabClear} bg-primary-soft font-semibold text-primary hover:text-primary`;
+
+/*
+ * ---- ClearCraft F14: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ *
+ * Re-composicion de `/` a la pantalla exacta del mockup
+ * (`imprimir_centro_unificado_de_producci_n`): header propio con modal de
+ * soporte y footer con hechos reales. Reusan `cardClear` y los tonos
+ * existentes: ningun color nuevo, ningun dato inventado.
+ */
+
+/** Velo del modal de soporte: oscurece y centra el dialogo. */
+export const overlayClear =
+  "fixed inset-0 z-50 grid place-items-center bg-strong/40 p-4";
+
+/** Dialogo de soporte: panel blanco con version, rutas, cola y /teclado. */
+export const dialogClear = `${cardClear} w-full max-w-md p-5`;

@@ -57,6 +57,9 @@ del writer + spot check del padre antes de cada commit de unidad.
   se acabaron los oceanos de gris). typecheck 0, 8 rutas en 200.
 - [x] **F13** Imprimir unificada: Buscar+Rapido+Historial+Plantillas+Lotes en una sola
   pantalla (re-composicion verificada linea por linea); nav a 3 tabs.
+- [x] **F14** Imprimir EXACTA al mockup `imprimir_centro_unificado` (reemplaza hub-tabs:
+  modos in-place, biblioteca en pill, historial embebido; funciones pendientes con
+  ledger honesto, nada fingido).
 - [ ] **F10** Rollout fino por pantalla (si hiciera falta mas alla del ancho).
 - [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
   barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
@@ -194,6 +197,12 @@ del writer + spot check del padre antes de cada commit de unidad.
   typecheck 0 (writer + padre), check 11/11, `/?tab=` x5 en 200, 4 rutas en 404,
   endpoints iguales. Cero logica nueva, cero cambios en lib/api/data.
 - Siguiente paso: **F12** (Ajustes rebuild).
+- **F14** (commit `feat(ui): F14 Imprimir exacta al mockup` en `consolidacion`): writer
+  delegado. Modos in-place (mismo codigo), biblioteca en pill, preview+buffer real,
+  historial embebido+expandible, Soporte real, footer real. Hub-tab-bar eliminada
+  (orden directa). typecheck 0 (writer + padre), check 11/11, gate estructural
+  re-corrido por el padre (3 marcadores, tab-bar ausente). Deuda conocida: `<main>`
+  anidado (secciones intactas, solo HTML).
 - **F9-sel** (commit `fix(editor): click-away y arranque sin seleccion` en
   `consolidacion`): `sel` inicial -1 (verificado null-safe en marco/panel/teclado),
   clic al vacio y Escape deseleccionan (sin gesto ni undo), cajas de referencia OFF
