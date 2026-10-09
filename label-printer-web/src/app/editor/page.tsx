@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_TEMPLATE, MM_TO_DOTS } from "@/lib/labels/label.template";
+import { encodeCode128Auto } from "@/lib/labels/code128";
 import {
   ASIDERES,
   MIN_DOTS,
@@ -23,8 +24,16 @@ import {
   cardClear,
   displayTitle,
   input,
+  insertClear,
+  layerActiveClear,
+  layerRowClear,
   monoClear,
-  pillClear,
+  rolBadgeClear,
+  rulerClear,
+  studioFooterClear,
+  studioHeaderClear,
+  studioSideClear,
+  studioToolbarClear,
 } from "@/components/ui";
 import type { LabelZone } from "@/lib/labels/label.template";
 import {
@@ -81,6 +90,12 @@ interface Preview {
   datosImpresos: string | null;
   anchoSimbolo: number;
   zonaQuieta: number;
+  /** Modulo del plan de producto (F9, del preview): el `moduleWidth` de la zona. */
+  modulo: number;
+  /** Modulos del simbolo de producto (F9, del preview): 0 si no es imprimible. */
+  modulos: number;
+  /** Symbologia del plan de producto (F9, del preview): la que decide. */
+  symPlan: string | null;
 }
 
 const MM = (dots: number) => dots / MM_TO_DOTS;
@@ -190,6 +205,54 @@ function primeraEditable(zonas: AnyZone[]): number {
   return i < 0 ? 0 : i;
 }
 
+type RolZona = "Fijo" | "Serie" | "Catálogo" | "Libre";
+
+/**
+ * Rol de cada zona para los badges de la lista ZONAS/CAPAS (F9, documentado).
+ *
+ * Mapeo: marco/logo/referenceLabel = Fijo; productName/barcode/barcodeData =
+ * Serie; price = Catalogo; fixed/rect/line = Libre. `reference` y `header` no
+ * estan en la lista del encargo: salen del catalogo/negocio por codigo (varian
+ * por producto), asi que son Serie. El logo duplicado (graphic que no es el de
+ * serie) y el codigo fijo son Libre: los puso el operador y se pueden borrar.
+ */
+function rolDe(z: AnyZone, i: number, logoSerie: number): RolZona {
+  if (z.kind === "shape") return "Fijo";
+  if (z.kind === "rect" || z.kind === "line") return "Libre";
+  if (z.kind === "graphic") return i === logoSerie ? "Fijo" : "Libre";
+  if (z.kind === "barcode") return String(z.source ?? "barcode") === "fixed" ? "Libre" : "Serie";
+  const s = String(z.source ?? "");
+  if (s === "fixed") return "Libre";
+  if (s === "price") return "Catálogo";
+  if (s === "referenceLabel") return "Fijo";
+  return "Serie";
+}
+
+/**
+ * Subtitulo real de cada fila de capas: coordenadas + que es.
+ *
+ * Todo sale de la zona (o del preview para la symbologia de producto): nada
+ * inventado. El codigo fijo dice "Code128 fijo" porque SIEMPRE es Code 128
+ * (`^BCN`); el de producto dice la symbologia del plan de la muestra actual.
+ */
+function detalleZona(z: AnyZone, symbology: string | null): string {
+  const xy = `en ${String(z.x)},${String(z.y)}`;
+  if (z.kind === "shape") return `${xy} · Borde papel`;
+  if (z.kind === "graphic") {
+    const d = graphicDots(String(z.gf ?? "")).dots;
+    return d ? `${xy} · GFA ${d.w}x${d.h}` : `${xy} · GFA`;
+  }
+  if (z.kind === "barcode") {
+    return String(z.source ?? "barcode") === "fixed"
+      ? `${xy} · Code128 fijo`
+      : `${xy} · ${symbology ?? "…"}`;
+  }
+  if (z.kind === "rect") return `${xy} · ${String(z.widthDots)}x${String(z.heightDots)} ^GB`;
+  if (z.kind === "line") return `${xy} · ${String(z.largoDots)} ${String(z.orientacion)}`;
+  const s = String(z.source ?? "");
+  return `${xy} · ${s === "fixed" ? "fijo" : s}${z.autoFit ? " · AutoFit" : ""}`;
+}
+
 /**
  * Que zona de la plantilla corresponde a cada caja dibujada.
  *
@@ -220,14 +283,26 @@ function mapearCajas(
   // plegado o empieza la caja de otra zona.
   let anterior = -1;
 
+  // F9: puede haber VARIAS zonas de codigo y de logo (fijas + duplicados). Las
+  // cajas salen en orden de emision y `emit()` recorre las zonas en orden, asi
+  // que la n-esima caja de barras es de la n-esima zona de codigo. Con una sola
+  // zona esto es identico al `findIndex` de antes.
+  const colas: Record<string, number[]> = { barras: [], logo: [], marco: [] };
+  zones.forEach((z, j) => {
+    if (z.kind === "barcode") colas.barras.push(j);
+    else if (z.kind === "graphic") colas.logo.push(j);
+    else if (z.kind === "shape") colas.marco.push(j);
+  });
+  const turno: Record<string, number> = { barras: 0, logo: 0, marco: 0 };
+
   cajas.forEach((c, i) => {
     // El marco no tiene texto, asi que sin emparejarlo por tipo se quedaba sin caja
     // asociada: era la razon de que no se pudiera mover. Por tipo funciona porque solo hay
     // una zona de cada uno de estos tres tipos.
     if (c.etiqueta === "barras" || c.etiqueta === "logo" || c.etiqueta === "marco") {
-      const kind =
-        c.etiqueta === "barras" ? "barcode" : c.etiqueta === "logo" ? "graphic" : "shape";
-      const j = zones.findIndex((z) => z.kind === kind);
+      const cola = colas[c.etiqueta] ?? [];
+      const j = cola[Math.min(turno[c.etiqueta], Math.max(0, cola.length - 1))] ?? -1;
+      turno[c.etiqueta] += 1;
       map[i] = j;
       // Se guarda el INDICE DE ZONA, porque `usados` se compara contra `resueltos`, que va
       // por zona. Guardar el indice de caja ahi hacia que dos numeros distintos se
@@ -329,6 +404,8 @@ export default function EditorPage() {
     kind: "estructurada" | "raw";
     widthMm: number;
     heightMm: number;
+    widthDots: number;
+    heightDots: number;
     dpi: number;
     category: string;
     archived: boolean;
@@ -363,6 +440,161 @@ export default function EditorPage() {
     null,
   );
   const [plantillaError, setPlantillaError] = useState<string | null>(null);
+
+  /**
+   * Undo/redo (F9): pila de snapshots de `zones` en commits discretos.
+   *
+   * Solo se compromete al agregar, al borrar, al SOLTAR un arrastre o un
+   * estirado, y cuando una edicion de campos se confirma (al salir del panel
+   * de propiedades). Los fotogramas intermedios del arrastre NO van a la pila:
+   * un arrastre es un commit, no cien. Tope 50 snapshots; mas alla se tira lo
+   * mas viejo. Cargar o descartar el override no es una edicion: reinicia la
+   * pila con lo cargado como punto de partida.
+   *
+   * Va en un ref + contador de version (para pintar deshabilitados honestos) y
+   * no en estado, porque los commits llegan desde `setTimeout` (fin de gesto)
+   * y desde `onBlur`, donde el estado de la pila estaria desfasado.
+   */
+  const histRef = useRef<{ stack: AnyZone[][]; idx: number } | null>(null);
+  if (histRef.current === null) {
+    histRef.current = {
+      stack: [structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]],
+      idx: 0,
+    };
+  }
+  const [histVer, setHistVer] = useState(0);
+  /** Espejo de `zones` ya pintado: el fin de gesto compromete DESPUES de pintar. */
+  const zonesRef = useRef<AnyZone[]>(zones);
+  zonesRef.current = zones;
+  /** JSON del ultimo commit: asi el blur solo compromete si algo cambio. */
+  const ultimoCommitRef = useRef<string>(JSON.stringify(DEFAULT_TEMPLATE.zones));
+  const puedeUndo = (histRef.current?.idx ?? 0) > 0;
+  const puedeRedo =
+    (histRef.current?.idx ?? 0) < (histRef.current?.stack.length ?? 1) - 1;
+
+  function comprometer(zs: AnyZone[]) {
+    const h = histRef.current;
+    if (!h) return;
+    h.stack = [...h.stack.slice(0, h.idx + 1), structuredClone(zs) as unknown as AnyZone[]];
+    if (h.stack.length > 50) h.stack = h.stack.slice(-50);
+    h.idx = h.stack.length - 1;
+    ultimoCommitRef.current = JSON.stringify(zs);
+    setHistVer((v) => v + 1);
+  }
+
+  /** Compromete lo que YA esta pintado (fin de arrastre/estirado, logo, toggle). */
+  function comprometerActual() {
+    window.setTimeout(() => comprometer(zonesRef.current), 0);
+  }
+
+  /** Cargar/descartar no es editar: la pila empieza de nuevo en lo cargado. */
+  function baseHistorial(zs: AnyZone[]) {
+    histRef.current = { stack: [structuredClone(zs) as unknown as AnyZone[]], idx: 0 };
+    ultimoCommitRef.current = JSON.stringify(zs);
+    setHistVer((v) => v + 1);
+  }
+
+  function deshacer() {
+    const h = histRef.current;
+    if (!h || h.idx <= 0) return;
+    h.idx -= 1;
+    const zs = structuredClone(h.stack[h.idx]) as unknown as AnyZone[];
+    setEstirando(null);
+    setZones(zs);
+    setSel((s) => Math.min(s, Math.max(0, zs.length - 1)));
+    ultimoCommitRef.current = JSON.stringify(zs);
+    setHistVer((v) => v + 1);
+  }
+
+  function rehacer() {
+    const h = histRef.current;
+    if (!h || h.idx >= h.stack.length - 1) return;
+    h.idx += 1;
+    const zs = structuredClone(h.stack[h.idx]) as unknown as AnyZone[];
+    setEstirando(null);
+    setZones(zs);
+    setSel((s) => Math.min(s, Math.max(0, zs.length - 1)));
+    ultimoCommitRef.current = JSON.stringify(zs);
+    setHistVer((v) => v + 1);
+  }
+
+  /**
+   * Pill de impresora REAL (F9): sale de `/api/printer/status`, cero numeros
+   * inventados. Mapeo documentado a los textos del mockup:
+   *
+   *   blocked/missing -> "Bloqueada: ..." (SOLO con estos dos estados reales;
+   *     prohibido el texto sin estado detras)
+   *   busy            -> "Ocupada: ..." (+ trabajos en cola si hay)
+   *   warning         -> "Aviso: ..."
+   *   ready           -> "Lista: ..." (cola + puerto reales)
+   *   unknown         -> "Estado desconocido: ..."
+   *
+   * El boton Actualizar re-sondea con `force=1`; ademas se sondea cada 20 s
+   * (mismo suelo que el banner) solo con la pestana visible.
+   */
+  interface EstadoImpresora {
+    state: string;
+    message: string;
+    jobCount: number;
+    queue: string;
+    port: string | null;
+    error: string | null;
+  }
+  const [imp, setImp] = useState<EstadoImpresora | null>(null);
+  const [impCargando, setImpCargando] = useState(true);
+  const leerImp = useCallback(async (fuerte: boolean, avisa: boolean) => {
+    if (avisa) setImpCargando(true);
+    try {
+      const res = await fetch(
+        fuerte ? "/api/printer/status?force=1" : "/api/printer/status",
+        { cache: "no-store" },
+      );
+      const j = (await res.json().catch(() => null)) as {
+        state?: unknown;
+        message?: unknown;
+        jobCount?: unknown;
+        error?: unknown;
+        raw?: { queue?: unknown; port?: unknown };
+      } | null;
+      setImp({
+        state: typeof j?.state === "string" ? j.state : "unknown",
+        message: typeof j?.message === "string" ? j.message : "sin respuesta",
+        jobCount: typeof j?.jobCount === "number" ? j.jobCount : 0,
+        queue: typeof j?.raw?.queue === "string" ? j.raw.queue : "",
+        port: typeof j?.raw?.port === "string" ? j.raw.port : null,
+        error: typeof j?.error === "string" ? j.error : null,
+      });
+    } catch (e) {
+      setImp({
+        state: "unknown",
+        message: "No se pudo consultar el estado de la impresora",
+        jobCount: 0,
+        queue: "",
+        port: null,
+        error: (e as Error).message,
+      });
+    } finally {
+      if (avisa) setImpCargando(false);
+    }
+  }, []);
+  useEffect(() => {
+    void leerImp(true, true);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") void leerImp(false, false);
+    }, 20000);
+    return () => clearInterval(t);
+  }, [leerImp]);
+
+  /** Version REAL del package (F9): viene del GET de preview, nunca escrita a mano. */
+  const [version, setVersion] = useState<string | null>(null);
+  /** Coordenadas reales del cursor sobre la etiqueta, en mm. Fuera = null. */
+  const [cursor, setCursor] = useState<{ xMm: number; yMm: number } | null>(null);
+  /** Menu de "+ Anadir zona personalizada": los 5 tipos con handlers reales. */
+  const [menuZonas, setMenuZonas] = useState(false);
+  /** Cambiar imagen del logo (F9): fichero, subida y error honesto. */
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   /** Imprimir prueba: gasta 1 etiqueta de verdad. Nunca se invoca solo. */
   const [imprimiendo, setImprimiendo] = useState(false);
@@ -400,6 +632,8 @@ export default function EditorPage() {
           kind: tpl.kind,
           widthMm: tpl.widthMm,
           heightMm: tpl.heightMm,
+          widthDots: tpl.widthDots,
+          heightDots: tpl.heightDots,
           dpi: tpl.dpi,
           category: tpl.category,
           archived: tpl.archived,
@@ -416,9 +650,11 @@ export default function EditorPage() {
       try {
         const j = (await fetch("/api/editor/preview").then((r) => r.json())) as {
           productos?: Muestra[];
+          version?: unknown;
         };
         if (!vivo || !Array.isArray(j?.productos)) return;
         setProductos(j.productos);
+        if (typeof j?.version === "string") setVersion(j.version);
         const preferida =
           j.productos.find((p) => p.barcode === "033844007522") ?? j.productos[0];
         if (preferida) setMuestra(preferida.code);
@@ -456,6 +692,9 @@ export default function EditorPage() {
         const cargadas = structuredClone(j.zones) as unknown as AnyZone[];
         setZones(cargadas);
         setSel(primeraEditable(cargadas));
+        // Lo cargado es otro punto de partida, no una edicion: la pila de
+        // undo empieza aqui.
+        baseHistorial(cargadas);
         setAplicado({
           texto:
             `Cargado lo que hay guardado (${j.savedAt}). Estos son los valores con los que se ` +
@@ -526,8 +765,11 @@ export default function EditorPage() {
         texto: "Descartado. Se vuelve a la plantilla del codigo.",
         clave: JSON.stringify(DEFAULT_TEMPLATE.zones),
       });
-      setZones(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]);
-      setSel(primeraEditable(structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[]));
+      const base = structuredClone(DEFAULT_TEMPLATE.zones) as unknown as AnyZone[];
+      setZones(base);
+      setSel(primeraEditable(base));
+      // Otro punto de partida, no una edicion.
+      baseHistorial(base);
     } catch (e) {
       setRechazo((e as Error).message);
     } finally {
@@ -783,8 +1025,159 @@ export default function EditorPage() {
       maxLines: 2,
       justify: "L",
     };
-    setZones((prev) => [...prev, nueva]);
+    const nuevas = [...zones, nueva];
+    setZones(nuevas);
     setSel(zones.length);
+    comprometer(nuevas);
+  }
+
+  /**
+   * Agrega un codigo de barras FIJO (F9): barras + HRI pareada, como el producto.
+   *
+   * Las barras van en x 360, y 40, con 40 dots de alto y modulo 1: a la derecha
+   * del logo (acaba en x 344) y por encima del precio (empieza en y 196). El
+   * contenido por defecto ("FIJO", 4 caracteres) mide 79 modulos = 79 dots a
+   * modulo 1: de 360 a 439, dentro del rollo (472) y con las dos zonas quietas
+   * de 10X (360 >= 10 y 472 - 439 = 33 >= 10). La HRI es una zona de texto fijo
+   * debajo (y 88, 12 dots de letra, como la `barcodeData` del producto), con el
+   * MISMO contenido: las dos se borran por separado, cada una con su boton.
+   *
+   * `interpretationLine: false` en las barras, como el producto: los digitos
+   * los pone la zona de texto, en posicion controlada, no el firmware con su
+   * hueco propio (que en la prueba fisica caia fuera de la etiqueta).
+   */
+  function agregarCodigoBarrasFijo() {
+    const barras: AnyZone = {
+      kind: "barcode",
+      x: 360,
+      y: 40,
+      heightDots: 40,
+      interpretationLine: false,
+      source: "fixed",
+      text: "FIJO",
+      center: false,
+      moduleWidth: 1,
+    };
+    const hri: AnyZone = {
+      kind: "text",
+      x: 360,
+      y: 88,
+      format: "^A0N,12,7",
+      source: "fixed",
+      text: "FIJO",
+      maxWidthDots: 100,
+      maxLines: 1,
+      justify: "L",
+    };
+    const nuevas = [...zones, barras, hri];
+    setZones(nuevas);
+    setSel(zones.length);
+    comprometer(nuevas);
+  }
+
+  /**
+   * Agrega un duplicado del logo actual (F9): mismo bitmap, otra posicion.
+   *
+   * Sale 1 mm a la derecha del original, encima de el: no hay ningun hueco de
+   * 27 x 9 mm libre en la etiqueta, asi que cualquier duplicado a tamano real
+   * pisa algo. Se arrastra y se achica con los campos (o el asa); Aplicar no
+   * guarda solapes (422 honesto). Solo el logo de SERIE (el primero) es fijo:
+   * los duplicados se pueden borrar, cambiar y mover.
+   */
+  function agregarLogoExtra() {
+    const serie = zones.find((z) => z.kind === "graphic");
+    const gf = String(serie?.gf ?? "");
+    if (gf === "") return;
+    const nueva: AnyZone = {
+      kind: "graphic",
+      x: Number(serie?.x ?? 128) + 8,
+      y: Number(serie?.y ?? 40),
+      gf,
+    };
+    const nuevas = [...zones, nueva];
+    setZones(nuevas);
+    setSel(zones.length);
+    comprometer(nuevas);
+  }
+
+  /**
+   * Cambia una zona de codigo entre producto y fijo (F9).
+   *
+   * A fijo: conserva el contenido si ya trae uno, si no "FIJO". A producto: se
+   * quita el literal (el dato vuelve a ser el del catalogo). El resto de la
+   * geometria (alto, modulo, posicion) no se toca: el toggle es de FUENTE, no
+   * de tamano.
+   */
+  function cambiarFuenteBarcode(i: number, fuente: "barcode" | "fixed") {
+    setZones((prev) =>
+      prev.map((z, j) => {
+        if (j !== i || z.kind !== "barcode") return z;
+        return fuente === "fixed"
+          ? { ...z, source: "fixed", text: String(z.text ?? "") !== "" ? String(z.text) : "FIJO" }
+          : { ...z, source: "barcode", text: undefined };
+      }),
+    );
+    comprometerActual();
+  }
+
+  /** Abre el selector de fichero para cambiar la imagen del logo. */
+  function pedirLogo() {
+    setLogoError(null);
+    logoInputRef.current?.click();
+  }
+
+  /**
+   * Cambia la imagen de una zona `graphic` (F9): PNG del operador -> `^GFA`.
+   *
+   * Solo PNG y maximo 2 MB, validado AQUI y en el servidor (el servidor decide:
+   * lo de aqui es para avisar pronto, no para dar por bueno). El ancho por
+   * defecto es el del logo actual: se manda en `widthMm` para que el servidor
+   * no tenga que adivinarlo. Devuelve `{ gf, wDots, hDots }` y se pone en la
+   * zona; el commit va despues de pintar.
+   */
+  async function cambiarLogo(i: number, f: File | undefined) {
+    if (!f) return;
+    if (f.type !== "image/png" && !f.name.toLowerCase().endsWith(".png")) {
+      setLogoError("Solo PNG: el convertidor no acepta JPG ni otros formatos.");
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      setLogoError(
+        `Pesa ${(f.size / 1024 / 1024).toFixed(2)} MB: maximo 2 MB. Reducelo y vuelve a intentarlo.`,
+      );
+      return;
+    }
+    setLogoBusy(true);
+    setLogoError(null);
+    try {
+      const buf = await f.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = "";
+      for (let k = 0; k < bytes.length; k += 0x8000) {
+        bin += String.fromCharCode(...bytes.subarray(k, k + 0x8000));
+      }
+      const actual = zones[i];
+      const d = actual ? graphicDots(String(actual.gf ?? "")).dots : null;
+      const res = await fetch("/api/editor/logo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pngBase64: btoa(bin),
+          widthMm: d ? d.w / MM_TO_DOTS : undefined,
+        }),
+      });
+      const j = (await res.json()) as { gf?: unknown; error?: string };
+      if (!res.ok || typeof j.gf !== "string") {
+        setLogoError(j?.error ?? `La app respondio ${res.status}`);
+        return;
+      }
+      editar(i, { gf: j.gf });
+      comprometerActual();
+    } catch (e) {
+      setLogoError((e as Error).message);
+    } finally {
+      setLogoBusy(false);
+    }
   }
 
   /**
@@ -793,11 +1186,33 @@ export default function EditorPage() {
    * estructura de la etiqueta (marco, logo, nombre, barras, digitos, REF y precio) y sin
    * ellas no hay etiqueta que imprimir. El boton solo se pinta para las libres, asi que
    * esto no necesita comprobar nada mas.
+   *
+   * F9: tambien son libres el codigo fijo y los logos duplicados (el de serie, no).
    */
   function eliminarZonaLibre(i: number) {
     const resto = zones.filter((_, j) => j !== i);
     setZones(resto);
     setSel(primeraEditable(resto));
+    comprometer(resto);
+  }
+
+  /** Indice del logo de SERIE (el primero `graphic`): los demas son duplicados borrables. */
+  const logoSerieIdx = useMemo(
+    () => zones.findIndex((z) => z.kind === "graphic"),
+    [zones],
+  );
+
+  /**
+   * Que zonas se pueden borrar (F9): libres F8a/F8b + codigo fijo + logos
+   * duplicados. Las de serie (marco, logo de serie, nombre, barras de
+   * producto, digitos, REF y precio), no.
+   */
+  function esBorrable(z: AnyZone, i: number): boolean {
+    if (z.kind === "rect" || z.kind === "line") return true;
+    if (z.kind === "text" && String(z.source ?? "") === "fixed") return true;
+    if (z.kind === "barcode" && String(z.source ?? "barcode") === "fixed") return true;
+    if (z.kind === "graphic" && i !== logoSerieIdx) return true;
+    return false;
   }
 
   /**
@@ -817,8 +1232,10 @@ export default function EditorPage() {
       heightDots: 56,
       thicknessDots: 2,
     };
-    setZones((prev) => [...prev, nueva]);
+    const nuevas = [...zones, nueva];
+    setZones(nuevas);
     setSel(zones.length);
+    comprometer(nuevas);
   }
 
   /**
@@ -838,8 +1255,10 @@ export default function EditorPage() {
       orientacion: "vertical",
       thicknessDots: 2,
     };
-    setZones((prev) => [...prev, nueva]);
+    const nuevas = [...zones, nueva];
+    setZones(nuevas);
     setSel(zones.length);
+    comprometer(nuevas);
   }
 
   /**
@@ -1044,6 +1463,28 @@ export default function EditorPage() {
   const raf = useRef<number | null>(null);
 
   /**
+   * Modulos de cada zona de codigo FIJO (F9), con la misma funcion que el servidor.
+   *
+   * Hacen falta en el navegador por dos cosas: el marco de la fija (su ancho es
+   * `modulos * moduleWidth`, y `preview.anchoSimbolo` es el simbolo de PRODUCTO,
+   * otro simbolo distinto) y el `ctx.modulos` del estirado (el escalon del
+   * modulo sale de ahi). Si el contenido no se puede codificar, 0 y el marco
+   * cae en la estimacion generica de 95 modulos, como antes.
+   */
+  const modulosFijos = useMemo(
+    () =>
+      zones.map((z) => {
+        if (z.kind !== "barcode" || String(z.source ?? "barcode") !== "fixed") return 0;
+        try {
+          return encodeCode128Auto(String(z.text ?? "")).encoded.modules;
+        } catch {
+          return 0;
+        }
+      }),
+    [zones],
+  );
+
+  /**
    * La caja de cada zona, estimada desde la zona y el ultimo render.
    *
    * Esta es el marco que se pinta y el area en la que se acierta al clic, y por eso no
@@ -1060,14 +1501,20 @@ export default function EditorPage() {
             esFiguraLibre(z)
             ? marcoFiguraLibre(z)
             : cajaEstimada(z as unknown as LabelZone, {
-                anchoSimbolo: preview.anchoSimbolo,
+                // La fija mide sus propios modulos, no el simbolo de producto.
+                anchoSimbolo:
+                  z.kind === "barcode" &&
+                  String(z.source ?? "barcode") === "fixed" &&
+                  modulosFijos[i] > 0
+                    ? modulosFijos[i] * Math.max(1, Number(z.moduleWidth))
+                    : preview.anchoSimbolo,
                 texto: preview.resueltos[i]?.texto ?? null,
                 altoLetra: preview.resueltos[i]?.alto,
                 anchoCelda: preview.resueltos[i]?.ancho,
               })
           : null,
       ),
-    [zones, preview],
+    [zones, preview, modulosFijos],
   );
 
   /**
@@ -1199,7 +1646,14 @@ export default function EditorPage() {
       origen: structuredClone(z) as unknown as LabelZone,
       base,
       ctx: {
-        modulos: modulosActuales,
+        // La fija estira por SUS modulos, no por los del producto (F9): el
+        // escalon del modulo sale de ahi y con los del producto saldria otro.
+        modulos:
+          z.kind === "barcode" &&
+          String(z.source ?? "barcode") === "fixed" &&
+          modulosFijos[indice] > 0
+            ? modulosFijos[indice]
+            : modulosActuales,
         anchoCajaTexto: anchoCajaDeTexto(indice, preview, pegables),
       },
       movido: false,
@@ -1237,6 +1691,8 @@ export default function EditorPage() {
     // zona, que acaba de moverse con ella. Al soltar un ESTIRADO si: el marco se queda donde
     // lo dejo el puntero hasta que llegue el render nuevo, y entonces se ajusta a lo impreso.
     if (g.asa === null) setEstirando(null);
+    // Fin de arrastre o de estirado (F9): UN commit de undo, con lo ya pintado.
+    comprometerActual();
   }
 
   /**
@@ -1310,7 +1766,11 @@ export default function EditorPage() {
       // Si habia un estirado congelado, la posicion nueva ya no es la suya: que pinte la
       // caja estimada de la zona mientras llega el render.
       setEstirando(null);
-      setZones((prev) => prev.map((zz, i) => (i === sel ? { ...zz, x, y } : zz)));
+      // Cada pulsacion es un commit discreto de undo (F9): se calcula la
+      // siguiente en vez de leer el estado, que aqui esta fresco por las deps.
+      const nz = zones.map((zz, i) => (i === sel ? { ...zz, x, y } : zz));
+      setZones(nz);
+      comprometer(nz);
     };
 
     window.addEventListener("keydown", teclado);
@@ -1391,33 +1851,208 @@ export default function EditorPage() {
       ? "No se guarda: con estos valores algo se pisa o se sale de la etiqueta (ver avisos del canvas)."
       : null;
 
+  /** Texto y tono de la pill de impresora (F9): el mapeo esta documentado en `leerImp`. */
+  const pillCola = imp && imp.jobCount > 0 ? ` · ${imp.jobCount} en cola` : "";
+  const pillTexto = !imp
+    ? "Consultando impresora…"
+    : imp.state === "blocked" || imp.state === "missing"
+      ? `Bloqueada: ${imp.message}`
+      : imp.state === "busy"
+        ? `Ocupada: ${imp.message}${pillCola}`
+        : imp.state === "warning"
+          ? `Aviso: ${imp.message}`
+          : imp.state === "ready"
+            ? `Lista: ${imp.queue !== "" ? imp.queue : imp.message}${pillCola}`
+            : `Estado desconocido: ${imp.message}`;
+  const pillTono = !imp
+    ? "border-edge bg-panel text-muted"
+    : imp.state === "ready"
+      ? "border-success bg-success-soft text-success"
+      : imp.state === "busy" || imp.state === "warning"
+        ? "border-warn-line bg-warn-soft text-warn"
+        : imp.state === "blocked" || imp.state === "missing"
+          ? "border-error bg-error-soft text-error"
+          : "border-edge bg-panel text-muted";
+  const pillPunto = !imp
+    ? "bg-ink-mute"
+    : imp.state === "ready"
+      ? "bg-ok"
+      : imp.state === "busy"
+        ? "bg-busy"
+        : imp.state === "warning"
+          ? "bg-warn"
+          : imp.state === "blocked" || imp.state === "missing"
+            ? "bg-danger"
+            : "bg-ink-mute";
+
+  /** Pestanas del estudio: las 6 rutas reales (+ editor, que es esta). */
+  const tabsEstudio = [
+    { href: "/", etiqueta: "Normal" },
+    { href: "/fast", etiqueta: "Rápido" },
+    { href: "/history", etiqueta: "Historial" },
+    { href: "/editor", etiqueta: "Editor", activo: true },
+    { href: "/plantillas", etiqueta: "Plantillas" },
+    { href: "/lotes", etiqueta: "Lotes" },
+    { href: "/settings", etiqueta: "Ajustes" },
+  ];
+
+  /**
+   * Guardar como plantilla desde la cabecera: el MISMO handler. Sin nombre no
+   * hay nada que guardar (el endpoint exige nombre): se baja al campo y se
+   * dice, en vez de guardar "sin titulo".
+   */
+  function guardarDesdeCabecera() {
+    if (guardandoPlantilla) return;
+    if (nombrePlantilla.trim() === "") {
+      setPlantillaError("Ponle un nombre abajo, en «Nombre de nueva variante», y vuelve a pulsar.");
+      document.getElementById("editor-nombre-plantilla")?.focus();
+      return;
+    }
+    void guardarComoPlantilla();
+  }
+
   return (
-    <main className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className={`${displayTitle} text-2xl`}>Editor de plantilla</h1>
-          <p className="mt-1 text-sm text-muted">
-            El dibujo sale del mismo codigo que genera el ZPL, asi que lo que ves aqui es lo que
-            se imprime. Haz clic en cualquier zona y arrastra: se selecciona y se mueve de una,
-            como en Word o PowerPoint. Con el boton de <strong>Aplicar cambios</strong> el cambio
-            vale para imprimir al instante.
-          </p>
+    <main className="flex min-h-screen flex-col bg-canvas">
+      {/* Cabecera del estudio (F9, piel del mockup): marca + pill REAL de
+          impresora + Actualizar (re-sondea) + tabs reales + Guardar (mismo
+          handler) + Aplicar (mismo handler). */}
+      <header className={studioHeaderClear}>
+        <div className="flex items-center gap-2">
+          <span className={`${displayTitle} text-sm`}>LabelPrinter</span>
+          <span className="text-xs text-muted">·</span>
+          <span className="text-xs font-semibold text-primary">PAPICAR</span>
+          <span className="font-mono text-[10px] text-muted">v{version ?? "…"}</span>
         </div>
-        {activa && (
-          <div className="flex flex-wrap gap-2">
-            <span className={pillClear}>
-              Activa: {activa.name} · {activa.widthMm} × {activa.heightMm} mm
-            </span>
-            {activa.kind === "raw" && <span className={badgeRawClear}>RAW</span>}
-            {activa.archived && <span className={badgeArchivedClear}>Archivada</span>}
-            {hayOverride && editable && (
-              <span className={pillClear}>
-                Override guardado{guardado ? ` · ${guardado.savedAt}` : ""}
-              </span>
-            )}
-          </div>
-        )}
+        <div
+          role={imp?.state === "blocked" || imp?.state === "missing" ? "alert" : "status"}
+          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs ${pillTono}`}
+        >
+          <span className={`inline-block size-2 shrink-0 rounded-full ${pillPunto}`} />
+          <span className="max-w-xs truncate font-medium md:max-w-md">{pillTexto}</span>
+          <button
+            type="button"
+            onClick={() => void leerImp(true, true)}
+            disabled={impCargando}
+            className="font-semibold underline hover:opacity-80 disabled:opacity-40"
+          >
+            {impCargando ? "Consultando…" : "Actualizar"}
+          </button>
+        </div>
+        <nav aria-label="Modulos" className="hidden items-center gap-1 lg:flex">
+          {tabsEstudio.map((t) => (
+            <a
+              key={t.href}
+              href={t.href}
+              aria-current={t.activo ? "page" : undefined}
+              className={
+                t.activo
+                  ? "rounded-md bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary"
+                  : "rounded-md px-2.5 py-1 text-xs font-medium text-muted hover:text-strong"
+              }
+            >
+              {t.etiqueta}
+            </a>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={guardarDesdeCabecera}
+            disabled={guardandoPlantilla || !editable}
+            className={buttonClearSecondary}
+            title="Guardar geometria como plantilla nueva en la biblioteca"
+          >
+            {guardandoPlantilla ? "guardando…" : "Guardar como plantilla"}
+          </button>
+          <button
+            type="button"
+            onClick={aplicar}
+            disabled={aplicando || !editable}
+            className={buttonClear}
+            title="Compila y guarda: a partir de ya se imprime con esto"
+          >
+            {aplicando ? "guardando…" : "Aplicar cambios"}
+          </button>
+        </div>
       </header>
+
+      {/* Barra de insercion (F9): los 5 tipos con handlers reales + pill de
+          activa REAL + zoom (estado existente) + ver cajas (toggle real,
+          default ON) + undo/redo (pila de snapshots, deshabilitados honestos). */}
+      {activa && editable && (
+        <section aria-label="Insertar y lienzo" className={studioToolbarClear}>
+          <span className="font-medium uppercase tracking-wide text-muted">Insertar:</span>
+          <button type="button" onClick={agregarTextoLibre} className={insertClear}>
+            Texto libre
+          </button>
+          <button type="button" onClick={agregarCodigoBarrasFijo} className={insertClear}>
+            Código barras
+          </button>
+          <button type="button" onClick={agregarRectanguloLibre} className={insertClear}>
+            Rectángulo
+          </button>
+          <button type="button" onClick={agregarLineaLibre} className={insertClear}>
+            Línea
+          </button>
+          <button type="button" onClick={agregarLogoExtra} className={insertClear}>
+            Logo GFA
+          </button>
+          <span className="ml-2 rounded border border-edge bg-canvas px-2 py-0.5 font-mono text-[11px] text-strong">
+            Activa: {activa.name} · {activa.widthMm} × {activa.heightMm} mm ({activa.widthDots} ×{" "}
+            {activa.heightDots} dots)
+          </span>
+          {hayOverride && (
+            <span className="rounded border border-edge bg-canvas px-2 py-0.5 font-mono text-[11px] text-muted">
+              Override guardado{guardado ? ` · ${guardado.savedAt}` : ""}
+            </span>
+          )}
+          <span className="ml-auto flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-muted">
+              Zoom
+              <input
+                type="range"
+                min={1}
+                max={6}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="h-1.5 w-16 cursor-pointer accent-primary"
+              />
+              <span className="w-5 font-mono font-semibold text-strong">{zoom}x</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-1.5 font-medium text-muted">
+              <input
+                type="checkbox"
+                checked={mostrarCajas}
+                onChange={(e) => setMostrarCajas(e.target.checked)}
+                className="size-3.5 rounded border-line-strong accent-primary"
+              />
+              Ver cajas
+            </label>
+            <span className="flex items-center overflow-hidden rounded border border-edge">
+              <button
+                type="button"
+                onClick={deshacer}
+                disabled={!puedeUndo}
+                title="Deshacer"
+                aria-label="Deshacer"
+                className="p-1 text-muted hover:bg-canvas disabled:opacity-40"
+              >
+                ↩
+              </button>
+              <button
+                type="button"
+                onClick={rehacer}
+                disabled={!puedeRedo}
+                title="Rehacer"
+                aria-label="Rehacer"
+                className="border-l border-edge p-1 text-muted hover:bg-canvas disabled:opacity-40"
+              >
+                ↪
+              </button>
+            </span>
+          </span>
+        </section>
+      )}
 
       {!activa && !activaError && (
         <p className="text-sm text-muted">Leyendo la plantilla activa...</p>
@@ -1477,70 +2112,145 @@ export default function EditorPage() {
       )}
 
       {activa && editable && (
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_1fr]">
-        {/* ------------------------------------------------------------- controles */}
-        <section className="flex flex-col gap-4">
-          <div className={cardClear + " p-4"}>
-            <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Zonas</h3>
+      <div className="grid flex-1 grid-cols-1 gap-0 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
+        {/* Columna 1: ZONAS/CAPAS (F9). Conteo REAL, badges por rol real,
+            "+ Anadir zona personalizada" con menu de los 5 tipos reales. */}
+        <aside aria-label="Zonas y capas" className={`${studioSideClear} border-r border-edge xl:col-start-1 xl:row-start-1`}>
+          <div className="flex items-center justify-between border-b border-edge bg-canvas/60 p-3">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-strong">
+              Zonas / Capas ZPL
+            </h2>
+            <span className="rounded bg-canvas px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">
+              {zones.length} elementos
+            </span>
+          </div>
+          <p className="border-b border-warn-line bg-warn-soft px-3 py-2 text-[11px] leading-tight text-warn">
+            Las {zones.length - zones.filter((z, i) => esBorrable(z, i)).length} zonas de serie
+            pertenecen a la plantilla base; las{" "}
+            {zones.filter((z, i) => esBorrable(z, i)).length} libres las puso el operador.
+          </p>
+          <ul className="max-h-[60vh] flex-1 divide-y divide-edge overflow-y-auto">
+            {zones.map((z, i) => {
+              const esSel = i === sel;
+              const rol = rolDe(z, i, logoSerieIdx);
+              const tonoRol =
+                rol === "Serie" || rol === "Catálogo"
+                  ? "bg-primary-soft text-primary"
+                  : rol === "Libre"
+                    ? "bg-canvas text-strong"
+                    : "bg-canvas text-muted";
+              return (
+                <li key={i}>
+                  <button
+                    type="button"
+                    disabled={!EDITABLES.has(z.kind)}
+                    onClick={() => setSel(i)}
+                    className={esSel ? layerActiveClear : layerRowClear}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-strong">
+                        {etiquetaDe(z, i)}
+                      </span>
+                      <span className="block truncate font-mono text-[10px] text-muted">
+                        {detalleZona(z, preview?.symPlan ?? preview?.symbology ?? null)}
+                      </span>
+                    </span>
+                    <span className={`${rolBadgeClear} ${esSel ? "bg-primary text-white" : tonoRol}`}>
+                      {esSel ? "ACTIVO" : rol}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="border-t border-edge bg-panel p-3">
             <button
               type="button"
-              onClick={agregarTextoLibre}
-              className={`${buttonClearSecondary} w-full`}
+              onClick={() => setMenuZonas((m) => !m)}
+              aria-expanded={menuZonas}
+              className={`${buttonClearSecondary} w-full border-dashed`}
             >
-              Texto libre
+              + Añadir zona personalizada
             </button>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={agregarRectanguloLibre}
-                className={buttonClearSecondary}
-              >
-                Rectangulo
-              </button>
-              <button
-                type="button"
-                onClick={agregarLineaLibre}
-                className={buttonClearSecondary}
-              >
-                Linea
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted">
-              Agrega un texto fijo (&quot;TEXTO&quot;) arriba a la izquierda: sale tal cual se
-              escribe y no varia por producto. El rectangulo (12 x 7 mm, a la izquierda del
-              logo) y la linea (vertical de 10 mm, a la derecha) salen con `^GB`, como el
-              marco, y se arrastran y estiran igual que lo demas. Solo lo libre se puede
-              borrar: el marco fijo no se toca.
-            </p>
-            <div className="mt-2 flex flex-col gap-1">
-              {zones.map((z, i) => {
-                const activa = i === sel;
-                const editable = EDITABLES.has(z.kind);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    disabled={!editable}
-                    onClick={() => setSel(i)}
-                    className={`rounded px-2 py-1.5 text-left text-sm ${
-                      activa
-                        ? "bg-primary text-white"
-                        : editable
-                          ? "bg-canvas text-strong hover:bg-edge"
-                          : "bg-panel text-muted"
-                    }`}
-                  >
-                    {etiquetaDe(z, i)}
-                  </button>
-                );
-              })}
-            </div>
+            {menuZonas && (
+              <div className="mt-2 flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    agregarTextoLibre();
+                    setMenuZonas(false);
+                  }}
+                  className={insertClear}
+                >
+                  Texto libre
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    agregarCodigoBarrasFijo();
+                    setMenuZonas(false);
+                  }}
+                  className={insertClear}
+                >
+                  Código barras (fijo + HRI)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    agregarRectanguloLibre();
+                    setMenuZonas(false);
+                  }}
+                  className={insertClear}
+                >
+                  Rectángulo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    agregarLineaLibre();
+                    setMenuZonas(false);
+                  }}
+                  className={insertClear}
+                >
+                  Línea
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    agregarLogoExtra();
+                    setMenuZonas(false);
+                  }}
+                  className={insertClear}
+                >
+                  Logo GFA (duplicado)
+                </button>
+              </div>
+            )}
           </div>
+        </aside>
+        {/* Columna 3: inspector (F9). Propiedades por kind (las existentes) +
+            PRODUCTO DE MUESTRA + Imprimir prueba + Guardar como plantilla
+            (mismos handlers). En movil va despues del lienzo. */}
+        <section className="flex min-w-0 flex-col gap-4 border-l border-edge bg-panel p-4 xl:col-start-3 xl:row-start-1">
 
           {zona && EDITABLES.has(zona.kind) && (
-            <div className={cardClear + " p-4"}>
-              <h3 className="mb-3 text-sm font-semibold tracking-tight text-strong">
-                {etiquetaDe(zona, sel)}
+            <div
+              className={cardClear + " p-4"}
+              onBlurCapture={(e) => {
+                // Edicion confirmada (F9): al salir del panel, si algo cambio,
+                // UN commit de undo. Moverse entre campos del panel no cuenta.
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                const ahora = JSON.stringify(zones);
+                if (ahora !== ultimoCommitRef.current) comprometer(zones);
+              }}
+            >
+              <h3 className="mb-3 flex items-center justify-between text-sm font-semibold tracking-tight text-strong">
+                <span>Propiedades de zona</span>
+                <span className="rounded bg-primary-soft px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
+                  {zona.kind === "barcode" && String(zona.source ?? "barcode") === "fixed"
+                    ? "codigo fijo"
+                    : etiquetaDe(zona, sel)}
+                </span>
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 <Num
@@ -1578,6 +2288,39 @@ export default function EditorPage() {
                       </div>
                     );
                   })()}
+                  {/* Cambiar imagen (F9): PNG -> ^GFA via POST /api/editor/logo. */}
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,.png"
+                    className="hidden"
+                    aria-label="Elegir PNG para el logo"
+                    onChange={(e) => {
+                      void cambiarLogo(sel, e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={pedirLogo}
+                    disabled={logoBusy}
+                    className={`${buttonClearSecondary} mt-3 w-full`}
+                  >
+                    {logoBusy ? "convirtiendo…" : "Cambiar imagen…"}
+                  </button>
+                  {logoError && (
+                    <p role="alert" className="mt-2 rounded-md border border-error bg-error-soft px-3 py-2 text-xs text-error">
+                      {logoError}
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    Solo PNG, maximo 2 MB. Se convierte a `^GFA` en blanco y negro
+                    (umbral 128) al ancho actual del logo, manteniendo la
+                    proporcion.
+                    {sel !== logoSerieIdx
+                      ? " Este es un duplicado: se puede borrar."
+                      : " Este es el logo de serie: no se puede borrar, pero si cambiar."}
+                  </p>
                   <p className="mt-2 text-xs leading-relaxed text-muted">
                     El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
                     aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
@@ -1590,6 +2333,65 @@ export default function EditorPage() {
 
               {zona.kind === "barcode" ? (
                 <>
+                  {/* Fuente del codigo (F9): producto o fijo, con el mismo mando.
+                      El resto de la geometria no se toca: el toggle es de fuente. */}
+                  <div className="mt-3">
+                    <span className="mb-1 block text-xs text-muted">Fuente del codigo</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cambiarFuenteBarcode(sel, "barcode")}
+                        disabled={String(zona.source ?? "barcode") !== "fixed"}
+                        className={buttonClearSecondary}
+                        title={
+                          String(zona.source ?? "barcode") !== "fixed"
+                            ? "Ya es de producto"
+                            : "Volver al codigo del producto"
+                        }
+                      >
+                        De producto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cambiarFuenteBarcode(sel, "fixed")}
+                        disabled={String(zona.source ?? "barcode") === "fixed"}
+                        className={buttonClearSecondary}
+                        title={
+                          String(zona.source ?? "barcode") === "fixed"
+                            ? "Ya es fijo"
+                            : "Fijar un contenido propio (siempre Code128)"
+                        }
+                      >
+                        Fijo
+                      </button>
+                    </div>
+                    {String(zona.source ?? "barcode") === "fixed" ? (
+                      <>
+                        <label
+                          htmlFor="editor-barcode-fijo"
+                          className="mb-1 mt-2 block text-xs text-muted"
+                        >
+                          Contenido fijo
+                        </label>
+                        <input
+                          id="editor-barcode-fijo"
+                          value={String(zona.text ?? "")}
+                          maxLength={48}
+                          onChange={(e) => editar(sel, { text: e.target.value })}
+                          className={`${input} font-mono`}
+                        />
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                          Sale SIEMPRE en Code128 (^BCN), sin auto-EAN. Maximo 48
+                          ASCII. Vacio no se guarda (400 honesto).
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                        Del catalogo por codigo: la symbologia la decide el plan
+                        (EAN-13 o Code 128).
+                      </p>
+                    )}
+                  </div>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Num
                       label="alto barra (mm)"
@@ -1783,12 +2585,11 @@ export default function EditorPage() {
                 </>
               ) : null}
 
-              {/* Solo lo libre se puede borrar: textos fijos (F8a) y figuras libres (F8b).
-                  Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y precio)
-                  no: son la estructura de la etiqueta. */}
-              {(zona.kind === "rect" ||
-                zona.kind === "line" ||
-                (zona.kind === "text" && zona.source === "fixed")) && (
+              {/* Solo lo libre se puede borrar: textos fijos (F8a), figuras libres
+                  (F8b), codigos fijos y logos duplicados (F9). Las zonas de serie
+                  (marco, logo de serie, nombre, barras de producto, digitos, REF y
+                  precio) no: son la estructura de la etiqueta. */}
+              {esBorrable(zona, sel) && (
                 <>
                   <button
                     type="button"
@@ -1798,8 +2599,9 @@ export default function EditorPage() {
                     Eliminar esta zona
                   </button>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                    Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y
-                    precio) no se pueden borrar: son la estructura de la etiqueta.
+                    Las zonas de serie (marco, logo de serie, nombre, barras de
+                    producto, digitos, REF y precio) no se pueden borrar: son la
+                    estructura de la etiqueta.
                   </p>
                 </>
               )}
@@ -1909,19 +2711,6 @@ export default function EditorPage() {
           </div>
 
           {/* --------------------------------------- biblioteca e impresion real */}
-          <GuardarPlantillaPanel
-            nombre={nombrePlantilla}
-            onNombre={(v) => {
-              setNombrePlantilla(v);
-              setPlantillaCreada(null);
-            }}
-            ocupado={guardandoPlantilla}
-            puede={nombrePlantilla.trim() !== "" && motivoBloqueoGuardar === null}
-            motivoBloqueo={motivoBloqueoGuardar}
-            resultado={plantillaCreada}
-            error={plantillaError}
-            onGuardar={() => void guardarComoPlantilla()}
-          />
           <PruebaImpresionPanel
             productos={productos}
             muestra={muestra}
@@ -1934,44 +2723,47 @@ export default function EditorPage() {
             error={pruebaError}
             onImprimir={() => void imprimirPrueba()}
           />
+          <GuardarPlantillaPanel
+            nombre={nombrePlantilla}
+            onNombre={(v) => {
+              setNombrePlantilla(v);
+              setPlantillaCreada(null);
+              setPlantillaError(null);
+            }}
+            ocupado={guardandoPlantilla}
+            puede={nombrePlantilla.trim() !== "" && motivoBloqueoGuardar === null}
+            motivoBloqueo={motivoBloqueoGuardar}
+            resultado={plantillaCreada}
+            error={plantillaError}
+            onGuardar={() => void guardarComoPlantilla()}
+          />
         </section>
 
-        {/* --------------------------------------------------------------- dibujo */}
-        <section className="flex flex-col gap-3">
-          <div className={cardClear + " flex items-center gap-4 px-4 py-2"}>
-            <label className="text-xs text-muted">
-              Zoom
-              <input
-                type="range"
-                min={1}
-                max={6}
-                value={zoom}
-                onChange={(e) => setZoom(Number(e.target.value))}
-                className="ml-2"
-              />
-              <span className="ml-1">{zoom}x</span>
-            </label>
-            <label className="text-xs text-muted">
-              <input
-                type="checkbox"
-                checked={mostrarCajas}
-                onChange={(e) => setMostrarCajas(e.target.checked)}
-                className="mr-1"
-              />
-              ver cajas
-            </label>
-            <span className="text-xs text-muted">
-              Clic en cualquier zona para seleccionarla y arrastrarla en el mismo gesto; tira de
-              los puntos blancos de las esquinas o los bordes para cambiarle el tamano. Flechas =
-              mover 1 dot, con Mayus 1 mm; Escape = deshacer. Vale para el logo, los textos,
-              las barras, los rectangulos y las lineas. <strong>El marco no</strong>: es el margen del papel y se calcula
-              solo desde el ancho de la etiqueta.
+        {/* Columna 2: lienzo (F9). En movil va primero. */}
+        <section className="order-first flex min-w-0 flex-col gap-3 bg-slate-200/70 p-4 xl:order-none xl:col-start-2 xl:row-start-1">
+          {/* Barra meta REAL (F9): 203 DPI, mm y dots desde las constantes. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-panel px-4 py-1.5 font-mono text-[11px] text-muted">
+            <span>
+              Resolución: <strong className="text-strong">203 DPI ({MM_TO_DOTS} dots/mm)</strong>
             </span>
-            <span className="text-xs text-muted">
-              {DEFAULT_TEMPLATE.widthMm} x {DEFAULT_TEMPLATE.heightMm} mm ={" "}
-              {DEFAULT_TEMPLATE.widthDots} x {DEFAULT_TEMPLATE.heightDots} dots
+            <span>·</span>
+            <span>
+              Tamaño físico:{" "}
+              <strong className="text-strong">
+                {DEFAULT_TEMPLATE.widthMm.toFixed(1)} × {DEFAULT_TEMPLATE.heightMm.toFixed(1)} mm
+              </strong>
             </span>
-            {busy && <span className="text-xs text-primary">calculando...</span>}
+            <span>·</span>
+            <span>
+              Matriz dots:{" "}
+              <strong className="text-strong">
+                {DEFAULT_TEMPLATE.widthDots} × {DEFAULT_TEMPLATE.heightDots} px
+              </strong>
+            </span>
+            <span className="ml-auto font-sans">
+              Clic para arrastrar elemento · Flechas = 1 dot (Shift = 1 mm)
+            </span>
+            {busy && <span className="text-primary">calculando…</span>}
           </div>
 
           {error && (
@@ -1980,32 +2772,67 @@ export default function EditorPage() {
             </p>
           )}
 
-          {solapes.length > 0 && (
-            <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2">
-              <p className="text-sm font-semibold text-warn">
-                Con estos valores algo se pisa o se sale de la etiqueta
-              </p>
-              <ul className="mt-1 list-disc pl-5 text-xs text-warn">
-                {solapes.map((s, i) => (
-                  <li key={i}>{s.mensaje}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {preview && (
             <div
               ref={lienzoRef}
-              className="relative inline-block touch-none select-none rounded-lg border border-edge bg-white p-2 shadow-card"
+              className="relative touch-none select-none overflow-auto rounded-lg border border-edge bg-white p-2 shadow-card"
               onPointerDown={empezarGesto}
               onPointerMove={moverPuntero}
               onPointerUp={terminarGesto}
               onPointerCancel={terminarGesto}
               onLostPointerCapture={terminarGesto}
             >
-              {/* Todo lo absoluto de aca dentro se posiciona contra ESTE wrapper, que empieza
-                  en el mismo punto que la imagen: cero offsets magicos. */}
-              <div className="relative">
+              {/* Regla superior en mm (F9): pura presentacion sobre la grilla. Cada
+                  mm son 8 dots a 203 dpi, por el zoom actual. */}
+              <div className={`flex ${rulerClear}`} aria-hidden="true">
+                <div style={{ width: 28, height: 14 }} />
+                <div className="relative flex" style={{ height: 14 }}>
+                  {Array.from({ length: Math.round(DEFAULT_TEMPLATE.widthMm) + 1 }, (_, mm) => (
+                    <div
+                      key={mm}
+                      className="relative border-l border-edge"
+                      style={{ width: MM_TO_DOTS * zoom, height: 14 }}
+                    >
+                      {mm % 5 === 0 && (
+                        <span className="absolute left-0.5 top-0.5">{mm}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex">
+                {/* Regla izquierda en mm (F9): igual que la superior, en vertical. */}
+                <div className={rulerClear} aria-hidden="true" style={{ width: 28 }}>
+                  {Array.from({ length: Math.round(DEFAULT_TEMPLATE.heightMm) + 1 }, (_, mm) => (
+                    <div
+                      key={mm}
+                      className="relative border-t border-edge text-right"
+                      style={{ height: MM_TO_DOTS * zoom }}
+                    >
+                      {mm % 5 === 0 && (
+                        <span className="absolute right-1 top-0.5">{mm}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Todo lo absoluto de aca dentro se posiciona contra ESTE wrapper, que empieza
+                    en el mismo punto que la imagen: cero offsets magicos. */}
+                <div
+                  className="relative"
+                  onMouseMove={(e) => {
+                    const el = imgRef.current;
+                    if (!el) {
+                      setCursor(null);
+                      return;
+                    }
+                    const r = el.getBoundingClientRect();
+                    setCursor({
+                      xMm: (e.clientX - r.left) / zoom / MM_TO_DOTS,
+                      yMm: (e.clientY - r.top) / zoom / MM_TO_DOTS,
+                    });
+                  }}
+                  onMouseLeave={() => setCursor(null)}
+                >
                 <img
                   ref={imgRef}
                   src={`data:image/png;base64,${preview.png}`}
@@ -2052,6 +2879,23 @@ export default function EditorPage() {
                   ) : null,
                 )}
 
+                {/* Guias de alineacion (F9): centro de la seleccion, a lo ancho y
+                    alto del lienzo. Geometria real del marco, presentacion pura. */}
+                {marcoSel && (
+                  <>
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute bottom-0 top-0 border-l border-dashed border-primary/70"
+                      style={{ left: `${((marcoSel.x0 + marcoSel.x1) / 2) * zoom}px` }}
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-primary/70"
+                      style={{ top: `${((marcoSel.y0 + marcoSel.y1) / 2) * zoom}px` }}
+                    />
+                  </>
+                )}
+
                 {/* Marco de la zona seleccionada: unico, con asas, y POR ENCIMA de todo. */}
                 {marcoSel && (
                   <div
@@ -2089,37 +2933,82 @@ export default function EditorPage() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
             </div>
           )}
 
+          {/* Panel validador (F9, piel del mockup): colisiones REALES de
+              `buscarProblemas` + desbordes REALES del informe + symbologia,
+              modulo y quiet REALES del plan del preview. Sin hallazgos, verde
+              honesto con la muestra actual. El informe completo sigue debajo. */}
           {preview && (
-            <div className={cardClear + " p-4"}>
-              <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Informe</h3>
-
-              {/* Fallos de dibujado, arriba y en grande.
-                  Lo que dice "NO" o "EN BLANCO" es algo que falta: una zona que no se ha
-                  pintado o un texto que la impresora corta. Abajo, en el `<pre>`, esa linea
-                  se leeria como un dato mas entre otros, y justo estos son los que no se
-                  pueden perder de vista. */}
-              {avisos.length > 0 && (
-                <ul className="mb-3 list-disc space-y-1 rounded-md border border-error bg-error-soft px-3 py-2 pl-6 text-xs text-error">
-                  {avisos.map((a, i) => (
-                    <li key={i}>{a}</li>
-                  ))}
-                </ul>
-              )}
-
-              <pre className={`${monoClear} whitespace-pre-wrap`}>
-                {[
-                  `symbologia: ${preview.symbology ?? "-"}`,
-                  `datos impresos: ${preview.datosImpresos ?? "-"}`,
-                  `ancho del simbolo: ${preview.anchoSimbolo} dots (${MM(preview.anchoSimbolo).toFixed(1)} mm)`,
-                  `zona quieta: ${preview.zonaQuieta} dots`,
-                  "",
-                  ...preview.informe,
-                ].join("\n")}
-              </pre>
+            <div className="border-t border-edge bg-panel px-4 py-2.5">
+              <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-strong">
+                  Informe del validador ZPL
+                </h3>
+                {solapes.length + avisos.length > 0 ? (
+                  <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[10px] font-semibold text-warn">
+                    Colisiones y desbordes detectados
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
+                    Sin colisiones con esta muestra
+                  </span>
+                )}
+                <span className="ml-auto font-mono text-[11px] text-muted">
+                  sym: {preview.symPlan ?? preview.symbology ?? "-"} · simbolo:{" "}
+                  {preview.anchoSimbolo} dots ({MM(preview.anchoSimbolo).toFixed(1)} mm) ·
+                  modulo: {preview.modulo} dots · modulos: {preview.modulos} · quiet:{" "}
+                  {preview.zonaQuieta} dots
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-2">
+                {solapes.length > 0 && (
+                  <div className="rounded border border-warn-line bg-warn-soft p-2 text-warn">
+                    <strong className="block font-semibold">
+                      Con estos valores algo se pisa o se sale:
+                    </strong>
+                    <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-[10px]">
+                      {solapes.map((s, i) => (
+                        <li key={i}>{s.mensaje}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {avisos.length > 0 && (
+                  <div className="rounded border border-error bg-error-soft p-2 text-error">
+                    <strong className="block font-semibold">
+                      Texto no sale entero (Desborde):
+                    </strong>
+                    <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-[10px]">
+                      {avisos.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {solapes.length + avisos.length === 0 && (
+                  <p className="rounded border border-success bg-success-soft p-2 text-success md:col-span-2">
+                    Nada se pisa ni se sale con «{nombre}» · {barcode} · {precio}. Con
+                    otro producto puede cambiar: el validador mira la muestra actual.
+                  </p>
+                )}
+              </div>
+              <details className="mt-2 text-[11px] text-muted">
+                <summary className="cursor-pointer font-medium">Ver informe completo</summary>
+                <pre className={`${monoClear} mt-1 whitespace-pre-wrap`}>
+                  {[
+                    `symbologia: ${preview.symbology ?? "-"}`,
+                    `datos impresos: ${preview.datosImpresos ?? "-"}`,
+                    `ancho del simbolo: ${preview.anchoSimbolo} dots (${MM(preview.anchoSimbolo).toFixed(1)} mm)`,
+                    `zona quieta: ${preview.zonaQuieta} dots`,
+                    "",
+                    ...preview.informe,
+                  ].join("\n")}
+                </pre>
+              </details>
             </div>
           )}
 
@@ -2136,11 +3025,42 @@ export default function EditorPage() {
                 onActualizar={() => setZplTick((t) => t + 1)}
               />
             }
-            origen={<OrigenTab zones={zones} etiquetaDe={etiquetaDe} />}
+            origen={<OrigenTab zones={zones} etiquetaDe={etiquetaDe} logoSerieIdx={logoSerieIdx} />}
           />
         </section>
       </div>
       )}
+
+      {/* Barra de estado (F9): todo real. Motor estatico y honesto ("local (en
+          proceso)", sin "Online" fingido); impresora objetivo de settings/cola;
+          origen override-vs-codigo; cursor real del raton; version REAL del
+          package (prohibido inventar la del mockup). */}
+      <footer className={studioFooterClear}>
+        <span>
+          <span className="inline-block size-1.5 rounded-full bg-slate-500" /> Motor ZPL: local
+          (en proceso)
+        </span>
+        <span>
+          Impresora objetivo:{" "}
+          <span className="text-slate-300">
+            {imp?.queue !== "" && imp?.queue ? imp.queue : "sin datos"}
+            {imp?.port ? ` (${imp.port})` : ""}
+          </span>
+        </span>
+        <span>
+          Origen:{" "}
+          <span className="text-slate-300">
+            {hayOverride ? "data/plantilla-override.json" : "codigo"}
+          </span>
+        </span>
+        <span className="ml-auto">
+          Coordenadas cursor:{" "}
+          {cursor
+            ? `X: ${cursor.xMm.toFixed(1)}mm | Y: ${cursor.yMm.toFixed(1)}mm`
+            : "—"}
+        </span>
+        <span className="text-slate-300">v{version ?? "…"}</span>
+      </footer>
     </main>
   );
 }

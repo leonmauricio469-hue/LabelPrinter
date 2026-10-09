@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   templateById,
+  type BarcodeZone,
   type LabelTemplate,
   type TextZone,
 } from "@/lib/labels/label.template";
 import { renderLabel } from "@/lib/labels/label.render";
-import { resolveZoneText } from "@/lib/labels/zpl.builder";
+import { resolveZoneText, planForZone } from "@/lib/labels/zpl.builder";
 import type { LabelData } from "@/lib/labels/label.types";
 import { zoneSchema } from "@/lib/labels/label-zones.schema";
 import { readOverride } from "@/lib/labels/label-override.store";
@@ -68,7 +71,27 @@ export async function GET() {
   return NextResponse.json({
     productos: muestra,
     override: o ? { activo: true, templateId: o.templateId, savedAt: o.savedAt } : { activo: false },
+    // Version REAL del package, para el pie del editor (F9): prohibido inventar
+    // la del mockup. Si no se puede leer, `null` y la pantalla lo dice.
+    version: versionReal(),
   });
+}
+
+/**
+ * La version tal cual la dice `package.json`, sin adornos.
+ *
+ * Vive en este GET y no en un endpoint nuevo porque el editor ya lo pide al
+ * abrir (muestras + override): un viaje mas para un string seria ruido.
+ */
+function versionReal(): string | null {
+  try {
+    const j = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+      version?: unknown;
+    };
+    return typeof j.version === "string" && j.version !== "" ? j.version : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
@@ -95,6 +118,16 @@ export async function POST(req: Request) {
 
   const data: LabelData = parsed.data;
 
+  // Zona de producto para los metadatos del validador: la de `source:
+  // "barcode"`, y si no hay (solo fijas), la primera de codigo. El plan se
+  // calcula con el barcode de la muestra, igual que hace el render.
+  const esBarcode = (z: (typeof template.zones)[number]): z is BarcodeZone =>
+    z.kind === "barcode";
+  const zonaPlan =
+    template.zones.find((z): z is BarcodeZone => esBarcode(z) && z.source !== "fixed") ??
+    template.zones.find(esBarcode);
+  const planPlan = zonaPlan ? planForZone(template, zonaPlan, data.barcode) : null;
+
   try {
     const r = renderLabel(template, data, { scale: parsed.scale });
 
@@ -118,6 +151,17 @@ export async function POST(req: Request) {
       datosImpresos: r.datosImpresos,
       anchoSimbolo: r.anchoSimbolo,
       zonaQuieta: r.zonaQuieta,
+      // Metadatos del plan para el panel validador (F9): con que modulo y
+      // cuantos modulos sale el simbolo de producto de la muestra. La zona que
+      // manda es la de producto (`source: "barcode"`); si solo hay fijas, la
+      // primera: el plan se calcula con el barcode de la muestra igual que el
+      // render, asi que estos numeros son los del dibujo, no un supuesto.
+      modulo: zonaPlan?.moduleWidth ?? 0,
+      modulos: planPlan?.printable ? planPlan.modules : 0,
+      // Symbologia DEL PLAN (la que decide, EAN-13 o Code 128): el `symbology`
+      // del render es el ultimo simbolo emitido y con varias zonas de codigo
+      // puede ser la fija; el validador ensena la del plan de producto.
+      symPlan: planPlan?.printable ? planPlan.symbology : null,
       widthDots: template.widthDots,
       heightDots: template.heightDots,
     });

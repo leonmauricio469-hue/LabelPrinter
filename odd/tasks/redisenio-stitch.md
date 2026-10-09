@@ -43,6 +43,8 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [ ] **F8** Editor vectorial acotado (por objetos, 1 a 1):
   - [x] **F8a** Texto libre fijo (agregar/borrar/editar contenido en canvas).
   - [x] **F8b** Lineas y rectangulos libres (todo con `^GB`, sin parser nuevo).
+- [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
+  barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
 
 ## Aceptacion F0
 - `npm run typecheck` exit 0; `npm run check` 11/11 verdes.
@@ -140,6 +142,15 @@ del writer + spot check del padre antes de cada commit de unidad.
   al shape). Correccion: el writer atribuyo al padre un `ok:false` del historial, pero
   la cola prueba que es la linea F4 del 18:03 — ningun intento nuevo, nada que explicar.
 - Siguiente paso: **F8c** (a definir) o cierre de la linea vectorial.
+- **F9** (commit `feat(editor): F9 editor tal cual Stitch + barcode fijo + logo PNG` en
+  `consolidacion`): writer delegado. Piel exacta del mockup (header, insertar, zonas
+  con roles, reglas, validador con sym/quiet reales, footer real, version real 1.2.0)
+  + undo/redo por snapshots + barcode fijo Code128 con HRI pareada + upload PNG→`^GFA`
+  (`pngjs`, nueva dep). typecheck 0 (writer + padre), check 11/11, round-trips reales
+  (barcode fijo, logo 16x8 convertido y validado contra solapes, override restaurado).
+  Arrastre/undo a clics sin verificar (declarado). Decisiones del usuario aplicadas:
+  barcode = contenido editable, logo = cambiable via upload.
+- Siguiente paso: **lo que pidas** (F8c, pruebas fisicas o PR a `main`).
 
 ## Proximo paso
 F0.

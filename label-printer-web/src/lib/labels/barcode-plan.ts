@@ -184,6 +184,53 @@ export function planBarcode(raw: string, options: BarcodePlanOptions): BarcodePl
 }
 
 /**
+ * Plan de una zona de codigo FIJO (F9): contenido literal del operador.
+ *
+ * SIEMPRE Code 128 (`^BCN`), sin auto-EAN: aunque el contenido sean 13 digitos
+ * validos no se emite `^BE`. Es decision del usuario ("cambiar el contenido"):
+ * el fijo tiene que salir predecible, el mismo texto en la misma symbologia,
+ * sin que el plan lo cambie de symbologia por su cuenta segun lo que parezca.
+ *
+ * Por eso NO pasa por `planBarcode()`: ese decide EAN-13 para los digitos, que
+ * es justo lo que aqui no se quiere. El contenido sale tal cual, sin normalizar
+ * (sin quitar espacios ni guiones): es literal del operador, no dato de
+ * catalogo. Lo que si se comprueba igual es la cabida (tope de modulos con sus
+ * zonas quietas) y que sea ASCII imprimible, que es lo unico que Code 128
+ * codifica. Un fijo que no cabe o no se puede codificar no se emite (igual que
+ * un producto no imprimible), y el motivo viaja en el `reason`.
+ */
+export function planFixedBarcode(raw: string, options: BarcodePlanOptions): BarcodePlan {
+  const x = options.moduleWidthDots ?? MODULE_DOTS;
+  const tope = maxModules(options);
+
+  if (raw === "") {
+    return { printable: false, reason: "vacio", detail: "la zona de codigo fijo no tiene contenido" };
+  }
+  if (!/^[\x20-\x7e]+$/.test(raw)) {
+    return {
+      printable: false,
+      reason: "ilegible",
+      detail: `el contenido fijo "${raw}" tiene caracteres que Code 128 no puede codificar`,
+    };
+  }
+
+  const { encoded } = encodeCode128Auto(raw);
+  if (encoded.modules > tope) {
+    return {
+      printable: false,
+      reason: "no-cabe",
+      detail:
+        `el contenido fijo "${raw}" necesita ${encoded.modules} modulos de Code 128 y en una ` +
+        `etiqueta de ${options.labelWidthDots} dots caben ${tope}. No cabe sin saltarse la ` +
+        `zona quieta de ${options.quietFactor ?? QUIET_FACTOR}X que manda la norma.`,
+      modulesNeeded: encoded.modules,
+    };
+  }
+
+  return { printable: true, symbology: "code128", data: raw, modules: encoded.modules, moduleWidth: x };
+}
+
+/**
  * El comando ZPL del simbolo.
  *
  * El 4o parametro de `^BE` y de `^BC` es la linea de interpretacion; el 5o de `^BC` es el

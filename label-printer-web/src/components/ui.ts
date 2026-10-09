@@ -205,3 +205,50 @@ export const tabClearActive = `${tabClear} bg-primary-soft font-semibold text-pr
 /** Bloque monoespaciado (ZPL, informe, resultados verbatim) sobre canvas. */
 export const monoClear =
   "rounded-md border border-edge bg-canvas p-3 font-mono text-xs leading-relaxed text-strong";
+
+/*
+ * ---- ClearCraft F9: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ *
+ * Piel del estudio Stitch (`stitch_panel_editor`): cabecera con pill de
+ * impresora, barra de insercion, 3 columnas (capas / lienzo con regla /
+ * inspector) y barra de estado. Reusan `base`, `badge` y los tonos
+ * semanticos existentes (ok/warn/error): ningun color nuevo, ningun dato
+ * inventado. La unica tipografia es la del sistema + `font-mono` donde ya se
+ * usaba.
+ */
+
+/** Cabecera del estudio: marca + pill + tabs + acciones, sobre panel blanco. */
+export const studioHeaderClear =
+  "border-b border-edge bg-panel px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2";
+
+/** Barra de insercion y lienzo: blanca, una linea, con los mandos del canvas. */
+export const studioToolbarClear =
+  "border-b border-edge bg-panel px-4 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs";
+
+/** Columna lateral del estudio (capas o inspector): panel blanco con scroll. */
+export const studioSideClear =
+  "bg-panel border-edge flex flex-col overflow-hidden";
+
+/** Fila de capa: clic para seleccionar; la activa va en `layerActiveClear`. */
+export const layerRowClear =
+  "w-full px-3 py-2 flex items-center justify-between gap-2 text-left hover:bg-canvas text-xs";
+
+/** Fila de la zona seleccionada: fondo primario suave + borde izquierdo. */
+export const layerActiveClear =
+  "w-full px-3 py-2 flex items-center justify-between gap-2 text-left bg-primary-soft border-l-4 border-primary text-xs";
+
+/** Badge de rol de zona (Fijo / Serie / Catalogo / Libre / ACTIVO): la forma. */
+export const rolBadgeClear =
+  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold";
+
+/** Regla milimetrada del lienzo (presentacion pura sobre la grilla). */
+export const rulerClear =
+  "bg-panel border-edge font-mono text-[9px] leading-none text-muted select-none";
+
+/** Barra de estado inferior: fondo oscuro, datos reales en mono. */
+export const studioFooterClear =
+  "bg-slate-900 text-slate-400 px-3 py-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[10px] font-mono select-none";
+
+/** Boton de insertar: borde sutil, hover primario. Uno por tipo de zona. */
+export const insertClear =
+  "rounded border border-edge px-2.5 py-1 font-medium text-strong hover:border-primary hover:bg-primary-soft transition";

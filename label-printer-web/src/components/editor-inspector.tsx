@@ -51,9 +51,12 @@ const FUENTE_TEXTO: Record<string, string> = {
 export function OrigenTab({
   zones,
   etiquetaDe,
+  logoSerieIdx,
 }: {
   zones: AnyZone[];
   etiquetaDe: (z: AnyZone, i: number) => string;
+  /** Indice del logo de serie (el primero `graphic`): los demas son duplicados del operador. */
+  logoSerieIdx?: number;
 }) {
   return (
     <div>
@@ -72,9 +75,13 @@ export function OrigenTab({
                 ? (FUENTE_TEXTO[String(z.source ?? "")] ??
                   `Origen «${String(z.source ?? "?")}»: fijo de la plantilla.`)
                 : z.kind === "barcode"
-                  ? "Simbolo del codigo. La symbologia la decide planBarcode por producto (EAN-13 o Code 128); el alto y el modulo son de la plantilla."
+                  ? String(z.source ?? "barcode") === "fixed"
+                    ? `Codigo fijo «${String(z.text ?? "")}» escrito por el operador. Sale SIEMPRE en Code 128 (^BCN), sin auto-EAN. No varia por producto; se puede mover, estirar y borrar.`
+                    : "Simbolo del codigo. La symbologia la decide planBarcode por producto (EAN-13 o Code 128); el alto y el modulo son de la plantilla."
                   : z.kind === "graphic"
-                    ? "Logo fijo (bitmap ^GFA). No varia por producto."
+                    ? logoSerieIdx !== undefined && i !== logoSerieIdx
+                      ? "Duplicado del logo puesto por el operador (mismo bitmap, otra posicion). No varia por producto; se puede mover, estirar, cambiar y borrar."
+                      : "Logo fijo (bitmap ^GFA). No varia por producto."
                     : z.kind === "rect"
                       ? "Rectangulo libre dibujado por el operador (^GB hueco, esquinas vivas). No varia por producto; se puede mover, estirar y borrar."
                       : z.kind === "line"

@@ -7,7 +7,7 @@ import type {
   TextZone,
   ShapeZone,
 } from "./label.template";
-import { planBarcode, barcodeFormat, QUIET_FACTOR } from "./barcode-plan";
+import { planBarcode, barcodeFormat, QUIET_FACTOR, planFixedBarcode } from "./barcode-plan";
 import type { BarcodePlan } from "./barcode-plan";
 import { foldField } from "./ascii.fold";
 
@@ -410,6 +410,36 @@ function emit(
     }
 
     if (zone.kind === "barcode") {
+      // Codigo FIJO del operador (F9): el literal de `zone.text`, SIEMPRE Code 128.
+      //
+      // No usa el `plan` del producto: ese decide EAN-13 para los digitos y aqui no
+      // se quiere auto-EAN. `planFixedBarcode()` calcula los modulos del literal con
+      // el `moduleWidth` de ESTA zona y comprueba la cabida en la misma columna;
+      // `barcodeFormat()` emite `^BCN` porque el plan que recibe ya es code128.
+      //
+      // Si el fijo no cabe o no se puede codificar, la zona no se emite, igual que
+      // un producto no imprimible sin lista alternativa: mejor una etiqueta sin ese
+      // codigo que un simbolo recortado que no lee nadie. El esquema ya impide el
+      // vacio y lo no-ASCII con 400; aqui solo queda el que no cabe.
+      //
+      // NOTA: la decision de `zonesWithoutBarcode` (`resolveLabel`) la sigue tomando
+      // la PRIMERA zona de codigo con el barcode del producto, aunque haya fijas:
+      // con un producto sin codigo imprimible la etiqueta entera se recompone y las
+      // fijas tampoco salen. Es el mismo camino que el producto, sin trato especial.
+      if (zone.source === "fixed") {
+        const planFijo = planFixedBarcode(zone.text ?? "", {
+          labelWidthDots: anchoDisponible(template, zone),
+          moduleWidthDots: zone.moduleWidth,
+          quietFactor: QUIET_FACTOR,
+        });
+        if (!planFijo.printable) continue;
+        commands.push(
+          barcodeFormat(planFijo, zone.heightDots, zone.interpretationLine, zone.hriHeightDots),
+          `^FO${barcodeX(template, zone, planFijo)},${zone.y}`,
+          `^FD${planFijo.data}^FS`,
+        );
+        continue;
+      }
       // Aqui se decide la symbologia. Si el codigo no se puede imprimir y la plantilla no
       // trae lista alternativa, la zona no se emite: es preferible una etiqueta sin codigo
       // a un simbolo recortado, que sale bonito y no lo lee nadie.

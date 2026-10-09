@@ -31,6 +31,16 @@ import type { LabelZone } from "./label.template";
 export const TEXTO_FIJO_MAX = 60;
 
 /**
+ * Tope del contenido literal de una zona de codigo fijo (F9), en caracteres.
+ *
+ * 48 y no 60 como el texto: el fijo viaja literal en el `^FD` de un Code 128 y
+ * cada caracter son ~11 modulos; a modulo 1 en la columna de 28,75 mm (230 dots
+ * menos 20 de zonas quietas) caben unos 19 caracteres de ancho medio. 48 es tope
+ * de cordura, no de cabida: si no cabe, el plan lo dice y la zona no se emite.
+ */
+export const BARCODE_FIJO_MAX = 48;
+
+/**
  * Topes de cordura de las figuras libres (F8b), en dots.
  *
  * El esquema NO decide si la figura cabe en la etiqueta: eso lo decide `apply`, que
@@ -60,6 +70,46 @@ function refinamientoTextoFijo(
       ctx.addIssue({
         code: "custom",
         message: "una zona de texto fijo necesita su contenido en text",
+        path: ["text"],
+      });
+    }
+    return;
+  }
+  if (zona.text !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "text solo vale con source fixed",
+      path: ["text"],
+    });
+  }
+}
+
+/**
+ * `text` solo vale con `source: "fixed"`, y con el es obligatorio (F9, espejo de
+ * `refinamientoTextoFijo`).
+ *
+ * Ademas el contenido fijo del codigo tiene que ser ASCII imprimible (es lo
+ * unico que Code 128 codifica) y no pasar de 48 caracteres. Sin esto, un texto
+ * con eñes llegaria al plan, el plan lo declararia ilegible y la zona
+ * desapareceria del preview sin que ningun 400 dijera por que.
+ */
+function refinamientoBarcodeFijo(
+  zona: { source: string; text?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (zona.source === "fixed") {
+    if (zona.text === undefined || zona.text.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "una zona de codigo fijo necesita su contenido en text",
+        path: ["text"],
+      });
+      return;
+    }
+    if (!/^[\x20-\x7e]*$/.test(zona.text)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "el contenido fijo del codigo solo admite ASCII imprimible (Code 128)",
         path: ["text"],
       });
     }
@@ -104,11 +154,15 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
       y: z.number().int().min(-2000).max(4000),
       heightDots: z.number().int().min(10).max(2000),
       interpretationLine: z.boolean(),
-      source: z.literal("barcode"),
+      // Fijo (F9): `source` abierto a "fixed" + contenido literal del operador.
+      // Tope 48 ASCII: el fijo viaja literal en el `^FD` y Code 128 no codifica
+      // mas que ASCII imprimible.
+      source: z.enum(["barcode", "fixed"]),
+      text: z.string().min(1).max(BARCODE_FIJO_MAX).optional(),
       center: z.boolean().optional(),
       moduleWidth: z.number().int().min(1).max(10),
       hriHeightDots: z.number().int().min(0).max(200).optional(),
-    }),
+    }).superRefine(refinamientoBarcodeFijo),
     z.object({
       kind: z.literal("graphic"),
       x: z.number().int().min(-2000).max(4000),

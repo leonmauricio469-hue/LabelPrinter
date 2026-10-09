@@ -146,7 +146,25 @@ export interface BarcodeZone {
   heightDots: number;
   /** imprime la linea de interpretacion con los digitos debajo de las barras */
   interpretationLine: boolean;
-  source: "barcode";
+  /**
+   * De donde sale el dato del simbolo (F9, espejo de `TextZoneFixed`).
+   *
+   * `"barcode"` = el codigo del producto: la symbologia la decide `planBarcode()`
+   * (EAN-13 o Code 128 segun el dato). `"fixed"` = el literal de `text`, SIEMPRE
+   * Code 128 (`^BCN`), sin auto-EAN: aunque el contenido sean solo digitos no se
+   * emite `^BE`. Predecible a proposito: el operador escribe un texto y sale ese
+   * texto en Code 128, sin que el plan lo cambie de symbologia por su cuenta.
+   *
+   * Solo vale con `barcode`, y `text` solo vale con `"fixed"` (lo impone el
+   * esquema, igual que `refinamientoTextoFijo` hace con las zonas de texto).
+   */
+  source: "barcode" | "fixed";
+  /**
+   * Contenido literal del operador cuando `source` es `"fixed"`, como "FIJO-001".
+   * Tope 48 ASCII (lo impone el esquema): el fijo viaja literal en el `^FD` de un
+   * Code 128, y mas largo que eso no cabe en la columna de 28,75 mm ni a modulo 1.
+   */
+  text?: string;
   /** centra el barcode horizontalmente usando el ancho real del simbolo */
   center?: boolean;
   /** ancho de modulo permitido; el plan no baja de aqui por mucho que el codigo sea largo */
