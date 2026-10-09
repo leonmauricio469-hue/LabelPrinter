@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScannerInput } from "@/components/scanner-input";
 import { ProductCard } from "@/components/product-card";
+import { ProductSearch } from "@/components/product-search";
 import { ProductPreview } from "@/components/product-preview";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { PrintStatus } from "@/components/print-status";
@@ -22,7 +23,6 @@ import {
   cardClear,
   dialogClear,
   hint,
-  input,
   label,
   modeTabActiveClear,
   modeTabClear,
@@ -556,6 +556,19 @@ export function CentroImpresion({
     reset();
   }, [reset]);
 
+  // Elegir un producto ya resuelto (sugerencia del predictivo o tarjeta de la
+  // lista de coincidencias): NO re-resuelve, solo selecciona. El submit del
+  // form y el scan siguen usando `resolve`.
+  const elegirProducto = useCallback(
+    (product: Product) => {
+      setSelected(product);
+      setMatches([]);
+      setQty(1);
+      notify({ kind: "ok", message: product.name });
+    },
+    [notify],
+  );
+
   const doPrint = useCallback(async () => {
     if (!selected) return;
     if (
@@ -862,15 +875,11 @@ export function CentroImpresion({
                 resolve(term);
               }}
             >
-              <input
-                id="term"
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                placeholder="Escanea aqui, o escribe el codigo y pulsa Enter"
-                className={`${input} h-12 flex-1 text-base`}
+              <ProductSearch
+                term={term}
+                onTermChange={setTerm}
+                onPick={elegirProducto}
+                disabled={busy}
               />
               <button
                 type="submit"
@@ -974,12 +983,7 @@ export function CentroImpresion({
                   <ProductCard
                     key={product.code}
                     product={product}
-                    onSelect={() => {
-                      setSelected(product);
-                      setMatches([]);
-                      setQty(1);
-                      notify({ kind: "ok", message: product.name });
-                    }}
+                    onSelect={() => elegirProducto(product)}
                   />
                 ))}
               </div>
