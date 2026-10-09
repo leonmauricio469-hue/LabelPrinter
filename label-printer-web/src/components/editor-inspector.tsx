@@ -177,7 +177,7 @@ export function EditorTabs({
   origen: ReactNode;
 }) {
   return (
-    <div className={`${cardClear} p-4`}>
+    <div className={`${cardClear} min-w-0 p-4`}>
       <div role="tablist" aria-label="Vista del editor" className="mb-3 flex gap-1">
         {(["zpl", "origen"] as const).map((t) => (
           <button
@@ -225,7 +225,7 @@ export function GuardarPlantillaPanel({
   onGuardar: () => void;
 }) {
   return (
-    <div className={`${cardClear} p-4`}>
+    <div className={`${cardClear} min-w-0 p-4`}>
       <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">
         Guardar como plantilla
       </h3>
@@ -305,7 +305,7 @@ export function PruebaImpresionPanel({
   onImprimir: () => void;
 }) {
   return (
-    <div className={`${cardClear} p-4`}>
+    <div className={`${cardClear} min-w-0 p-4`}>
       <h3 className="mb-2 text-sm font-semibold tracking-tight text-strong">Imprimir prueba</h3>
       <p className={hint}>
         Imprime 1 etiqueta de verdad con la plantilla activa («{plantillaNombre}»). Gasta papel.

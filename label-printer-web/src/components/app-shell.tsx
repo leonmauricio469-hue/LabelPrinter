@@ -23,6 +23,10 @@ import { buttonClearSecondary, displayTitle } from "@/components/ui";
  *     ZPL/EPL". `/teclado` queda fuera del nav, como hoy.
  *   - El contenido (`children`) conserva la columna `max-w-3xl` del layout
  *     anterior para que las paginas rindan identico; solo el cromo es nuevo.
+ *   - F9-fix: `/editor` sale a full-bleed SOLO el (`esAncha` por
+ *     `pathname`): cromo y contenido pasan a `max-w-none` en esa ruta. Las
+ *     demas pantallas siguen en `max-w-3xl`. El workbench marca su
+ *     contenedor con la clase `editor-fullbleed` (ver `ui.ts`/`globals.css`).
  *
  * Lo que NO hay a proposito: zoom global, undo/redo global, telemetria,
  * botones sin destino real.
@@ -30,6 +34,16 @@ import { buttonClearSecondary, displayTitle } from "@/components/ui";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const pathname = usePathname();
+
+  /**
+   * F9-fix: pagina ancha SOLO para el editor.
+   *
+   * El workbench (capas + lienzo + inspector) no entra en 768 px. En
+   * `/editor` (y subrutas) el cromo y el contenido van a `max-w-none`;
+   * el resto de rutas conserva `max-w-3xl` intacto.
+   */
+  const esAncha = pathname === "/editor" || (pathname?.startsWith("/editor/") ?? false);
+  const anchoCromo = esAncha ? "max-w-none" : "max-w-3xl";
 
   // Al navegar se cierra el drawer: el cambio de ruta ya es la confirmacion.
   useEffect(() => {
@@ -49,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col bg-app">
       <header className="sticky top-0 z-40 border-b border-edge bg-panel">
         {/* Fila superior: menu, marca, configurar. */}
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pt-3 sm:px-6">
+        <div className={`mx-auto flex w-full ${anchoCromo} items-center gap-2 px-4 pt-3 sm:px-6`}>
           <button
             type="button"
             onClick={() => setMenuAbierto(true)}
@@ -91,19 +105,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Pill de impresora: estado REAL via PrinterStatusBanner. */}
-        <div className="mx-auto w-full max-w-3xl px-4 pt-2.5 sm:px-6">
+        <div className={`mx-auto w-full ${anchoCromo} px-4 pt-2.5 sm:px-6`}>
           <PrinterStatusBanner />
         </div>
 
         {/* Tabs a las rutas existentes. */}
-        <div className="mx-auto w-full max-w-3xl px-4 pb-2 pt-2.5 sm:px-6">
+        <div className={`mx-auto w-full ${anchoCromo} px-4 pb-2 pt-2.5 sm:px-6`}>
           <AppNav />
         </div>
       </header>
 
       {/* Div y no `<main>`: cada pagina ya renderiza el suyo. El id mantiene el
           salto del enlace "Ir al contenido". */}
-      <div id="contenido" className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-10 pt-5 sm:px-6 sm:pt-7">
+      <div id="contenido" className={`mx-auto flex w-full ${anchoCromo} flex-1 flex-col px-4 pb-10 pt-5 sm:px-6 sm:pt-7`}>
         {children}
       </div>
 

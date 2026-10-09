@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_TEMPLATE, MM_TO_DOTS } from "@/lib/labels/label.template";
+import { DEFAULT_TEMPLATE, MM_TO_DOTS, dotsFromMm } from "@/lib/labels/label.template";
 import { encodeCode128Auto } from "@/lib/labels/code128";
 import {
   ASIDERES,
@@ -22,7 +22,7 @@ import {
   buttonClear,
   buttonClearSecondary,
   cardClear,
-  displayTitle,
+  editorFullbleedClear,
   input,
   insertClear,
   layerActiveClear,
@@ -31,7 +31,6 @@ import {
   rolBadgeClear,
   rulerClear,
   studioFooterClear,
-  studioHeaderClear,
   studioSideClear,
   studioToolbarClear,
 } from "@/components/ui";
@@ -519,18 +518,11 @@ export default function EditorPage() {
   }
 
   /**
-   * Pill de impresora REAL (F9): sale de `/api/printer/status`, cero numeros
-   * inventados. Mapeo documentado a los textos del mockup:
-   *
-   *   blocked/missing -> "Bloqueada: ..." (SOLO con estos dos estados reales;
-   *     prohibido el texto sin estado detras)
-   *   busy            -> "Ocupada: ..." (+ trabajos en cola si hay)
-   *   warning         -> "Aviso: ..."
-   *   ready           -> "Lista: ..." (cola + puerto reales)
-   *   unknown         -> "Estado desconocido: ..."
-   *
-   * El boton Actualizar re-sondea con `force=1`; ademas se sondea cada 20 s
-   * (mismo suelo que el banner) solo con la pestana visible.
+   * Estado de impresora REAL (F9-fix): sale de `/api/printer/status`, cero
+   * numeros inventados. La pill visible vive en el shell
+   * (`PrinterStatusBanner`, dueno del nav y del estado); aqui solo se lee
+   * para el pie (cola + puerto objetivo reales). Se sondea cada 20 s (mismo
+   * suelo que el banner) solo con la pestana visible.
    */
   interface EstadoImpresora {
     state: string;
@@ -541,9 +533,7 @@ export default function EditorPage() {
     error: string | null;
   }
   const [imp, setImp] = useState<EstadoImpresora | null>(null);
-  const [impCargando, setImpCargando] = useState(true);
-  const leerImp = useCallback(async (fuerte: boolean, avisa: boolean) => {
-    if (avisa) setImpCargando(true);
+  const leerImp = useCallback(async (fuerte: boolean) => {
     try {
       const res = await fetch(
         fuerte ? "/api/printer/status?force=1" : "/api/printer/status",
@@ -573,14 +563,12 @@ export default function EditorPage() {
         port: null,
         error: (e as Error).message,
       });
-    } finally {
-      if (avisa) setImpCargando(false);
     }
   }, []);
   useEffect(() => {
-    void leerImp(true, true);
+    void leerImp(true);
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") void leerImp(false, false);
+      if (document.visibilityState === "visible") void leerImp(false);
     }, 20000);
     return () => clearInterval(t);
   }, [leerImp]);
@@ -1851,130 +1839,25 @@ export default function EditorPage() {
       ? "No se guarda: con estos valores algo se pisa o se sale de la etiqueta (ver avisos del canvas)."
       : null;
 
-  /** Texto y tono de la pill de impresora (F9): el mapeo esta documentado en `leerImp`. */
-  const pillCola = imp && imp.jobCount > 0 ? ` · ${imp.jobCount} en cola` : "";
-  const pillTexto = !imp
-    ? "Consultando impresora…"
-    : imp.state === "blocked" || imp.state === "missing"
-      ? `Bloqueada: ${imp.message}`
-      : imp.state === "busy"
-        ? `Ocupada: ${imp.message}${pillCola}`
-        : imp.state === "warning"
-          ? `Aviso: ${imp.message}`
-          : imp.state === "ready"
-            ? `Lista: ${imp.queue !== "" ? imp.queue : imp.message}${pillCola}`
-            : `Estado desconocido: ${imp.message}`;
-  const pillTono = !imp
-    ? "border-edge bg-panel text-muted"
-    : imp.state === "ready"
-      ? "border-success bg-success-soft text-success"
-      : imp.state === "busy" || imp.state === "warning"
-        ? "border-warn-line bg-warn-soft text-warn"
-        : imp.state === "blocked" || imp.state === "missing"
-          ? "border-error bg-error-soft text-error"
-          : "border-edge bg-panel text-muted";
-  const pillPunto = !imp
-    ? "bg-ink-mute"
-    : imp.state === "ready"
-      ? "bg-ok"
-      : imp.state === "busy"
-        ? "bg-busy"
-        : imp.state === "warning"
-          ? "bg-warn"
-          : imp.state === "blocked" || imp.state === "missing"
-            ? "bg-danger"
-            : "bg-ink-mute";
-
-  /** Pestanas del estudio: las 6 rutas reales (+ editor, que es esta). */
-  const tabsEstudio = [
-    { href: "/", etiqueta: "Normal" },
-    { href: "/fast", etiqueta: "Rápido" },
-    { href: "/history", etiqueta: "Historial" },
-    { href: "/editor", etiqueta: "Editor", activo: true },
-    { href: "/plantillas", etiqueta: "Plantillas" },
-    { href: "/lotes", etiqueta: "Lotes" },
-    { href: "/settings", etiqueta: "Ajustes" },
-  ];
-
   /**
-   * Guardar como plantilla desde la cabecera: el MISMO handler. Sin nombre no
-   * hay nada que guardar (el endpoint exige nombre): se baja al campo y se
-   * dice, en vez de guardar "sin titulo".
+   * Dots de la ACTIVA calculados en cliente (F9-fix).
+   *
+   * `GET /api/templates/:id` devuelve la plantilla tal cual esta guardada
+   * (`StoredTemplate`: solo `widthMm`/`heightMm`, sin `widthDots`), asi que
+   * los dots no llegan nunca por red: se calculan aqui con `dotsFromMm()`
+   * (funcion pura de `label.template.ts`, sin `server-only`, importable en
+   * cliente) desde la activa.
    */
-  function guardarDesdeCabecera() {
-    if (guardandoPlantilla) return;
-    if (nombrePlantilla.trim() === "") {
-      setPlantillaError("Ponle un nombre abajo, en «Nombre de nueva variante», y vuelve a pulsar.");
-      document.getElementById("editor-nombre-plantilla")?.focus();
-      return;
-    }
-    void guardarComoPlantilla();
-  }
+  const activaDots = activa
+    ? { w: dotsFromMm(activa.widthMm), h: dotsFromMm(activa.heightMm) }
+    : null;
 
   return (
-    <main className="flex min-h-screen flex-col bg-canvas">
-      {/* Cabecera del estudio (F9, piel del mockup): marca + pill REAL de
-          impresora + Actualizar (re-sondea) + tabs reales + Guardar (mismo
-          handler) + Aplicar (mismo handler). */}
-      <header className={studioHeaderClear}>
-        <div className="flex items-center gap-2">
-          <span className={`${displayTitle} text-sm`}>LabelPrinter</span>
-          <span className="text-xs text-muted">·</span>
-          <span className="text-xs font-semibold text-primary">PAPICAR</span>
-          <span className="font-mono text-[10px] text-muted">v{version ?? "…"}</span>
-        </div>
-        <div
-          role={imp?.state === "blocked" || imp?.state === "missing" ? "alert" : "status"}
-          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs ${pillTono}`}
-        >
-          <span className={`inline-block size-2 shrink-0 rounded-full ${pillPunto}`} />
-          <span className="max-w-xs truncate font-medium md:max-w-md">{pillTexto}</span>
-          <button
-            type="button"
-            onClick={() => void leerImp(true, true)}
-            disabled={impCargando}
-            className="font-semibold underline hover:opacity-80 disabled:opacity-40"
-          >
-            {impCargando ? "Consultando…" : "Actualizar"}
-          </button>
-        </div>
-        <nav aria-label="Modulos" className="hidden items-center gap-1 lg:flex">
-          {tabsEstudio.map((t) => (
-            <a
-              key={t.href}
-              href={t.href}
-              aria-current={t.activo ? "page" : undefined}
-              className={
-                t.activo
-                  ? "rounded-md bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary"
-                  : "rounded-md px-2.5 py-1 text-xs font-medium text-muted hover:text-strong"
-              }
-            >
-              {t.etiqueta}
-            </a>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={guardarDesdeCabecera}
-            disabled={guardandoPlantilla || !editable}
-            className={buttonClearSecondary}
-            title="Guardar geometria como plantilla nueva en la biblioteca"
-          >
-            {guardandoPlantilla ? "guardando…" : "Guardar como plantilla"}
-          </button>
-          <button
-            type="button"
-            onClick={aplicar}
-            disabled={aplicando || !editable}
-            className={buttonClear}
-            title="Compila y guarda: a partir de ya se imprime con esto"
-          >
-            {aplicando ? "guardando…" : "Aplicar cambios"}
-          </button>
-        </div>
-      </header>
+    <main className={`${editorFullbleedClear} flex min-h-screen min-w-0 flex-col bg-canvas`}>
+      {/* F9-fix: sin cabecera propia. El nav y la pill de impresora son del
+          shell (`AppShell` + `PrinterStatusBanner`); esta pagina solo aporta
+          su barra de insercion (con la pill contextual de la activa) y el
+          workbench. Guardar/Aplicar siguen en sus paneles del inspector. */}
 
       {/* Barra de insercion (F9): los 5 tipos con handlers reales + pill de
           activa REAL + zoom (estado existente) + ver cajas (toggle real,
@@ -1997,9 +1880,9 @@ export default function EditorPage() {
           <button type="button" onClick={agregarLogoExtra} className={insertClear}>
             Logo GFA
           </button>
-          <span className="ml-2 rounded border border-edge bg-canvas px-2 py-0.5 font-mono text-[11px] text-strong">
-            Activa: {activa.name} · {activa.widthMm} × {activa.heightMm} mm ({activa.widthDots} ×{" "}
-            {activa.heightDots} dots)
+          <span className="ml-2 min-w-0 max-w-full truncate rounded border border-edge bg-canvas px-2 py-0.5 font-mono text-[11px] text-strong">
+            Activa: {activa.name} · {activa.widthMm} × {activa.heightMm} mm ({activaDots?.w} ×{" "}
+            {activaDots?.h} dots)
           </span>
           {hayOverride && (
             <span className="rounded border border-edge bg-canvas px-2 py-0.5 font-mono text-[11px] text-muted">
@@ -2115,7 +1998,7 @@ export default function EditorPage() {
       <div className="grid flex-1 grid-cols-1 gap-0 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
         {/* Columna 1: ZONAS/CAPAS (F9). Conteo REAL, badges por rol real,
             "+ Anadir zona personalizada" con menu de los 5 tipos reales. */}
-        <aside aria-label="Zonas y capas" className={`${studioSideClear} border-r border-edge xl:col-start-1 xl:row-start-1`}>
+        <aside aria-label="Zonas y capas" className={`${studioSideClear} min-w-0 border-r border-edge xl:col-start-1 xl:row-start-1`}>
           <div className="flex items-center justify-between border-b border-edge bg-canvas/60 p-3">
             <h2 className="text-xs font-bold uppercase tracking-wide text-strong">
               Zonas / Capas ZPL
@@ -2313,21 +2196,26 @@ export default function EditorPage() {
                       {logoError}
                     </p>
                   )}
-                  <p className="mt-2 text-xs leading-relaxed text-muted">
-                    Solo PNG, maximo 2 MB. Se convierte a `^GFA` en blanco y negro
-                    (umbral 128) al ancho actual del logo, manteniendo la
-                    proporcion.
-                    {sel !== logoSerieIdx
-                      ? " Este es un duplicado: se puede borrar."
-                      : " Este es el logo de serie: no se puede borrar, pero si cambiar."}
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed text-muted">
-                    El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
-                    aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
-                    dots. Al cambiarlo se reescala manteniendo la proporcion, con vecino mas
-                    proximo y sin suavizado, que es lo unico que una impresora termica de 203 dpi
-                    sabe hacer.
-                  </p>
+                  <details className="mt-2 text-xs leading-relaxed text-muted">
+                    <summary className="cursor-pointer font-medium text-strong">
+                      Sobre el logo (^GFA) y su tamaño
+                    </summary>
+                    <p className="mt-1">
+                      Solo PNG, maximo 2 MB. Se convierte a `^GFA` en blanco y negro
+                      (umbral 128) al ancho actual del logo, manteniendo la
+                      proporcion.
+                      {sel !== logoSerieIdx
+                        ? " Este es un duplicado: se puede borrar."
+                        : " Este es el logo de serie: no se puede borrar, pero si cambiar."}
+                    </p>
+                    <p className="mt-1">
+                      El logo es un bitmap dentro del <code>^GFA</code>, no una imagen con tamano
+                      aparte: el ancho se ajusta al multiplo de 8 mas cercano porque cada byte son 8
+                      dots. Al cambiarlo se reescala manteniendo la proporcion, con vecino mas
+                      proximo y sin suavizado, que es lo unico que una impresora termica de 203 dpi
+                      sabe hacer.
+                    </p>
+                  </details>
                 </>
               )}
 

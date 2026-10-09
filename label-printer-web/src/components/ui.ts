@@ -252,3 +252,17 @@ export const studioFooterClear =
 /** Boton de insertar: borde sutil, hover primario. Uno por tipo de zona. */
 export const insertClear =
   "rounded border border-edge px-2.5 py-1 font-medium text-strong hover:border-primary hover:bg-primary-soft transition";
+
+/*
+ * ---- ClearCraft F9-fix: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/**
+ * Contenedor full-bleed SOLO de `/editor` (clase marcadora).
+ *
+ * El shell ya abre el ancho en esa ruta (`esAncha` en `app-shell.tsx`); esta
+ * clase nombra el contenedor del workbench para el gate estructural y
+ * garantiza `width:100%; max-width:none` (ver `globals.css`) aunque el
+ * cromo cambie.
+ */
+export const editorFullbleedClear = "editor-fullbleed";

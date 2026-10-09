@@ -43,6 +43,9 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [ ] **F8** Editor vectorial acotado (por objetos, 1 a 1):
   - [x] **F8a** Texto libre fijo (agregar/borrar/editar contenido en canvas).
   - [x] **F8b** Lineas y rectangulos libres (todo con `^GB`, sin parser nuevo).
+- [x] **F9-fix** Rebuild del editor (full-bleed, header unico, dots calculados, ayudas
+  colapsables) + gate estructural de layout.
+- [ ] **F10** Rollout: mismo tratamiento al resto de las pantallas, una por una.
 - [x] **F9** Editor tal cual Stitch (piel exacta del mockup `stitch_panel_editor`):
   barcode de contenido fijo (Code128) + logo cambiable (upload PNG→`^GFA`) + undo/redo.
 
@@ -151,6 +154,13 @@ del writer + spot check del padre antes de cada commit de unidad.
   Arrastre/undo a clics sin verificar (declarado). Decisiones del usuario aplicadas:
   barcode = contenido editable, logo = cambiable via upload.
 - Siguiente paso: **lo que pidas** (F8c, pruebas fisicas o PR a `main`).
+- **F9-fix** (commit `fix(editor): rebuild full-bleed con header unico y gate estructural`
+  en `consolidacion`): writer delegado. Shell wide solo para `/editor`, header propio
+  volado (1 nav, 1 pill), dots calculados en cliente (la API solo da mm), ayudas en
+  `<details>`, grid `288/1fr/320` + `min-w-0`. typecheck 0 (writer + padre), check
+  11/11, gate estructural re-corridos por el padre (1 nav, fullbleed presente,
+  0 dots vacios). Logica y contratos intactos.
+- Siguiente paso: **tus ojos** en `/editor` + **F10** rollout al resto.
 
 ## Proximo paso
 F0.

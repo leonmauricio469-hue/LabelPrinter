@@ -241,3 +241,15 @@ input[type="number"]::-webkit-inner-spin-button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Full-bleed SOLO de `/editor` (F9-fix).
+ *
+ * La regla ancha vive en `AppShell` (`esAncha` por pathname: solo `/editor`
+ * pasa a `max-w-none`; el resto sigue en `max-w-3xl`). Esta clase solo marca
+ * el contenedor del workbench para el gate estructural y remata el ancho.
+ */
+.editor-fullbleed {
+  width: 100%;
+  max-width: none;
+}
