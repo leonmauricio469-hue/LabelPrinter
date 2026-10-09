@@ -839,6 +839,10 @@ export function CentroImpresion({
           />
 
           {/* Entrada operativa: mismo flujo de siempre, con autofocus. */}
+          {/* Lado a lado como el mockup: entrada a la izquierda, preview a la derecha
+              (en movil apilado). La tarjeta del elegido va con la entrada. */}
+          <div className="grid items-start gap-5 xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-5">
           <section className={`${cardClear} p-5`}>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold tracking-wide text-strong">
@@ -987,6 +991,8 @@ export function CentroImpresion({
               <ProductCard product={selected} selected />
             </section>
           )}
+          </div>
+          <div className="min-w-0">
 
           {/* Previsualizacion a escala: el PNG del ZPL real + reglas con los
               mm de la plantilla + Buffer en bytes reales. Orientacion y corte
@@ -1046,6 +1052,8 @@ export function CentroImpresion({
               <span>Orientación: Normal (0°) · Corte: Automático OFF</span>
             </div>
           </section>
+          </div>
+          </div>
 
           <PrintStatus
             state={state}
