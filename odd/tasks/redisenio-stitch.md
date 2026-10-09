@@ -35,7 +35,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F0** Fundaciones: tokens ClearCraft en `globals.css`, fuentes, `AppShell`
   (topbar + tabs + drawer con contenido real), navegacion de las 6 rutas actuales.
 - [x] **F1** Imprimir simple: `/` re-estilado + preview real + pill de impresora.
-- [ ] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
+- [x] **F2** Historial potenciado: filtros, detalle, reimprimir rango, exportar CSV.
 - [ ] **F3** Dispositivos: settings re-estilado + test ZPL real + estado real (solo GX420).
 - [ ] **F4** Biblioteca: modelo multi-plantilla + CRUD + importar + adaptar motor.
 - [ ] **F5** Lotes: CSV → mapeo → cola con progreso → historial.
@@ -64,6 +64,14 @@ del writer + spot check del padre antes de cada commit de unidad.
   para barcodes no imprimibles, igual que la impresion (etiqueta sin barras + aviso).
   Ademas se quito el `PrinterStatusBanner` duplicado de `/` (el pill vive en el shell).
 - Siguiente paso: **F2**.
+- **F2** (commit `feat(ui): F2 historial potenciado con detalle y reimpresion` en
+  `consolidacion`): writer delegado. KPIs contados de lo cargado, filtros reales
+  (texto/estado/limite 100-200-500), paginacion cliente x25, `HistoryDetail` (campos
+  reales + preview regenerado con caption honesto + reimprimir total/subrango +
+  exportar CSV cliente con columnas reales). typecheck 0 (writer + padre), check 11/11,
+  `/history` 200 y API con shape verificado (padre). Sin ZPL guardado (no existe en el
+  registro), sin telemetria.
+- Siguiente paso: **F3**.
 
 ## Proximo paso
 F0.

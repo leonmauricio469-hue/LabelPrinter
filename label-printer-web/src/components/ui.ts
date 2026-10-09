@@ -127,3 +127,25 @@ export const displayTitle = "font-display font-bold tracking-tight text-strong";
  */
 export const buttonClearPrint =
   `${buttonClear} min-w-[9.5rem] px-8 py-3.5 text-base font-bold tracking-wide disabled:active:translate-y-0`;
+
+/*
+ * ---- ClearCraft F2: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ */
+
+/** Badge de exito ClearCraft: SOLO para el resultado OK del historial. */
+export const badgeOkClear = `${badge} bg-success-soft text-success`;
+
+/** Badge de error ClearCraft: SOLO para los fallos del historial. */
+export const badgeErrorClear = `${badge} bg-error-soft text-error`;
+
+/** Etiqueta de KPI (Trabajos / Etiquetas / Fallos). */
+export const kpiLabel = "text-xs font-medium uppercase tracking-wide text-muted";
+
+/** Valor grande de KPI, tabular para que no baile al cambiar. */
+export const kpiValue = "mt-0.5 text-2xl font-bold tabular-nums text-strong";
+
+/** Encabezado de tabla ClearCraft. */
+export const thClear = "px-3 py-2.5 font-medium";
+
+/** Fila seleccionada en la tabla del historial. */
+export const rowSelectedClear = "bg-primary-soft";

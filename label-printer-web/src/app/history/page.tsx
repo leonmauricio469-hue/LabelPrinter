@@ -1,42 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
-import { buttonGhost, card, h2 } from "@/components/ui";
+import { HistoryDetail, formatHistoryTs, type HistoryRecord } from "@/components/history-detail";
+import {
+  badgeErrorClear,
+  badgeOkClear,
+  buttonClearSecondary,
+  cardClear,
+  displayTitle,
+  input,
+  kpiLabel,
+  kpiValue,
+  label,
+  rowSelectedClear,
+  select,
+  thClear,
+} from "@/components/ui";
 
-interface Record_ {
-  ts: string;
-  jobId: string;
-  code: string;
-  name: string;
-  qty: number;
-  ok: boolean;
-  mode: string;
-  error?: string;
-}
+type EstadoFiltro = "todos" | "ok" | "error";
 
-function formatTs(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("es-VE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
+const LIMITES = [100, 200, 500] as const;
+const POR_PAGINA = 25;
 
+const segBase =
+  "inline-flex items-center justify-center rounded-pill border px-3 py-1.5 text-xs font-medium transition duration-150";
+const segOn = `${segBase} border-strong bg-strong text-white`;
+const segOff = `${segBase} border-edge bg-panel text-strong hover:bg-canvas`;
+
+/**
+ * Historial potenciado (F2): la MISMA informacion de siempre —fecha, codigo,
+ * producto, cantidad, modo, resultado— sobre la piel ClearCraft, con filtros
+ * que filtran de verdad sobre lo cargado, paginacion en cliente y detalle por
+ * trabajo con reimpresion y exportacion.
+ *
+ * Todo sale de `GET /api/history`: nada se inventa, nada se estima. Los KPIs
+ * se cuentan del set cargado y el caption dice cuantos son.
+ */
 export default function HistoryPage() {
-  const [records, setRecords] = useState<Record_[] | null>(null);
+  const [records, setRecords] = useState<HistoryRecord[] | null>(null);
   const [state, setState] = useState<PrintState>({ kind: "idle" });
 
-  const load = useCallback(async () => {
+  const [q, setQ] = useState("");
+  const [estado, setEstado] = useState<EstadoFiltro>("todos");
+  const [limite, setLimite] = useState<number>(200);
+  const [pagina, setPagina] = useState(1);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+
+  const load = useCallback(async (n: number) => {
     setState({ kind: "busy", message: "Cargando historial..." });
     try {
-      const res = await fetch("/api/history?limit=200");
-      const data = (await res.json()) as { records?: Record_[]; error?: string };
+      const res = await fetch(`/api/history?limit=${n}`);
+      const data = (await res.json()) as { records?: HistoryRecord[]; error?: string };
       if (!res.ok) {
         setState({ kind: "error", message: data.error ?? `Error ${res.status}` });
         return;
@@ -49,32 +64,122 @@ export default function HistoryPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(limite);
+  }, [load, limite]);
 
-  /**
-   * Resumen de la ultima carga.
-   *
-   * La pregunta real de esta pagina no es "que se imprimio" sino "cuanto papel llevo hoy
-   * y si algo fallo". Contestarla exigiendo leer 200 filas en un monitor de mostrador no
-   * es una respuesta. Los dos numeros se calculan una vez por carga, no por render.
-   */
-  const totalEtiquetas = (records ?? []).reduce((n, r) => n + (r.ok ? r.qty : 0), 0);
-  const fallos = (records ?? []).filter((r) => !r.ok).length;
+  const filtrados = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (records ?? []).filter((r) => {
+      if (estado === "ok" && !r.ok) return false;
+      if (estado === "error" && r.ok) return false;
+      if (term === "") return true;
+      return (
+        r.code.toLowerCase().includes(term) || r.name.toLowerCase().includes(term)
+      );
+    });
+  }, [records, q, estado]);
+
+  // Los KPIs responden "cuanto papel y si algo fallo" sobre lo que se esta
+  // mirando. El caption dice de cuantos cargados salen, para no vender el
+  // filtro como si fuera el total.
+  const trabajos = filtrados.length;
+  const totalEtiquetas = filtrados.reduce((n, r) => n + (r.ok ? r.qty : 0), 0);
+  const fallos = filtrados.filter((r) => !r.ok).length;
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = filtrados.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
+
+  const selected = (records ?? []).find((r) => r.jobId === selectedJobId) ?? null;
+
+  function elegirEstado(next: EstadoFiltro) {
+    setEstado(next);
+    setPagina(1);
+  }
 
   return (
     <main className="flex flex-col gap-5">
       <section className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className={h2}>Historial de impresiones</h2>
-        <button type="button" onClick={load} className={buttonGhost}>
+        <h2 className={`${displayTitle} text-lg`}>Historial de impresiones</h2>
+        <button type="button" onClick={() => load(limite)} className={buttonClearSecondary}>
           Actualizar
         </button>
       </section>
 
       <PrintStatus state={state} idleText="" />
 
+      {/* Filtros: actuan sobre lo cargado, sin pedir nada al servidor. */}
+      <section aria-label="Filtros del historial" className={`${cardClear} flex flex-col gap-3 p-4`}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="flex-1">
+            <label htmlFor="filtro-texto" className={label}>
+              Buscar por codigo o producto
+            </label>
+            <input
+              id="filtro-texto"
+              type="search"
+              autoComplete="off"
+              spellCheck={false}
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPagina(1);
+              }}
+              placeholder="Ej. XPRO o nombre del producto"
+              className={`${input} mt-1`}
+            />
+          </div>
+          <div>
+            <label htmlFor="filtro-limite" className={label}>
+              Cargar
+            </label>
+            <select
+              id="filtro-limite"
+              value={limite}
+              onChange={(e) => {
+                setLimite(Number(e.target.value));
+                setPagina(1);
+              }}
+              className={`${select} mt-1 md:w-32`}
+            >
+              {LIMITES.map((n) => (
+                <option key={n} value={n}>
+                  {n} trabajos
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div role="group" aria-label="Filtrar por estado" className="flex gap-2">
+          <button
+            type="button"
+            aria-pressed={estado === "todos"}
+            onClick={() => elegirEstado("todos")}
+            className={estado === "todos" ? segOn : segOff}
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            aria-pressed={estado === "ok"}
+            onClick={() => elegirEstado("ok")}
+            className={estado === "ok" ? segOn : segOff}
+          >
+            Exitos
+          </button>
+          <button
+            type="button"
+            aria-pressed={estado === "error"}
+            onClick={() => elegirEstado("error")}
+            className={estado === "error" ? segOn : segOff}
+          >
+            Errores
+          </button>
+        </div>
+      </section>
+
       {records !== null && records.length === 0 && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-edge bg-panel px-6 py-12 text-center shadow-float">
           <svg
             viewBox="0 0 24 24"
             width="32"
@@ -82,7 +187,7 @@ export default function HistoryPage() {
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
-            className="text-line-strong"
+            className="text-muted"
             aria-hidden
           >
             <path
@@ -91,10 +196,10 @@ export default function HistoryPage() {
             />
             <rect x="6" y="14" width="12" height="7" rx="1" />
           </svg>
-          <p className="text-sm font-medium text-ink-soft">
+          <p className="text-sm font-medium text-strong">
             Todavia no hay impresiones registradas.
           </p>
-          <p className="text-xs text-ink-mute">
+          <p className="text-xs text-muted">
             La primera etiqueta que salga de la Zebra aparece aca.
           </p>
         </div>
@@ -102,79 +207,154 @@ export default function HistoryPage() {
 
       {records !== null && records.length > 0 && (
         <>
-          {/* Los dos numeros que responden la pregunta de la pagina. */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className={card + " px-4 py-3"}>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">
-                Etiquetas
-              </p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-ink">
-                {totalEtiquetas}
-              </p>
+          {/* Los numeros que responden la pregunta de la pagina. */}
+          <section aria-label="Resumen" className="flex flex-col gap-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className={`${cardClear} px-4 py-3`}>
+                <p className={kpiLabel}>Trabajos</p>
+                <p className={kpiValue}>{trabajos}</p>
+              </div>
+              <div className={`${cardClear} px-4 py-3`}>
+                <p className={kpiLabel}>Etiquetas</p>
+                <p className={kpiValue}>{totalEtiquetas}</p>
+              </div>
+              <div className={`${cardClear} px-4 py-3`}>
+                <p className={kpiLabel}>Fallos</p>
+                <p className={`${kpiValue} ${fallos > 0 ? "text-error" : "text-success"}`}>
+                  {fallos}
+                </p>
+              </div>
             </div>
-            <div className={`${card} px-4 py-3 ${fallos > 0 ? "border-danger-line bg-danger-soft" : ""}`}>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-mute">
-                Fallos
-              </p>
-              <p
-                className={`mt-0.5 text-2xl font-bold tabular-nums ${
-                  fallos > 0 ? "text-danger" : "text-ok"
-                }`}
-              >
-                {fallos}
-              </p>
-            </div>
-          </div>
+            <p className="text-xs text-muted">
+              Ultimos {records.length} trabajos cargados
+              {filtrados.length !== records.length &&
+                ` · ${filtrados.length} coinciden con el filtro`}
+            </p>
+          </section>
 
-          <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-card">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-line bg-surface-sunken text-xs uppercase tracking-wide text-ink-mute">
-                <tr>
-                  <th className="px-3 py-2.5 font-medium">Fecha</th>
-                  <th className="px-3 py-2.5 font-medium">Codigo</th>
-                  <th className="px-3 py-2.5 font-medium">Producto</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Cant.</th>
-                  <th className="px-3 py-2.5 font-medium">Modo</th>
-                  <th className="px-3 py-2.5 font-medium">Resultado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {records.map((r) => (
-                  <tr
-                    key={r.jobId}
-                    className={
-                      r.ok
-                        ? "hover:bg-surface-sunken/60"
-                        : "bg-danger-soft"
-                    }
-                  >
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink-mute">
-                      {formatTs(r.ts)}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs text-ink-soft">{r.code}</td>
-                    <td className="px-3 py-2 text-ink">{r.name}</td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink">
-                      {r.qty}
-                    </td>
-                    <td className="px-3 py-2 text-ink-mute">{r.mode}</td>
-                    <td className="px-3 py-2 text-xs">
-                      <span
-                        className={`inline-flex items-center gap-1.5 font-medium ${
-                          r.ok ? "text-ok" : "text-danger"
-                        }`}
+          {filtrados.length === 0 ? (
+            <div className={`${cardClear} px-6 py-10 text-center`}>
+              <p className="text-sm font-medium text-strong">
+                Ningun trabajo coincide con el filtro.
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Afloja el texto o vuelve a Todos para ver los {records.length} cargados.
+              </p>
+            </div>
+          ) : (
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <div className="flex flex-col gap-2">
+                <div
+                  className={`overflow-x-auto rounded-card border border-edge bg-panel shadow-float`}
+                >
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-edge bg-canvas text-xs uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className={thClear}>Fecha</th>
+                        <th className={thClear}>Codigo</th>
+                        <th className={thClear}>Producto</th>
+                        <th className={`${thClear} text-right`}>Cant.</th>
+                        <th className={thClear}>Modo</th>
+                        <th className={thClear}>Resultado</th>
+                        <th className={thClear}>
+                          <span className="sr-only">Detalle</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-edge">
+                      {visibles.map((r) => {
+                        const active = r.jobId === selectedJobId;
+                        return (
+                          <tr
+                            key={r.jobId}
+                            onClick={() => setSelectedJobId(r.jobId)}
+                            className={`cursor-pointer hover:bg-canvas ${active ? rowSelectedClear : ""}`}
+                          >
+                            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted">
+                              {formatHistoryTs(r.ts)}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-strong">{r.code}</td>
+                            <td className="px-3 py-2 text-strong">{r.name}</td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums text-strong">
+                              {r.qty}
+                            </td>
+                            <td className="px-3 py-2 text-muted">{r.mode}</td>
+                            <td className="px-3 py-2 text-xs">
+                              <span className={r.ok ? badgeOkClear : badgeErrorClear}>
+                                {r.ok ? "Exito" : (r.error ?? "Error")}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedJobId(r.jobId);
+                                }}
+                                aria-pressed={active}
+                                className={buttonClearSecondary + " px-3 py-1.5 text-xs"}
+                              >
+                                Ver
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted">
+                    Mostrando {(paginaActual - 1) * POR_PAGINA + 1}–
+                    {Math.min(paginaActual * POR_PAGINA, filtrados.length)} de {filtrados.length}
+                  </p>
+                  {totalPaginas > 1 && (
+                    <nav aria-label="Paginacion del historial" className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={paginaActual <= 1}
+                        onClick={() => setPagina(paginaActual - 1)}
+                        className={buttonClearSecondary + " px-3 py-1.5 text-xs"}
                       >
-                        <span
-                          aria-hidden
-                          className={`size-1.5 rounded-full ${r.ok ? "bg-ok" : "bg-danger"}`}
-                        />
-                        {r.ok ? "OK" : (r.error ?? "fallo")}
+                        Anterior
+                      </button>
+                      <span className="text-xs tabular-nums text-muted">
+                        Pagina {paginaActual} de {totalPaginas}
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <button
+                        type="button"
+                        disabled={paginaActual >= totalPaginas}
+                        onClick={() => setPagina(paginaActual + 1)}
+                        className={buttonClearSecondary + " px-3 py-1.5 text-xs"}
+                      >
+                        Siguiente
+                      </button>
+                    </nav>
+                  )}
+                </div>
+              </div>
+
+              {selected ? (
+                <div className="xl:sticky xl:top-4">
+                  <HistoryDetail
+                    key={selected.jobId}
+                    record={selected}
+                    records={records}
+                    onReprinted={() => load(limite)}
+                  />
+                </div>
+              ) : (
+                <div className={`${cardClear} px-6 py-10 text-center`}>
+                  <p className="text-sm font-medium text-strong">
+                    Elige un trabajo de la tabla
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Aca ves el detalle, la vista previa y los botones de reimprimir y exportar.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </main>
