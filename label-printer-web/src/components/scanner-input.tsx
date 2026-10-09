@@ -11,15 +11,21 @@ import { useEffect, useRef } from "react";
  * No renderiza nada: el escaner escribe "en el aire" y la UI reacciona a `onScan`.
  */
 
-/** Si pasan estos ms sin teclear nada, el buffer se descarta. */
-const IDLE_RESET_MS = 500;
+/** Si pasan estos ms sin teclear nada, el buffer se descarta. Valor por defecto. */
+export const IDLE_RESET_MS_DEFAULT = 500;
 
 export function ScannerInput({
   onScan,
   enabled = true,
+  /**
+   * F11: ventana idle configurable (`retardoEscanerMs` de settings). Por defecto
+   * el valor historico de 500 ms: sin prop, el comportamiento es identico.
+   */
+  idleMs = IDLE_RESET_MS_DEFAULT,
 }: {
   onScan: (code: string) => void;
   enabled?: boolean;
+  idleMs?: number;
 }) {
   const bufferRef = useRef("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,7 +81,7 @@ export function ScannerInput({
       // Cualquier tecla nueva reinicia el reloj: sirve para descartar tecleos lentos
       // que dejarian un codigo partido colgado.
       if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(reset, IDLE_RESET_MS);
+      timerRef.current = setTimeout(reset, idleMs);
     }
 
     document.addEventListener("keydown", handleKey);
@@ -83,7 +89,7 @@ export function ScannerInput({
       document.removeEventListener("keydown", handleKey);
       reset();
     };
-  }, [enabled]);
+  }, [enabled, idleMs]);
 
   return null;
 }

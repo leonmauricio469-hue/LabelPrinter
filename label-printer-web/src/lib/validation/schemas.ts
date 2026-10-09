@@ -92,6 +92,19 @@ export const updateSettingsSchema = z.object({
     businessName: z.string().min(1),
     templateId: z.string().min(1).default(DEFAULT_TEMPLATE_ID),
   }),
+  /**
+   * Campos F11. `oscuridad` es "" (vacia = actual) o un entero 0-30 para `~SD`.
+   * `retardoEscanerMs` con suelo de 100: por debajo, un escaneo USB normal
+   * (que tarda decenas de ms entre caracteres) se partiria en dos.
+   */
+  oscuridad: z
+    .string()
+    .regex(/^(|30|[12][0-9]|[0-9])$/, "la oscuridad es vacia o un entero de 0 a 30")
+    .default(""),
+  sonidoOk: z.boolean().default(true),
+  sonidoError: z.boolean().default(true),
+  ventanaDuplicadosMs: z.number().int().min(0).max(60000).default(0),
+  retardoEscanerMs: z.number().int().min(100).max(5000).default(500),
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

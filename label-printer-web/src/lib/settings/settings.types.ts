@@ -58,6 +58,29 @@ export interface LabelSettings {
 export interface AppSettings {
   printer: PrinterSettings;
   label: LabelSettings;
+  /**
+   * Densidad termica para `~SD` (F11). Cadena vacia = comportamiento actual:
+   * no se antepone nada al ZPL y la impresora usa su ajuste fisico.
+   *
+   * Es cadena y no numero a proposito: "vacio" tiene que ser un valor valido y
+   * distinto de cualquier densidad, incluido el 0. Solo valen "" o 0-30
+   * (lo impone `updateSettingsSchema`).
+   */
+  oscuridad: string;
+  /** Beep WebAudio al imprimir bien (F11). Sin pagina de prueba: los toggles van en F12. */
+  sonidoOk: boolean;
+  /** Beep WebAudio al fallar (F11). Sin pagina de prueba: los toggles van en F12. */
+  sonidoError: boolean;
+  /**
+   * Ventana anti-duplicados en ms (F11). 0 = apagada. Con valor > 0, repetir el
+   * mismo codigo dentro de la ventana no imprime: avisa "duplicado ignorado".
+   */
+  ventanaDuplicadosMs: number;
+  /**
+   * Ventana idle del scanner USB en ms (F11). Es el `IDLE_RESET_MS` de
+   * `scanner-input.tsx`, que antes era una constante de 500.
+   */
+  retardoEscanerMs: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -81,4 +104,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
     businessName: "PA PICAR",
     templateId: DEFAULT_TEMPLATE_ID,
   },
+  // F11. `oscuridad` vacia = la impresora manda, como siempre. Sonidos ON por
+  // defecto: el operador ya miraba el cartel, el beep solo lo acompana.
+  // Duplicados OFF por defecto: con 0 nada cambia respecto a hoy.
+  // `retardoEscanerMs` 500 = la constante que ya habia en `scanner-input.tsx`.
+  oscuridad: "",
+  sonidoOk: true,
+  sonidoError: true,
+  ventanaDuplicadosMs: 0,
+  retardoEscanerMs: 500,
 };

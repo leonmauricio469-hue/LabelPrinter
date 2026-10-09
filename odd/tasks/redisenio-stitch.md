@@ -43,6 +43,10 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [ ] **F8** Editor vectorial acotado (por objetos, 1 a 1):
   - [x] **F8a** Texto libre fijo (agregar/borrar/editar contenido en canvas).
   - [x] **F8b** Lineas y rectangulos libres (todo con `^GB`, sin parser nuevo).
+- [x] **F11** Centro unificado de impresion (rebuild `/`: scan+modos+preview+historial
+  reciente, tal cual mockup `imprimir_centro_unificado`).
+- [ ] **F12** Ajustes rebuild (tal cual mockup `ajustes_configuracion`, sin telemetria
+  inventada).
 - [x] **F9-fix** Rebuild del editor (full-bleed, header unico, dots calculados, ayudas
   colapsables) + gate estructural de layout.
 - [x] **F9-zoom** Fix desfase con zoom: imagen a tamano exacto (`maxWidth:none` vs
@@ -158,6 +162,15 @@ del writer + spot check del padre antes de cada commit de unidad.
   Arrastre/undo a clics sin verificar (declarado). Decisiones del usuario aplicadas:
   barcode = contenido editable, logo = cambiable via upload.
 - Siguiente paso: **lo que pidas** (F8c, pruebas fisicas o PR a `main`).
+- **F11** (commit `feat(ui): F11 centro unificado de impresion` en `consolidacion`):
+  writer delegado. `/` rebuild (modos navegables, pills reales, scan+qty+preview,
+  densidad `~SD` condicional, beeps WebAudio, anti-duplicados, historial reciente).
+  typecheck 0 (writer + padre), check 11/11, settings round-trip restaurado,
+  `GET /api/printers` con JobCount real. Recortes: telemetria producto/HEAD/ribbon,
+  Avanzar/Calibrar, buffer, ERP. Desvio: `validation/schemas.ts` extendido (necesario).
+  NO verificado: IMPRIMIR AHORA (imprime). `plantillas.json` trae "version 1" de mano
+  desconocida: sin commitear hasta confirmar usuario.
+- Siguiente paso: **F12** (Ajustes rebuild).
 - **F9-fix** (commit `fix(editor): rebuild full-bleed con header unico y gate estructural`
   en `consolidacion`): writer delegado. Shell wide solo para `/editor`, header propio
   volado (1 nav, 1 pill), dots calculados en cliente (la API solo da mm), ayudas en

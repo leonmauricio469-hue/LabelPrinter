@@ -66,6 +66,24 @@ export type ResultadoImpresion =
     };
 
 /**
+ * Antepone `~SD<valor>` al ZPL cuando `oscuridad` esta seteada (F11).
+ *
+ * Vacia = comportamiento actual al milimetro: el ZPL sale intacto y la
+ * impresora usa su ajuste fisico. Con valor, el comando va DELANTE del primer
+ * `^XA`: es de configuracion, no de etiqueta, y fuera del bloque no altera el
+ * diseno.
+ *
+ * NOTA HONESTA: el manual ZPL del repo (`02 - Tecnico/ZPL Lenguaje Impresion.md`)
+ * no documenta `~SD`; el valor se valida ("" o 0-30) pero el efecto EN PAPEL
+ * esta pendiente de prueba fisica.
+ */
+export function aplicarOscuridad(zpl: string, oscuridad: string): string {
+  const v = oscuridad.trim();
+  if (v === "" || !/^(30|[12][0-9]|[0-9])$/.test(v)) return zpl;
+  return `~SD${v}\n${zpl}`;
+}
+
+/**
  * `POST /api/labels`: valida el cuerpo con zod y lo pasa por `ejecutarImpresion()`.
  *
  * La respuesta es la de siempre: 200 con lo impreso, o 400 (cuerpo invalido), 404
@@ -252,7 +270,10 @@ export async function ejecutarImpresion(input: ImpresionInput): Promise<Resultad
     }
   }
 
-  const zpl = buildZplBatch(template, data, input.qty, { mediaWidthDots });
+  const zpl = aplicarOscuridad(
+    buildZplBatch(template, data, input.qty, { mediaWidthDots }),
+    settings.oscuridad ?? "",
+  );
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(zpl);
 
@@ -323,7 +344,10 @@ async function printRaw(
     };
   }
 
-  const trabajo = Array.from({ length: input.qty }, () => zpl).join("\n");
+  const trabajo = aplicarOscuridad(
+    Array.from({ length: input.qty }, () => zpl).join("\n"),
+    settings.oscuridad ?? "",
+  );
   const transport = createPrinterTransport(settings.printer);
   const result = await transport.send(trabajo);
 

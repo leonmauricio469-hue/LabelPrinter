@@ -15,7 +15,30 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
 
-  const parsed = updateSettingsSchema.safeParse(body);
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
+  }
+
+  // F11: PUT parcial con validacion completa. Se lee lo guardado, se mezcla lo
+  // que trae el cuerpo (a dos niveles, igual que `readSettings()`) y se valida
+  // el resultado ENTERO. Asi el slider de densidad puede mandar `{ oscuridad }`
+  // sin reescribir el resto, y un cuerpo con un campo roto sigue siendo 400.
+  const actual = await readSettings();
+  const parcial = body as Partial<Record<string, unknown>>;
+  const mezclado = {
+    ...actual,
+    ...parcial,
+    printer: {
+      ...actual.printer,
+      ...((parcial.printer as Record<string, unknown> | undefined) ?? {}),
+    },
+    label: {
+      ...actual.label,
+      ...((parcial.label as Record<string, unknown> | undefined) ?? {}),
+    },
+  };
+
+  const parsed = updateSettingsSchema.safeParse(mezclado);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Configuracion invalida", details: parsed.error.flatten() },

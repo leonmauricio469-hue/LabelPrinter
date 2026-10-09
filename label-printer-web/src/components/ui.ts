@@ -266,3 +266,19 @@ export const insertClear =
  * cromo cambie.
  */
 export const editorFullbleedClear = "editor-fullbleed";
+
+/*
+ * ---- ClearCraft F11: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ *
+ * Piel del centro unificado (`imprimir_centro_unificado_de_producci_n`):
+ * navegacion de modos, pills de plantilla/spool y tabla reciente. Reusan
+ * `base`, `badge` y los tonos existentes: ningun color nuevo, ningun dato
+ * inventado.
+ */
+
+/** Pestana de modo del centro (Rapido / Busqueda / Lotes). Inactiva. */
+export const modeTabClear =
+  "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted transition duration-150 hover:bg-canvas hover:text-strong";
+
+/** Modo activo (esta pagina): fondo primario suave, sin link. */
+export const modeTabActiveClear = `${modeTabClear} bg-primary-soft font-semibold text-primary hover:text-primary`;
