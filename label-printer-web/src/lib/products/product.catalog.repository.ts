@@ -48,6 +48,25 @@ function normalize(value: string): string {
  */
 let cache: { mtimeMs: number; products: Product[] } | null = null;
 
+/**
+ * Prefijo de los barcodes PROVISIONALES.
+ *
+ * 250 productos del catalogo traen un barcode que empieza por `XPRO` (`XPROD20220002`,
+ * `XPRO2607000030`). No son codigos de barras reales: son codigos internos alfanumericos
+ * que caen en Code 128 y no caben a 3 dots de modulo, asi que su etiqueta saldria **sin
+ * codigo**. Mientras no se cargue el barcode real, el sistema los ignora por completo: no
+ * se listan, no se buscan, no se escanean y no se imprimen.
+ *
+ * Deliberadamente NO es una lista aparte ni un campo en el JSON: cuando el barcode real
+ * reemplace al `XPRO...`, el producto vuelve solo, sin tocar codigo ni datos.
+ */
+const PREFIJO_BARCODE_PROVISIONAL = "XPRO";
+
+/** ¿El barcode de este producto es un codigo provisional (no real)? */
+function esBarcodeProvisional(product: Product): boolean {
+  return product.barcode.toUpperCase().startsWith(PREFIJO_BARCODE_PROVISIONAL);
+}
+
 async function load(): Promise<Product[]> {
   let mtimeMs: number;
   let raw: string;
@@ -98,12 +117,17 @@ async function load(): Promise<Product[]> {
     throw new Error(`catalog.json tiene ${problems.length} fila(s) invalidas: ${shown}${rest}`);
   }
 
+  // Los barcodes provisionales se descartan aqui, en la unica puerta de entrada al
+  // catalogo, para que queden fuera de TODAS las lecturas (listar, buscar, escanear,
+  // imprimir) y no solo de algunas. Ver `PREFIJO_BARCODE_PROVISIONAL`.
+  const habilitados = products.filter((p) => !esBarcodeProvisional(p));
+
   // El digito de control de un EAN-13 NO es un dato que se pueda ignorar: con el digito
   // mal la etiqueta se imprime nitida y ningun lector la decodifica, que es el peor
   // fallo posible porque no se ve. Por aqui solo se avisa: la fila es valida y puede que
   // el codigo no sea EAN-13 (Code 128 admite cualquier cosa). `POST /api/labels` si
   // rechaza el caso de uso real, que es imprimir ese barcode como EAN-13.
-  const unreadable = products.filter((p) => isEan13Shape(p.barcode) && ean13Problem(p.barcode));
+  const unreadable = habilitados.filter((p) => isEan13Shape(p.barcode) && ean13Problem(p.barcode));
   if (unreadable.length > 0) {
     const shown = unreadable
       .slice(0, 5)
@@ -116,8 +140,17 @@ async function load(): Promise<Product[]> {
     );
   }
 
-  cache = { mtimeMs, products };
-  return products;
+  const deshabilitados = products.length - habilitados.length;
+  if (deshabilitados > 0) {
+    console.warn(
+      `catalog.json: ${deshabilitados} producto(s) con barcode provisional ` +
+        `"${PREFIJO_BARCODE_PROVISIONAL}..." quedan fuera del catalogo hasta que se ` +
+        `cargue su codigo de barras real.`,
+    );
+  }
+
+  cache = { mtimeMs, products: habilitados };
+  return habilitados;
 }
 
 function createCatalogRepository(): ProductRepository {
