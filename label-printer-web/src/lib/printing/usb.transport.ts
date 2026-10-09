@@ -1,5 +1,7 @@
 import "server-only";
 import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { PrintResult } from "./printer.types";
 
@@ -19,6 +21,7 @@ function runSpooler(
   mode: "Send" | "Check",
   base64: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  extraArgs: string[] = [],
 ): Promise<SpoolResponse> {
   return new Promise((resolve) => {
     const args = [
@@ -33,8 +36,10 @@ function runSpooler(
       "-Mode",
       mode,
     ];
-    if (mode === "Send") {
+    if (mode === "Send" && extraArgs.length === 0) {
       args.push("-Base64", base64);
+    } else if (mode === "Send") {
+      args.push(...extraArgs);
     }
 
     const child = spawn("powershell.exe", args, { windowsHide: true });
@@ -86,20 +91,40 @@ function runSpooler(
   });
 }
 
-/** Writes raw ZPL bytes to a Windows printer queue (USB). */
+/**
+ * Writes raw ZPL bytes to a Windows printer queue (USB).
+ *
+ * El ZPL viaja en un archivo temporal y `argv` lleva solo la ruta corta
+ * (`-FilePath`), no el base64 gigante. Con base64, Windows corta
+ * `CreateProcessW` en 32767 caracteres y `qty: 7` (34072) reventaba `spawn`
+ * sin dejar registro; con archivo, el mismo trabajo lleva ~200 caracteres de
+ * argumentos sin importar la cantidad de etiquetas.
+ */
 export async function sendZplUsb(
   printerName: string,
   zpl: string,
 ): Promise<PrintResult> {
-  const res = await runSpooler(
-    printerName,
-    "Send",
-    Buffer.from(zpl, "latin1").toString("base64"),
+  const tmp = path.join(
+    os.tmpdir(),
+    `labelprinter-${Date.now()}-${Math.random().toString(16).slice(2)}.zpl`,
   );
-  if (!res.ok) {
-    return { ok: false, error: res.error ?? "error desconocido del spooler" };
+  try {
+    await fs.writeFile(tmp, Buffer.from(zpl, "latin1"));
+  } catch (err) {
+    return { ok: false, error: `no se pudo escribir el trabajo temporal: ${(err as Error).message}` };
   }
-  return { ok: true };
+  try {
+    const res = await runSpooler(printerName, "Send", "", DEFAULT_TIMEOUT_MS, [
+      "-FilePath",
+      tmp,
+    ]);
+    if (!res.ok) {
+      return { ok: false, error: res.error ?? "error desconocido del spooler" };
+    }
+    return { ok: true };
+  } finally {
+    await fs.unlink(tmp).catch(() => {});
+  }
 }
 
 /** Checks that the queue exists and can be opened. */

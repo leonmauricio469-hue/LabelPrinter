@@ -30,7 +30,7 @@ export type ProductInput = z.infer<typeof productSchema>;
 /**
  * Tope de etiquetas por trabajo.
  *
- * No es arbitrario: `usb.transport.ts` manda el ZPL entero como un argumento de linea de
+ * Historial: `usb.transport.ts` mandaba el ZPL entero como un argumento de linea de
  * comandos en base64, y Windows corta `CreateProcessW` en 32767 caracteres. Medido con el
  * nombre mas largo del catalogo real (50 caracteres), una etiqueta son 3629 bytes de ZPL,
  * que son 4840 en base64, mas unos 200 del resto del argumento:
@@ -41,13 +41,15 @@ export type ProductInput = z.infer<typeof productSchema>;
  *
  * Con el tope en 999, `qty: 7` reventaba `spawn` de forma sincrona dentro del `new Promise`,
  * nadie la capturaba, y `POST /api/labels` devolvia un 500 generico sin imprimir nada y sin
- * dejar registro en el historial. No es un limite de negocio: es el techo del mecanismo de
- * envio por linea de comandos.
+ * dejar registro en el historial.
  *
- * Si esto sube, hay que cambiar como se pasa el ZPL a `send-raw.ps1` (archivo temporal o
- * stdin), no solo este numero.
+ * Desde el transporte por archivo temporal (`sendZplUsb()` escribe el ZPL y `argv` lleva
+ * solo `-FilePath` con la ruta corta, ~200 caracteres sin importar la cantidad), el techo
+ * de `CreateProcessW` ya no manda: 50 etiquetas son ~181 KB en archivo y el mismo `argv`
+ * corto. El tope actual (50) es operativo, no del mecanismo: evita tirar un rollo con un
+ * tecleo, y `quantity-stepper.tsx` lo hereda sin tocarlo.
  */
-export const MAX_QTY_POR_TRABAJO = 6;
+export const MAX_QTY_POR_TRABAJO = 50;
 
 export const printRequestSchema = z.object({
   productCode: z.string().min(1, "falta el codigo del producto"),
@@ -57,7 +59,7 @@ export const printRequestSchema = z.object({
     .min(1, "la cantidad minima es 1")
     .max(
       MAX_QTY_POR_TRABAJO,
-      `la cantidad maxima por trabajo es ${MAX_QTY_POR_TRABAJO}: por encima, el ZPL no cabe en la linea de comandos de Windows y la impresion falla sin dejar registro`,
+      `la cantidad maxima por trabajo es ${MAX_QTY_POR_TRABAJO}: por encima se evita tirar papel con un tecleo`,
     )
     .default(1),
   mode: z.enum(["normal", "fast"]).default("normal"),
