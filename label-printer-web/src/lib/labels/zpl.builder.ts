@@ -366,6 +366,44 @@ function emit(
       continue;
     }
 
+    // Figuras libres (F8b): por el mismo camino que el marco, sin comando nuevo.
+    //
+    // El rectangulo es un `shape` de esquinas vivas, tal cual. La linea es un `^GB`
+    // colapsado: de alto igual al grosor sale una barra horizontal maciza, y de ancho
+    // igual al grosor una vertical. Se normalizan a `ShapeZone` y las emite
+    // `shapeCommands()`: un solo constructor de `^GB`, una sola forma de salir mal.
+    if (zone.kind === "rect") {
+      commands.push(
+        ...shapeCommands({
+          kind: "shape",
+          x: zone.x,
+          y: zone.y,
+          widthDots: zone.widthDots,
+          heightDots: zone.heightDots,
+          thicknessDots: zone.thicknessDots,
+          radiusDots: 0,
+        }),
+      );
+      continue;
+    }
+
+    if (zone.kind === "line") {
+      const t = Math.max(1, zone.thicknessDots);
+      const vertical = zone.orientacion === "vertical";
+      commands.push(
+        ...shapeCommands({
+          kind: "shape",
+          x: zone.x,
+          y: zone.y,
+          widthDots: vertical ? t : zone.largoDots,
+          heightDots: vertical ? zone.largoDots : t,
+          thicknessDots: t,
+          radiusDots: 0,
+        }),
+      );
+      continue;
+    }
+
     if (zone.kind === "graphic") {
       commands.push(`^FO${zone.x},${zone.y}`, zone.gf);
       continue;

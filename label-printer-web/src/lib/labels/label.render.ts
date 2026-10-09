@@ -373,6 +373,21 @@ export function renderLabel(
     return { zones: sinCodigo ? template.zonesWithoutBarcode! : template.zones };
   })();
 
+  // A que zona corresponde cada `^GB`, en orden de emision.
+  //
+  // F8b: el marco ya no es el unico que emite `^GB`. Sin esto, el rectangulo y la linea
+  // libres saldrian en las cajas como `"marco"`, y un solape de la linea con el precio
+  // se avisaria como `"precio" pisa a "marco"`, que manda al operador a mirar el marco
+  // fijo en vez de la linea que acaba de dibujar. El orden del ZPL es el de las zonas
+  // (`emit()` las recorre en orden y solo shape/rect/line emiten `^GB`), asi que la
+  // cola n-esima corresponde al n-esimo `^GB` parseado.
+  const etiquetasGB: string[] = [];
+  for (const z of zones) {
+    if (z.kind === "shape") etiquetasGB.push("marco");
+    else if (z.kind === "rect") etiquetasGB.push("rectangulo");
+    else if (z.kind === "line") etiquetasGB.push("linea");
+  }
+
   // El ^GFA se dibuja desde LA ZONA, no buscando `^GFA` en el ZPL con un regex.
   //
   // Antes se hacia `zpl.match(/\^GFA,[\s\S]*?\n\^FS/)`, que parecia funcionar y no: el patron
@@ -460,7 +475,17 @@ export function renderLabel(
       marcoLine(x0, y0 + h, x0 + w, y0 + h, grosor, MARCO);
       marcoLine(x0, y0, x0, y0 + h, grosor, MARCO);
       marcoLine(x0 + w, y0, x0 + w, y0 + h, grosor, MARCO);
-      cajas.push({ etiqueta: "marco", x0, y0, x1: x0 + w, y1: y0 + h, grosorDots: grosor });
+      // La etiqueta sale de la zona que lo emitio (ver `etiquetasGB` arriba): el marco
+      // contiene al contenido y no lo pisa, pero el rectangulo y la linea libres SON
+      // contenido y participan en los solapes como tal. Sin cola (ZPL a mano), "marco".
+      cajas.push({
+        etiqueta: etiquetasGB.shift() ?? "marco",
+        x0,
+        y0,
+        x1: x0 + w,
+        y1: y0 + h,
+        grosorDots: grosor,
+      });
       continue;
     }
 

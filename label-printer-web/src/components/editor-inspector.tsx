@@ -75,7 +75,11 @@ export function OrigenTab({
                   ? "Simbolo del codigo. La symbologia la decide planBarcode por producto (EAN-13 o Code 128); el alto y el modulo son de la plantilla."
                   : z.kind === "graphic"
                     ? "Logo fijo (bitmap ^GFA). No varia por producto."
-                    : "Marco fijo (margen del papel). No varia y no se edita."}
+                    : z.kind === "rect"
+                      ? "Rectangulo libre dibujado por el operador (^GB hueco, esquinas vivas). No varia por producto; se puede mover, estirar y borrar."
+                      : z.kind === "line"
+                        ? "Linea libre dibujada por el operador (^GB colapsado, solo horizontal o vertical). No varia por producto; se puede mover, estirar y borrar."
+                        : "Marco fijo (margen del papel). No varia y no se edita."}
             </p>
           </li>
         ))}

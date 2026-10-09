@@ -42,6 +42,7 @@ del writer + spot check del padre antes de cada commit de unidad.
 - [x] **F6** Editor: re-estilado + reconciliacion con override + variables.
 - [ ] **F8** Editor vectorial acotado (por objetos, 1 a 1):
   - [x] **F8a** Texto libre fijo (agregar/borrar/editar contenido en canvas).
+  - [x] **F8b** Lineas y rectangulos libres (todo con `^GB`, sin parser nuevo).
 
 ## Aceptacion F0
 - `npm run typecheck` exit 0; `npm run check` 11/11 verdes.
@@ -129,6 +130,16 @@ del writer + spot check del padre antes de cada commit de unidad.
   Limpieza: `plantillas.json` volvio a seed (test F4 desarchivado por mano desconocida,
   copia en temp; confirmar que no fue el usuario).
 - Siguiente paso: **F8b** (a definir: lineas/rectangulos u otro objeto).
+- **F8b** (commit `feat(editor): F8b rectangulos y lineas libres con ^GB` en
+  `consolidacion`): writer delegado. Kinds `rect`/`line` (grosor 1–5, todo `^GB`;
+  diagonales/elipses recortadas por parser), toolbox + panel + Eliminar solo-libres,
+  solapes incluidos (422 honesto, probado sobre el precio). typecheck 0 (writer +
+  padre), check 11/11 sin adaptar, round-trip real + override restaurado. Toques
+  declarados: `label.render.ts` (cola de etiquetas por orden) + shim de tipos
+  `maxWidthDots?: never`. Arrastre a raton no verificado con clics (geometria espeja
+  al shape). Correccion: el writer atribuyo al padre un `ok:false` del historial, pero
+  la cola prueba que es la linea F4 del 18:03 — ningun intento nuevo, nada que explicar.
+- Siguiente paso: **F8c** (a definir) o cierre de la linea vectorial.
 
 ## Proximo paso
 F0.

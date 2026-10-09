@@ -7,6 +7,7 @@ import {
   MIN_DOTS,
   TITULO_ASIDERA,
   ejesRedimensionables,
+  lados,
   redimensionar,
   type Asider,
   type ContextoResize,
@@ -147,8 +148,12 @@ function anchoCajaDeTexto(
  * Sigue apareciendo en la lista, en gris y con "(fija)", y sigue dibujandose en la
  * previsualizacion: quitado del editor no es quitado de la etiqueta. Lo que se quita es el
  * tirador, que es lo que invita a moverlo.
+ *
+ * F8b: `"rect"` y `"line"` son figuras libres del operador y SI se editan, aunque tambien
+ * salgan por `^GB`. El `kind` distinto es lo que permite esto: `"shape"` sigue siendo
+ * solo el marco fijo, y las libres van por su propio camino.
  */
-const EDITABLES = new Set(["text", "barcode", "graphic"]);
+const EDITABLES = new Set(["text", "barcode", "graphic", "rect", "line"]);
 
 const TITULOS: Record<string, string> = {
   productName: "descripcion",
@@ -167,6 +172,8 @@ const FIJAS: Record<string, string> = {
 
 function etiquetaDe(z: AnyZone, i: number): string {
   if (z.kind === "barcode") return "codigo de barras";
+  if (z.kind === "rect") return "rectangulo";
+  if (z.kind === "line") return "linea";
   if (FIJAS[z.kind]) return FIJAS[z.kind];
   const src = String(z.source ?? "");
   return TITULOS[src] ?? `zona ${i}`;
@@ -781,15 +788,58 @@ export default function EditorPage() {
   }
 
   /**
-   * Borra la zona seleccionada. Solo las fijas (F8a) se pueden borrar: las 7 de serie son
-   * la estructura de la etiqueta (marco, logo, nombre, barras, digitos, REF y precio) y sin
-   * ellas no hay etiqueta que imprimir. El boton solo se pinta para las fijas, asi que esto
-   * no necesita comprobar nada mas.
+   * Borra la zona seleccionada. Solo las libres se pueden borrar: los textos fijos (F8a)
+   * y las figuras libres (F8b) los puso el operador y se quitan; las 7 de serie son la
+   * estructura de la etiqueta (marco, logo, nombre, barras, digitos, REF y precio) y sin
+   * ellas no hay etiqueta que imprimir. El boton solo se pinta para las libres, asi que
+   * esto no necesita comprobar nada mas.
    */
-  function eliminarZonaFija(i: number) {
+  function eliminarZonaLibre(i: number) {
     const resto = zones.filter((_, j) => j !== i);
     setZones(resto);
     setSel(primeraEditable(resto));
+  }
+
+  /**
+   * Agrega un rectangulo libre (F8b): 12 x 7 mm a la izquierda del logo.
+   *
+   * Posicion por defecto x 16, y 48 dots: dentro del hueco del marco (11,9..461,271),
+   * a la izquierda del logo (empieza en x 128) y por encima del nombre (empieza en
+   * y 120). Tamano 96 x 56 dots con trazo de 2: se ve sin tapar nada, y Aplicar lo
+   * acepta con el producto corto y con el largo.
+   */
+  function agregarRectanguloLibre() {
+    const nueva: AnyZone = {
+      kind: "rect",
+      x: 16,
+      y: 48,
+      widthDots: 96,
+      heightDots: 56,
+      thicknessDots: 2,
+    };
+    setZones((prev) => [...prev, nueva]);
+    setSel(zones.length);
+  }
+
+  /**
+   * Agrega una linea libre (F8b): vertical de 10 mm a la derecha del logo.
+   *
+   * x 400, y 16, largo 80 dots: dentro del hueco del marco, a la derecha del logo
+   * (acaba en x 344) y por encima del nombre y del precio. Vertical porque en
+   * horizontal ya estan el nombre y las barras: lo que falta es un separador, no otra
+   * raya acostada.
+   */
+  function agregarLineaLibre() {
+    const nueva: AnyZone = {
+      kind: "line",
+      x: 400,
+      y: 16,
+      largoDots: 80,
+      orientacion: "vertical",
+      thicknessDots: 2,
+    };
+    setZones((prev) => [...prev, nueva]);
+    setSel(zones.length);
   }
 
   /**
@@ -830,7 +880,10 @@ export default function EditorPage() {
 
   /** Que ejes se pueden estirar en la zona seleccionada, y el aviso de lo que no se puede. */
   const zonaEjes = useMemo(
-    () => (zona ? ejesRedimensionables(zona as unknown as LabelZone) : null),
+    () =>
+      zona
+        ? (esFiguraLibre(zona) ? ejesFiguraLibre(zona) : ejesRedimensionables(zona as unknown as LabelZone))
+        : null,
     [zona],
   );
 
@@ -1002,12 +1055,16 @@ export default function EditorPage() {
     () =>
       zones.map((z, i) =>
         preview && EDITABLES.has(z.kind)
-          ? cajaEstimada(z as unknown as LabelZone, {
-              anchoSimbolo: preview.anchoSimbolo,
-              texto: preview.resueltos[i]?.texto ?? null,
-              altoLetra: preview.resueltos[i]?.alto,
-              anchoCelda: preview.resueltos[i]?.ancho,
-            })
+          ? // Las figuras libres no pasan por `cajaEstimada()` (no esta en la superficie
+            // de F8b): su marco es el rectangulo que se imprime, calculado aqui.
+            esFiguraLibre(z)
+            ? marcoFiguraLibre(z)
+            : cajaEstimada(z as unknown as LabelZone, {
+                anchoSimbolo: preview.anchoSimbolo,
+                texto: preview.resueltos[i]?.texto ?? null,
+                altoLetra: preview.resueltos[i]?.alto,
+                anchoCelda: preview.resueltos[i]?.ancho,
+              })
           : null,
       ),
     [zones, preview],
@@ -1093,7 +1150,12 @@ export default function EditorPage() {
     g.movido = g.movido || ex !== 0 || ey !== 0;
     setEstirando({ indice: g.indice, asa: g.asa, base: g.base, dx: ex, dy: ey });
 
-    const nueva = redimensionar(g.origen, g.asa, ex, ey, g.ctx);
+    // Las figuras libres no pasan por `redimensionar()` (fuera de superficie F8b): su
+    // geometria es la del `shape`, calculada en la pagina. El resto va por el camino
+    // generico, que cuantiza modulos, multiplos de 8 y dots de letra.
+    const nueva = esFiguraLibre(g.origen as unknown as AnyZone)
+      ? redimensionarFiguraLibre(g.origen as unknown as AnyZone, g.asa, ex, ey)
+      : redimensionar(g.origen, g.asa, ex, ey, g.ctx);
     if (JSON.stringify(nueva) === JSON.stringify(g.origen)) return;
     const i = g.indice;
     setZones((prev) => prev.map((z, j) => (j === i ? (nueva as unknown as AnyZone) : z)));
@@ -1427,10 +1489,28 @@ export default function EditorPage() {
             >
               Texto libre
             </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={agregarRectanguloLibre}
+                className={buttonClearSecondary}
+              >
+                Rectangulo
+              </button>
+              <button
+                type="button"
+                onClick={agregarLineaLibre}
+                className={buttonClearSecondary}
+              >
+                Linea
+              </button>
+            </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">
               Agrega un texto fijo (&quot;TEXTO&quot;) arriba a la izquierda: sale tal cual se
-              escribe y no varia por producto. Arrastralo donde haga falta; solo los textos
-              libres se pueden borrar.
+              escribe y no varia por producto. El rectangulo (12 x 7 mm, a la izquierda del
+              logo) y la linea (vertical de 10 mm, a la derecha) salen con `^GB`, como el
+              marco, y se arrastran y estiran igual que lo demas. Solo lo libre se puede
+              borrar: el marco fijo no se toca.
             </p>
             <div className="mt-2 flex flex-col gap-1">
               {zones.map((z, i) => {
@@ -1476,9 +1556,8 @@ export default function EditorPage() {
               </div>
 
               {/* El marco (`kind: "shape"`) no tiene panel, y no es un olvido: ya no es
-                  editable. Tenia sus numeros de ancho, alto, grosor y esquina, y se han
-                  quitado con el resto. Su medida sale de la plantilla, asi que un panel de
-                  esos seria un formulario para desincronizar el marco de lo que se imprime. */}
+                  editable. El rectangulo LIBRE (`kind: "rect"`) si tiene el suyo mas abajo:
+                  mismo `^GB`, distinto `kind`, y por eso uno se toca y el otro no. */}
 
               {zona.kind === "graphic" && (
                 <>
@@ -1539,38 +1618,25 @@ export default function EditorPage() {
               ) : zona.kind === "text" ? (
                 <>
                   {zona.source === "fixed" && (
-                    <>
-                      <div className="mt-3">
-                        <label
-                          htmlFor="editor-texto-fijo"
-                          className="mb-1 block text-xs text-muted"
-                        >
-                          Contenido
-                        </label>
-                        <input
-                          id="editor-texto-fijo"
-                          value={String(zona.text ?? "")}
-                          maxLength={60}
-                          onChange={(e) => editar(sel, { text: e.target.value })}
-                          className={input}
-                        />
-                        <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                          Texto fijo: sale tal cual (plegado a ASCII, sin mayusculas forzadas).
-                          Maximo 60 caracteres.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => eliminarZonaFija(sel)}
-                        className={`${buttonClearSecondary} mt-3 w-full`}
+                    <div className="mt-3">
+                      <label
+                        htmlFor="editor-texto-fijo"
+                        className="mb-1 block text-xs text-muted"
                       >
-                        Eliminar esta zona
-                      </button>
+                        Contenido
+                      </label>
+                      <input
+                        id="editor-texto-fijo"
+                        value={String(zona.text ?? "")}
+                        maxLength={60}
+                        onChange={(e) => editar(sel, { text: e.target.value })}
+                        className={input}
+                      />
                       <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                        Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y
-                        precio) no se pueden borrar: son la estructura de la etiqueta.
+                        Texto fijo: sale tal cual (plegado a ASCII, sin mayusculas forzadas).
+                        Maximo 60 caracteres.
                       </p>
-                    </>
+                    </div>
                   )}
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Num
@@ -1648,7 +1714,95 @@ export default function EditorPage() {
                     }
                   />
                 </>
+              ) : zona.kind === "rect" ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="ancho (mm)"
+                      step={0.5}
+                      value={MM(Number(zona.widthDots))}
+                      onChange={(v) => editar(sel, { widthDots: Math.max(1, DOTS(v)) })}
+                    />
+                    <Num
+                      label="alto (mm)"
+                      step={0.5}
+                      value={MM(Number(zona.heightDots))}
+                      onChange={(v) => editar(sel, { heightDots: Math.max(1, DOTS(v)) })}
+                    />
+                  </div>
+                  <Num
+                    label="grosor (mm)"
+                    step={0.125}
+                    value={MM(Number(zona.thicknessDots))}
+                    onChange={(v) =>
+                      editar(sel, { thicknessDots: Math.min(5, Math.max(1, DOTS(v))) })
+                    }
+                  />
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    Rectangulo hueco con `^GB`, como el marco pero libre: se arrastra y se
+                    estira por los bordes. El grosor va de 1 a 5 dots (0,125 a 0,625 mm).
+                  </p>
+                </>
+              ) : zona.kind === "line" ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Num
+                      label="largo (mm)"
+                      step={0.5}
+                      value={MM(Number(zona.largoDots))}
+                      onChange={(v) => editar(sel, { largoDots: Math.max(1, DOTS(v)) })}
+                    />
+                    <Num
+                      label="grosor (mm)"
+                      step={0.125}
+                      value={MM(Number(zona.thicknessDots))}
+                      onChange={(v) =>
+                        editar(sel, { thicknessDots: Math.min(5, Math.max(1, DOTS(v))) })
+                      }
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <label htmlFor="editor-orientacion" className="mb-1 block text-xs text-ink-soft">
+                      Orientacion
+                    </label>
+                    <select
+                      id="editor-orientacion"
+                      value={String(zona.orientacion)}
+                      onChange={(e) => editar(sel, { orientacion: e.target.value })}
+                      className={input}
+                    >
+                      <option value="horizontal">Horizontal</option>
+                      <option value="vertical">Vertical</option>
+                    </select>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    Linea con `^GB` colapsado: solo horizontal o vertical, sin diagonales (el
+                    preview no las dibuja). El largo va en el eje de la orientacion y el
+                    grosor (1 a 5 dots) en el otro.
+                  </p>
+                </>
               ) : null}
+
+              {/* Solo lo libre se puede borrar: textos fijos (F8a) y figuras libres (F8b).
+                  Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y precio)
+                  no: son la estructura de la etiqueta. */}
+              {(zona.kind === "rect" ||
+                zona.kind === "line" ||
+                (zona.kind === "text" && zona.source === "fixed")) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => eliminarZonaLibre(sel)}
+                    className={`${buttonClearSecondary} mt-3 w-full`}
+                  >
+                    Eliminar esta zona
+                  </button>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                    Las 7 zonas de serie (marco, logo, nombre, barras, digitos, REF y
+                    precio) no se pueden borrar: son la estructura de la etiqueta.
+                  </p>
+                </>
+              )}
 
               {/* Lo que las asas hacen de verdad en ESTA zona. Sin esto, tirar de un tirador y
                   que no pase nada parece un fallo del editor, y en el codigo de barras y en el
@@ -1809,8 +1963,8 @@ export default function EditorPage() {
             <span className="text-xs text-muted">
               Clic en cualquier zona para seleccionarla y arrastrarla en el mismo gesto; tira de
               los puntos blancos de las esquinas o los bordes para cambiarle el tamano. Flechas =
-              mover 1 dot, con Mayus 1 mm; Escape = deshacer. Vale para el logo, los textos y
-              las barras. <strong>El marco no</strong>: es el margen del papel y se calcula
+              mover 1 dot, con Mayus 1 mm; Escape = deshacer. Vale para el logo, los textos,
+              las barras, los rectangulos y las lineas. <strong>El marco no</strong>: es el margen del papel y se calcula
               solo desde el ancho de la etiqueta.
             </span>
             <span className="text-xs text-muted">
@@ -2031,6 +2185,86 @@ function conAutoFit(z: AnyZone, cambio: Record<string, number>): AnyZone {
     number
   >;
   return { ...z, autoFit: { ...af, ...cambio } };
+}
+
+/**
+ * Figuras libres (F8b): marco de seleccion, redimensionado y ejes, en la pagina.
+ *
+ * Viven aqui y no en `label.resize.ts` / `label.marco.ts` porque esos modulos no estan
+ * en la superficie de F8b y no se tocan. La geometria es la misma que la del `shape`:
+ * el rectangulo ES la zona y la linea es la barra que emite el builder (largo en el
+ * eje de la orientacion, grosor en el otro), asi que el marco es el rectangulo que se
+ * imprime y los lados izquierdo/superior mueven la posicion. En la linea, el eje que
+ * no manda el largo manda el grosor (1..5 dots, como el esquema): estirar en vertical
+ * una linea horizontal la engorda, no la desplaza.
+ */
+function esFiguraLibre(z: AnyZone): boolean {
+  return z.kind === "rect" || z.kind === "line";
+}
+
+function marcoFiguraLibre(z: AnyZone): { x0: number; y0: number; x1: number; y1: number } | null {
+  const x = Number(z.x);
+  const y = Number(z.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
+  if (z.kind === "rect") {
+    const w = Number(z.widthDots);
+    const h = Number(z.heightDots);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+    return { x0: x, y0: y, x1: x + w, y1: y + h };
+  }
+  if (z.kind === "line") {
+    const t = Math.min(5, Math.max(1, Math.round(Number(z.thicknessDots))));
+    const l = Number(z.largoDots);
+    if (!Number.isFinite(l) || l <= 0 || !Number.isFinite(t)) return null;
+    const w = z.orientacion === "vertical" ? t : l;
+    const h = z.orientacion === "vertical" ? l : t;
+    return { x0: x, y0: y, x1: x + w, y1: y + h };
+  }
+  return null;
+}
+
+function redimensionarFiguraLibre(z: AnyZone, asa: Asider, dx: number, dy: number): AnyZone {
+  const l = lados(asa);
+  const dL = l.izq ? dx : 0;
+  const dR = l.der ? dx : 0;
+  const dT = l.arr ? dy : 0;
+  const dB = l.aba ? dy : 0;
+  const x = Math.max(0, Math.round(Number(z.x) + dL));
+  const y = Math.max(0, Math.round(Number(z.y) + dT));
+  if (z.kind === "rect") {
+    return {
+      ...z,
+      x,
+      y,
+      widthDots: Math.max(MIN_DOTS.ancho, Math.round(Number(z.widthDots) + dR - dL)),
+      heightDots: Math.max(MIN_DOTS.alto, Math.round(Number(z.heightDots) + dB - dT)),
+    };
+  }
+  const vertical = z.orientacion === "vertical";
+  const dLargo = vertical ? dB - dT : dR - dL;
+  const dGrosor = vertical ? dR - dL : dB - dT;
+  return {
+    ...z,
+    x,
+    y,
+    largoDots: Math.max(MIN_DOTS.ancho, Math.round(Number(z.largoDots) + dLargo)),
+    thicknessDots: Math.min(5, Math.max(1, Math.round(Number(z.thicknessDots) + dGrosor))),
+  };
+}
+
+function ejesFiguraLibre(z: AnyZone): { x: boolean; y: boolean; nota: string } | null {
+  if (z.kind === "rect") return { x: true, y: true, nota: "" };
+  if (z.kind === "line") {
+    return {
+      x: true,
+      y: true,
+      nota:
+        z.orientacion === "vertical"
+          ? "Vertical cambia el largo; horizontal, el grosor (1..5 dots)."
+          : "Horizontal cambia el largo; vertical, el grosor (1..5 dots).",
+    };
+  }
+  return null;
 }
 
 function Num({

@@ -31,6 +31,19 @@ import type { LabelZone } from "./label.template";
 export const TEXTO_FIJO_MAX = 60;
 
 /**
+ * Topes de cordura de las figuras libres (F8b), en dots.
+ *
+ * El esquema NO decide si la figura cabe en la etiqueta: eso lo decide `apply`, que
+ * vuelve a renderizar y devuelve 422 si algo se pisa o se sale. Aqui van limites de
+ * cordura: un grosor de mas de 5 dots (0,625 mm) ya no es un borde y un largo de mas de
+ * 8000 dots (1 m) no es una linea. Lo absurdo se rechaza con 400; lo que no cabe, con
+ * 422 honesto.
+ */
+export const FIGURA_GROSOR_MIN = 1;
+export const FIGURA_GROSOR_MAX = 5;
+export const FIGURA_LADO_MAX = 8000;
+
+/**
  * `text` solo vale con `source: "fixed"`, y con el es obligatorio.
  *
  * Va como refinamiento y no como union discriminada porque `source` es abierto (cualquier
@@ -110,6 +123,28 @@ export const zoneSchema: z.ZodType<LabelZone> = z.lazy(() =>
       heightDots: z.number().int().min(0).max(8000),
       thicknessDots: z.number().int().min(1).max(50),
       radiusDots: z.number().int().min(0).max(500).optional(),
+    }),
+    // Rectangulo libre (F8b): como el marco pero sin radio y con grosor acotado. El
+    // minimo es 1 y no 0 como en `shape`: un rectangulo de lado 0 no dibuja nada y su
+    // caja degenerada no intersecta con nada, asi que colaria por `apply` y emitiria
+    // un `^GB0,...` que en el papel es tinta invisible. Lo absurdo, fuera por 400.
+    z.object({
+      kind: z.literal("rect"),
+      x: z.number().int().min(-2000).max(4000),
+      y: z.number().int().min(-2000).max(4000),
+      widthDots: z.number().int().min(FIGURA_GROSOR_MIN).max(FIGURA_LADO_MAX),
+      heightDots: z.number().int().min(FIGURA_GROSOR_MIN).max(FIGURA_LADO_MAX),
+      thicknessDots: z.number().int().min(FIGURA_GROSOR_MIN).max(FIGURA_GROSOR_MAX),
+    }),
+    // Linea libre (F8b): largo en el eje de la orientacion, grosor en el otro. Mismos
+    // topes que el rectangulo: el que decide si cabe es `apply` con 422, no este 400.
+    z.object({
+      kind: z.literal("line"),
+      x: z.number().int().min(-2000).max(4000),
+      y: z.number().int().min(-2000).max(4000),
+      largoDots: z.number().int().min(FIGURA_GROSOR_MIN).max(FIGURA_LADO_MAX),
+      orientacion: z.enum(["horizontal", "vertical"]),
+      thicknessDots: z.number().int().min(FIGURA_GROSOR_MIN).max(FIGURA_GROSOR_MAX),
     }),
   ]),
 ) as z.ZodType<LabelZone>;

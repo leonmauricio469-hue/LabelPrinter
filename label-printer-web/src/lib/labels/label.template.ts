@@ -197,7 +197,69 @@ export interface ShapeZone {
   radiusDots?: number;
 }
 
-export type LabelZone = TextZone | BarcodeZone | GraphicZone | ShapeZone;
+/**
+ * Rectangulo libre del operador (F8b): un `shape` sin redondear y sin ataduras.
+ *
+ * Va en su propio `kind` y no reutiliza `"shape"` a proposito: `EDITABLES` en `/editor`
+ * decide por `kind`, y el marco (`"shape"`) es la unica zona que no se puede mover ni
+ * estirar. Con el mismo `kind`, o el marco se podria arrastrar, o el rectangulo libre
+ * no. El tipo ya dice cual es cual.
+ *
+ * Sin `radiusDots`: `^GB` solo redondea hasta 8 dots (1 mm) y el marco ya cubre el caso
+ * redondeado. Las figuras libres son de esquinas vivas. Sin elipses ni diagonales: el
+ * preview (`label.render.ts`) solo parsea `^GB`, y `^GD` saldria en el ZPL sin verse en
+ * pantalla. Recorte documentado, no olvido.
+ */
+export interface RectZone {
+  kind: "rect";
+  x: number;
+  y: number;
+  widthDots: number;
+  heightDots: number;
+  /**
+   * Grosor del trazo en dots (1..5, lo impone el esquema): 0,125..0,625 mm. Mas grueso
+   * que eso ya no es un borde, es una barra, y para barras esta el rectangulo relleno...
+   * que no existe: recorte documentado, con 5 dots hay de sobra para separar bloques.
+   */
+  thicknessDots: number;
+  /**
+   * Nunca trae caja `^FB`, y el tipo lo dice.
+   *
+   * Solo existe para que la rama de texto de `redimensionar()` (`label.resize.ts`, fuera
+   * de la superficie de F8b) siga compilando tras ampliar la union: esa rama lee
+   * `zona.maxWidthDots` y con un miembro sin el campo no compila. Las figuras libres no
+   * pasan por ahi (el editor las redimensiona por su propio camino en `page.tsx`); este
+   * campo no se escribe nunca y leerse da `undefined`.
+   */
+  maxWidthDots?: never;
+}
+
+/**
+ * Linea libre del operador (F8b): solo horizontal o vertical.
+ *
+ * Es un `^GB` colapsado: una linea horizontal de largo L y grosor t es
+ * `^GB{L},{t},{t}` (caja de alto igual al grosor = barra maciza), y la vertical
+ * `^GB{t},{L},{t}`. El mismo comando que el marco y el rectangulo, sin primitivo nuevo
+ * y sin trato especial en el preview: el parser ya lo dibuja y lo mide.
+ *
+ * Solo dos orientaciones porque `^GB` solo hace barras rectas. La diagonal (`^GD`) no
+ * la parsea `label.render.ts`: saldria en el ZPL sin verse en pantalla, y una linea que
+ * no se ve es la que acaba encima del precio. Recorte documentado.
+ */
+export interface LineZone {
+  kind: "line";
+  x: number;
+  y: number;
+  /** Largo en dots, en el eje que manda la orientacion. */
+  largoDots: number;
+  orientacion: "horizontal" | "vertical";
+  /** Grosor en dots (1..5, lo impone el esquema): el otro eje de la barra. */
+  thicknessDots: number;
+  /** Como en `RectZone`: nunca trae caja `^FB`; solo para que compile la rama de texto. */
+  maxWidthDots?: never;
+}
+
+export type LabelZone = TextZone | BarcodeZone | GraphicZone | ShapeZone | RectZone | LineZone;
 
 export interface LabelTemplate {
   /** Identificador estable. Va a `settings.json` y es lo que se guarda, no el objeto. */
