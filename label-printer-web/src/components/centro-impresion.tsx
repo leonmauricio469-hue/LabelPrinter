@@ -1016,8 +1016,13 @@ export function CentroImpresion({
                 <span>{plantilla === null ? "… mm" : `${plantilla.anchoMm} mm`}</span>
               </div>
               {selected ? (
-                <div className="mt-2">
-                  <ProductPreview key={previewKey} code={selected.code} />
+                // Lienzo acotado estilo mockup: la etiqueta centrada a tamano moderado
+                // sobre grilla, no a todo el ancho del panel. El PNG manda; el wrapper
+                // solo lo centra y le pone fondo.
+                <div className="mt-2 grid place-items-center rounded-md border border-edge bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:20px_20px] p-6">
+                  <div className="w-full max-w-[520px]">
+                    <ProductPreview key={previewKey} code={selected.code} />
+                  </div>
                 </div>
               ) : (
                 <div className="mt-2 grid place-items-center rounded-md border border-edge bg-panel p-8">
