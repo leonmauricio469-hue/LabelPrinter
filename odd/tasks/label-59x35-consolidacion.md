@@ -41,8 +41,8 @@ Habia que unificar sin perder nada y recien despues ajustar.
   REF `216..236`, HRI `244..256` (todo dentro de los 280 dots de alto).
 
 ## Pendiente / a decidir
-- **REF**: hoy imprime `"REF:"` (con dos puntos); la spec dice `Ejemplo: "REF"`. Decidir si se
-  quita el colon. (No se toco: es cosmetico y el `"REF:"` salio de una prueba fisica.)
+- **REF** (decidido 9/10, **se queda**): imprime `"REF:"` (con dos puntos); la spec decia
+  `Ejemplo: "REF"`. El usuario dijo "dejalo asi". No se toca.
 - **GK420t -> GX420**: los comentarios y el vault dicen "GK420t" en ~20 lugares (codigo +
   docs + nombres de archivo del vault). La impresora real es **GX420**. Barrido aparte para no
   romper wikilinks de Obsidian a lo tonto.
