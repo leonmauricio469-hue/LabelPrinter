@@ -1543,11 +1543,31 @@ export default function EditorPage() {
    * offset magico de 8+1 px descolocaba el marco respecto al cursor, y aqui no hay ninguna
    * constante que restar porque el marco y la imagen empiezan en el mismo sitio.
    */
+  /**
+   * Px por dot EFECTIVOS del lienzo, medidos, no asumidos.
+   *
+   * El preflight de Tailwind (`img { max-width: 100%; height: auto }`) encogia la
+   * imagen cuando el zoom la hacia mas ancha que la columna, mientras los overlays
+   * se dibujaban a `* zoom` nominal: a zoom 1x coincidia (472 px < columna), a zoom
+   * 6x el desfase era total. La imagen ahora lleva `maxWidth: "none"` (fix 1), y esto
+   * es el cinturon: si algo vuelve a cambiar el tamano rendido, el puntero sigue
+   * cayendo en el dot correcto porque se mide contra el `<img>` real.
+   */
+  function pxPorDot(): number {
+    const el = imgRef.current;
+    if (!el) return zoom;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return zoom;
+    const medidos = r.width / DEFAULT_TEMPLATE.widthDots;
+    return medidos > 0 ? medidos : zoom;
+  }
+
   function dotsDelPuntero(e: { clientX: number; clientY: number }) {
     const el = imgRef.current;
     if (!el) return { dx: 0, dy: 0 };
     const r = el.getBoundingClientRect();
-    return { dx: (e.clientX - r.left) / zoom, dy: (e.clientY - r.top) / zoom };
+    const s = pxPorDot();
+    return { dx: (e.clientX - r.left) / s, dy: (e.clientY - r.top) / s };
   }
 
   /**
@@ -2714,9 +2734,10 @@ export default function EditorPage() {
                       return;
                     }
                     const r = el.getBoundingClientRect();
+                    const s = pxPorDot();
                     setCursor({
-                      xMm: (e.clientX - r.left) / zoom / MM_TO_DOTS,
-                      yMm: (e.clientY - r.top) / zoom / MM_TO_DOTS,
+                      xMm: (e.clientX - r.left) / s / MM_TO_DOTS,
+                      yMm: (e.clientY - r.top) / s / MM_TO_DOTS,
                     });
                   }}
                   onMouseLeave={() => setCursor(null)}
@@ -2726,6 +2747,16 @@ export default function EditorPage() {
                   src={`data:image/png;base64,${preview.png}`}
                   width={DEFAULT_TEMPLATE.widthDots * zoom}
                   height={DEFAULT_TEMPLATE.heightDots * zoom}
+                  // `maxWidth: "none"` le gana al preflight de Tailwind
+                  // (`img { max-width: 100%; height: auto }`), que encogia la
+                  // imagen a la columna mientras los overlays se dibujaban a
+                  // `* zoom` nominal: a zoom alto, desfase total. Con tamano
+                  // exacto, el contenedor con scroll hace su trabajo.
+                  style={{
+                    width: DEFAULT_TEMPLATE.widthDots * zoom,
+                    height: DEFAULT_TEMPLATE.heightDots * zoom,
+                    maxWidth: "none",
+                  }}
                   alt="Previsualizacion de la etiqueta"
                   draggable={false}
                   className="block"
