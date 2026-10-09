@@ -31,10 +31,10 @@ Operador de mostrador con escáner en mano necesita sugerencias mientras tipea s
   - Route: delegated direct (mismo writer, mismo branch).
   - Acceptance: nav de Imprimir sin Ajustes; `/settings` abre directo y desde AppNav/Configurar.
   - Checks: typecheck + grep sin `/settings` en centro + navegación manual.
-- [ ] **T3** Cierre — tests/docs junto al código, work-unit commits por tarea, assess de riesgo y verificación enfocada.
+- [x] **T3** Cierre — tests/docs junto al código, work-unit commits por tarea, assess de riesgo y verificación enfocada.
   - Route: delegated direct (writer self-verification + parent spot check).
   - Acceptance: commits convencionales en feature branch con IDs registrados abajo; sin `TODO` nuevos.
-  - Checks: comandos de ## Verification del writer + `git status --short`.
+  - Checks: comandos de ## Verification del writer + `git status --short` + assess + spot check typecheck. Todos observados.
 
 ## Authorized scope
 - Editar: `label-printer-web/src/components/centro-impresion.tsx`, `label-printer-web/src/components/use-print.ts`
@@ -42,7 +42,7 @@ Operador de mostrador con escáner en mano necesita sugerencias mientras tipea s
 - No tocar fuera de lo anterior.
 
 ## Delivery strategy
-- Strategy: ask-on-risk (default). Forecast: <400 authored changed lines (combobox ~120-180 + T2 ~10 + tests ~100). Running count: 0. Slice: single-pr previsto.
+- Strategy: ask-on-risk (default). Forecast: <400 authored changed lines. Running count: 274 insertions (diff HEAD~3: 3 files, +274/-21). Slice: single-pr previsto, `under_budget` (295 changed_lines según assess).
 
 ## Progress
 - 2026-10-09: doc creado, 3 tareas. Explorer handoff confirma sin autocomplete (0 matches combobox) y botón Configurar como duplicado real (`app-shell.tsx:91-96`).
@@ -50,12 +50,18 @@ Operador de mostrador con escáner en mano necesita sugerencias mientras tipea s
   - T1: nuevo `label-printer-web/src/components/product-search.tsx` (combobox ARIA, debounce 200ms, AbortController como guarda de staleness sin cambiar `lookupProducts`, teclado ↑↓/Enter/Esc, `<mark>`, `aria-live`, `autoComplete="off"`, `enterKeyHint="search"`, dropdown `max-h-60` con scroll); `centro-impresion.tsx` integra `ProductSearch` en el form existente + `elegirProducto` compartido (sugerencia y tarjetas, sin re-`resolve`). Commit `092934c`.
   - T2: borrado solo el `Link href="/settings"` de la nav de ventanas + comentario `:57-58` actualizado; `/settings` sigue en `app-nav.tsx:31` y `app-shell.tsx:92`. Commit `e7c9c64`.
   - Excepción TDD: `package.json` sin script `test` y sin config vitest/jest/playwright runnable (playwright solo aparece como dependencia transitiva en `package-lock.json`); no se creó `product-search.test.tsx`.
+  - T3: doc actualizado. Commit `68f929a`.
+  - T3-parent: assess + spot check + cierre. Commit pendiente (este edit).
 
 ## Verification evidence
-- `npm --prefix label-printer-web run typecheck`: exit 0, sin errores (post T1+T2).
-- `grep /settings centro-impresion.tsx`: sin `Link href="/settings"`; solo mención en comentario, `GET /api/settings` y tipo `AjustesOperativos`.
-- `git status --short` / `git diff --stat`: ver committing abajo; sin `TODO` nuevos.
-- Pendiente manual (parent/operador): teclado (↑↓/Enter/Esc), scan USB con foco en input, y abrir `/settings` directo + desde AppNav/Configurar.
+- Writer: `npm --prefix label-printer-web run typecheck`: exit 0, sin errores (post T1+T2).
+- Writer: `git status --short`: limpio; `git diff --stat`: vacío (todo commiteado; T1 +209/-16 en 2 archivos, T2 +4/-5).
+- Writer: `grep /settings centro-impresion.tsx`: sin `Link href="/settings"`; solo mención en comentario, `GET /api/settings` y tipo `AjustesOperativos`.
+- Parent spot check: `npm --prefix label-printer-web run typecheck`: exit 0 (re-corrido antes de entregar).
+- Parent: `gentle-ai review mode status`: `on (decided by default)`, global unset, clone-local unset.
+- Parent: `gentle-ai review assess --base-ref 3106a7b --committed-only`: `risk=medium` (`executable_change` en centro-impresion), `review_due=false`, `review_due_reason=under_budget`, 295 changed_lines. Tier registrado: medium / under budget (slice pendiente, sin review nativa).
+- Sin `TODO` nuevos.
+- Pendiente manual (operador): teclado (↑↓/Enter/Esc), scan USB con foco en input, y abrir `/settings` directo + desde AppNav/Configurar.
 
 ## Next step
-- Lanzar un writer acotado en feature branch `feat/busqueda-autocomplete-quitar-ajuste` con T1+T2, luego verificación y commits por tarea.
+- Probar en navegador lo pendiente manual; si va bien, PR single desde `feat/busqueda-autocomplete-quitar-ajuste` (decisión tuya, yo no pusheo).
