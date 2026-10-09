@@ -78,6 +78,50 @@
   --shadow-card: 0 1px 2px rgb(16 20 26 / 0.04), 0 1px 3px rgb(16 20 26 / 0.05);
   --shadow-pop: 0 4px 12px rgb(16 20 26 / 0.08), 0 2px 4px rgb(16 20 26 / 0.05);
 
+  /*
+   * ---- ClearCraft F0: piel nueva. SOLO AGREGA, nada de arriba cambia. ----
+   *
+   * Las paginas siguen usando los tokens vigentes (`brand`, `app`, `line`...),
+   * asi que estos conviven hasta que F1-F6 migren cada pantalla. Nombres nuevos
+   * a proposito (`primary`, `canvas`, `edge`, `strong`...): redefinir `ink` o
+   * `brand` cambiaria las paginas por debajo, y F0 es cero cambio visual en
+   * ellas. Valores de `DESIGN.md` (stitch `clearcraft_design_system`).
+   */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+  --color-primary-line: #bfdbfe;
+  --color-focus: #93c5fd;
+
+  --color-canvas: #f8fafc;
+  --color-panel: #ffffff;
+  --color-edge: #e2e8f0;
+  --color-strong: #0f172a;
+  --color-muted: #64748b;
+
+  --color-error: #ba1a1a;
+  --color-error-soft: #ffdad6;
+  --color-success: #059669;
+  --color-success-soft: #ecfdf5;
+
+  /* Display: Plus Jakarta Sans via next/font (variable `--font-display` en el
+     layout); la pila de sistema queda como fallback offline. */
+  --font-display:
+    "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Radios ClearCraft: campos 8px, tarjetas 12px, paneles 16px, pills total. */
+  --radius-field: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+  --radius-pill: 9999px;
+
+  /* Sombras ClearCraft nivel 2 (barras flotantes) y 3 (popovers/drawer). */
+  --shadow-float:
+    0 2px 8px -2px rgb(15 23 42 / 0.06), 0 4px 14px -4px rgb(37 99 235 / 0.08);
+  --shadow-overlay:
+    0 8px 24px -4px rgb(15 23 42 / 0.1), 0 2px 6px -1px rgb(15 23 42 / 0.04);
+
   /* ---- Tipografia ---- */
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,

@@ -88,3 +88,27 @@ export const buttonWarn = `${base} border border-danger-line bg-danger-soft text
 
 /** Chip o badge de estado compacto. */
 export const badge = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium";
+
+/*
+ * ---- ClearCraft F0: clases nuevas. SOLO AGREGA, nada de arriba cambia. ----
+ *
+ * Las paginas siguen importando las de arriba; F1-F6 migraran cada pantalla a
+ * estas. Usan los tokens `--color-primary`, `--color-edge`, `--color-panel`,
+ * `--color-canvas`, `--color-strong`, `--radius-*` y `--shadow-*` de
+ * `globals.css`. Reusan `base` (misma metrica de boton: min-h, 150 ms).
+ */
+
+/** Boton destacado ClearCraft: royal `#2563EB`, hover `#1D4ED8`. */
+export const buttonClear = `${base} bg-primary text-white hover:bg-primary-hover active:translate-y-px`;
+
+/** Boton secundario ClearCraft: papel blanco, borde sutil. */
+export const buttonClearSecondary = `${base} border border-edge bg-panel text-strong hover:bg-canvas`;
+
+/** Tarjeta ClearCraft: panel blanco, radio 12px, sombra flotante nivel 2. */
+export const cardClear = "rounded-card border border-edge bg-panel shadow-float";
+
+/** Pill ClearCraft (forma): el tono lo pone cada uso, como `badge`. */
+export const pillClear = "inline-flex items-center gap-2 rounded-pill border border-edge bg-panel px-3 py-1.5 text-xs font-medium";
+
+/** Titulo con la display (Plus Jakarta Sans): marca y encabezados del shell. */
+export const displayTitle = "font-display font-bold tracking-tight text-strong";

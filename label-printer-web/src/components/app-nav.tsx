@@ -20,8 +20,11 @@ import { usePathname } from "next/navigation";
  *
  * `LINKS` sigue siendo `as const` porque `href` es literal: si un dia alguien pone una
  * plantilla, Next y el tipado lo veran aqui.
+ *
+ * F0: se exporta como `NAV_LINKS` para que `AppShell` (tabs + drawer) use la misma
+ * lista. Una sola fuente de rutas, sin grupos inventados.
  */
-const LINKS = [
+export const NAV_LINKS = [
   { href: "/", label: "Normal", icon: IconScan, primary: true },
   { href: "/fast", label: "Rapido", icon: IconBolt },
   { href: "/history", label: "Historial", icon: IconClock },
@@ -35,7 +38,7 @@ export function AppNav() {
   return (
     <nav aria-label="Secciones" className="-mx-1 overflow-x-auto pb-0.5">
       <ul className="flex w-max min-w-full gap-1">
-        {LINKS.map((link) => {
+        {NAV_LINKS.map((link) => {
           const active = pathname === link.href;
           const Icon = link.icon;
 
