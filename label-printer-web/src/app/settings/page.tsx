@@ -392,7 +392,17 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <Seccion3Catalogo label={settings.label} override={override} onPatchLabel={patchLabel} />
+          <Seccion3Catalogo
+            label={settings.label}
+            override={override}
+            onPatchLabel={patchLabel}
+            onImportado={(s) => {
+              setSettings(s);
+              setLastSyncOk(Date.now());
+              setAhora(Date.now());
+              setRefreshKey((k) => k + 1);
+            }}
+          />
 
           <Telemetria />
         </div>

@@ -130,9 +130,8 @@ export function Seccion3Catalogo({
   // Importar real: lee el JSON elegido, lo valida como objeto y lo guarda
   // (PUT /api/settings, merge en servidor). Si el archivo no es JSON o el
   // servidor lo rechaza (400), se avisa y el formulario queda intacto.
-  // Limite honesto: sin `onImportado` cableado (prop de la pagina, fuera de
-  // esta superficie) solo se refresca `label` en el formulario padre; el
-  // resto llega con la recarga que pide el mensaje.
+  // `onImportado` lo cablea la pagina (`page.tsx`): aplica el objeto entero,
+  // marca `lastSyncOk` y refresca. Sin él, solo se refresca `label`.
   const [archivo, setArchivo] = useState<File | null>(null);
   const [importando, setImportando] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
