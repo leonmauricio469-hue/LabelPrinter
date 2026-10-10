@@ -40,7 +40,8 @@ Operador: pantalla 100% funcional + plantillas visibles y usables desde Ajustes.
   - Route: delegated direct (writer self-verification + parent spot check).
   - Acceptance: commits convencionales con IDs abajo; sin TODO nuevos.
   - Checks: verification del writer + `git status` + assess.
-  - Outcome: parent spot check `typecheck` exit 0; assess abajo; visual/manual pendientes del operador.
+  - Outcome: parent spot check `typecheck` exit 0; assess `medium/slice_budget_reached` (731 líneas) → review `reliability` APROBADA y QUEMADA (lineage `review-acfd44a5a0e41834`, ver abajo).
+- [ ] **T5** Follow-ups de la review (informativos, sin corrección ofrecida) — (a) `usar()` en seccion3 aplica el template en estado local antes del PUT: si el PUT falla, la UI muestra el nuevo como activo aunque el error diga que nada cambió; (b) el dropdown de plantillas de seccion3 carga una vez al montar y queda viejo tras crear/archivar en la sección 4 hasta recargar. Sin papel, sin backend nuevo.
 
 ## Authorized scope
 - Editar: `label-printer-web/src/app/settings/page.tsx`, `label-printer-web/src/components/settings-seccion1.tsx`, `label-printer-web/src/components/settings-seccion2.tsx`, `label-printer-web/src/components/settings-seccion3.tsx`, `label-printer-web/src/components/settings-telemetria.tsx` (puede eliminarse si la sección sale)
@@ -60,6 +61,7 @@ Operador: pantalla 100% funcional + plantillas visibles y usables desde Ajustes.
 - Smoke sin papel contra dev server :3000: `GET /api/templates` → 200 con 3 plantillas no archivadas (id/name/widthMm presentes); `PUT /api/settings` round-trip con mismo `templateId` → 200 con todas las claves intactas. El PUT añadió claves raíz por defecto al `settings.json` en disco y se revirtió (`git checkout`) para dejar el árbol como estaba.
 - `git status --short`: limpio salvo este doc sin trackear. `git diff --stat`: vacío.
 - Commits: `3a3414a` feat(ajustes): quitar muertos y checksum real FNV-1a; `126cc54` feat(ajustes): plantillas reales en Ajustes; `b96b088` style(ajustes): identidad de taller e copy en sentence case. Sin Co-Authored-By, sin TODO nuevos, sin `^PQ`/`^MF`/`^CI` nuevos (se eliminó la única mención en copy).
+- Review `review-acfd44a5a0e41834`: APROBADA y QUEMADA, lente reliability, 0 bloqueantes; 2 SUGGESTIONs = T5 arriba. Sin corrección ofrecida.
 - Visual operador pendiente (parent).
 
 ## Next step
