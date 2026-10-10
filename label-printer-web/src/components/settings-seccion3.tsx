@@ -30,7 +30,7 @@ const calloutWarn =
   "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn";
 
 /** Ruta del mockup: solo texto, el campo esta deshabilitado. */
-const RUTA_MOCKUP = "C:\\Papicar\\Data\\Articulos_Activos_2024…";
+const RUTA_MOCKUP = "C:\\Papicar\\Data\\Articulos_Activos_2024.sqlite";
 
 /**
  * Seccion 3: catalogo y plantillas (T7: replica del template).
@@ -128,8 +128,8 @@ export function Seccion3Catalogo({
 
       <div className={note} title={mockTitle}>
         <p className={labelClass}>RUTA BASE DE DATOS LOCAL / ERP</p>
-        <p className="mt-1.5 text-sm font-bold text-ink">
-          4.820 ARTÍCULOS
+        <p className="mt-1.5 font-mono text-[11px] font-bold text-ink">
+          4.820 Artículos
           <span className={mockBadge}>mockup · sin datos / no cableado</span>
         </p>
         <div className="mt-1.5 flex gap-2">
@@ -154,8 +154,9 @@ export function Seccion3Catalogo({
       </div>
 
       <div className={note} title={mockTitle}>
-        <p className="text-sm text-ink">
-          Sincronización Catálogo / Última: Hoy 08:32 AM
+        <p className="text-sm font-bold text-ink">Sincronización Catálogo</p>
+        <p className="font-mono text-[11px] text-ink-soft">
+          Última: Hoy 08:32 AM
           <span className={mockBadge}>mockup · sin datos / no cableado</span>
         </p>
         <button
@@ -173,9 +174,12 @@ export function Seccion3Catalogo({
       <div className={note}>
         <p className="text-sm font-semibold text-ink">COPIAS DE RESPALDO &amp; PERFILES</p>
         <p className="mt-1.5">
-          El perfil es el <code>settings.json</code> guardado: exportarlo lo descarga
-          tal cual para pasarlo a otra máquina. Importar desde un archivo todavía no
-          está cableado.
+          Descarga o restaura toda la calibración física, márgenes y formatos de etiquetas
+          guardados.
+        </p>
+        <p className="mt-1.5">
+          Exportar descarga el <code>settings.json</code> real tal cual; importar desde un
+          archivo todavía no está cableado.
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
           <button

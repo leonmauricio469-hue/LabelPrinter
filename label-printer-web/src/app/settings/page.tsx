@@ -13,25 +13,32 @@ import {
   buttonClearSecondary,
   cardClear,
   displayTitle,
-  hint,
   input,
   label as labelClass,
   pillClear,
+  studioFooterClear,
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
-import { DEFAULT_TEMPLATE } from "@/lib/labels/label.template";
+import { DEFAULT_SETTINGS } from "@/lib/settings/settings.types";
+import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
 
 /** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
 const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
 const mockTitle =
   "Texto del mockup sin fuente real: no cableado, no son datos en vivo.";
 
-/** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
-const note =
-  "rounded-md border border-line bg-surface-sunken px-3 py-3 text-xs leading-relaxed text-ink-soft";
+/** Relativo en español para la última sincronización real (timestamp del PUT ok). */
+function haceCuanto(ts: number, ahora: number): string {
+  const s = Math.max(0, Math.round((ahora - ts) / 1000));
+  if (s < 10) return "ahora mismo";
+  if (s < 60) return `hace ${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
 
-/** `input` compartido con la separacion respecto de la etiqueta de arriba. */
-const inputClass = `mt-1.5 ${input}`;
 
 /**
  * Ajustes replica del template 1:1, sin inventar datos (T7).
@@ -56,6 +63,16 @@ export default function SettingsPage() {
   // Si `/editor` guardo una geometria, esta pagina es el unico sitio donde el
   // operador se entera antes de imprimir.
   const [override, setOverride] = useState<{ activo: boolean; savedAt?: string } | null>(null);
+  // Timestamp del último PUT ok: la barra inferior lo muestra en relativo.
+  const [lastSyncOk, setLastSyncOk] = useState<number | null>(null);
+  // Reloj para que el relativo avance sin recargar.
+  const [ahora, setAhora] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (lastSyncOk === null) return;
+    const t = window.setInterval(() => setAhora(Date.now()), 30000);
+    return () => window.clearInterval(t);
+  }, [lastSyncOk]);
 
   useEffect(() => {
     void (async () => {
@@ -206,6 +223,8 @@ export default function SettingsPage() {
       }
       setSettings((await res.json()) as AppSettings);
       setState({ kind: "ok", message: "Configuracion guardada en settings.json" });
+      setLastSyncOk(Date.now());
+      setAhora(Date.now());
       setRefreshKey((k) => k + 1);
     } catch (err) {
       setState({ kind: "error", message: (err as Error).message });
@@ -231,6 +250,28 @@ export default function SettingsPage() {
     } catch (err) {
       setState({ kind: "error", message: (err as Error).message });
     }
+  }, []);
+
+  // Vuelve al formulario a los valores de fábrica: no guarda solo, el
+  // operador confirma con Guardar Configuración.
+  const resetear = useCallback(() => {
+    if (
+      !window.confirm(
+        "¿Restablecer configuración física a los valores predeterminados para PAPICAR 59mm @ 203 DPI?",
+      )
+    ) {
+      return;
+    }
+    setSettings({
+      ...DEFAULT_SETTINGS,
+      printer: { ...DEFAULT_SETTINGS.printer },
+      label: { ...DEFAULT_SETTINGS.label },
+    });
+    setState({
+      kind: "info",
+      message:
+        "Valores de fábrica en el formulario. Pulsa Guardar Configuración para aplicarlos.",
+    });
   }, []);
 
   // Etiqueta de diagnostico: imprime DE VERDAD por el transporte configurado.
@@ -298,55 +339,30 @@ export default function SettingsPage() {
         </span>
       </section>
 
-      {/* Perfil: la empresa cableada (alimenta PERFIL ACTIVO); respaldo sin fuente. */}
-      <section className={`${cardClear} flex flex-col gap-4 p-5`}>
-        <h3 className={`${displayTitle} text-base`}>Perfil</h3>
-        <div>
-          <label htmlFor="businessName" className={labelClass}>
-            Empresa
-          </label>
-          <input
-            id="businessName"
-            value={settings.label.businessName}
-            onChange={(e) => patchLabel({ businessName: e.target.value })}
-            className={inputClass}
-          />
-          <p className={hint}>
-            Aparece impresa en la etiqueta. Cambiarla aqui no reimprime nada: toma efecto en la
-            proxima tirada.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled
-            title="Sin fuente real: exportar el perfil no esta cableado."
-            className={buttonClearSecondary}
-          >
-            Exportar perfil
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Sin fuente real: importar el perfil no esta cableado."
-            className={buttonClearSecondary}
-          >
-            Importar perfil
-          </button>
-        </div>
-        <p className={hint}>
-          Exportar / importar perfil: texto del mockup.
-          <span className={mockBadge} title={mockTitle}>
-            mockup · sin datos / no cableado
-          </span>
-        </p>
-        <p className={note}>
-          Plantilla: <strong>{DEFAULT_TEMPLATE.name}</strong> = {DEFAULT_TEMPLATE.widthMm} x{" "}
-          {DEFAULT_TEMPLATE.heightMm} mm. El detalle vive en la seccion Catalogo;{" "}
+      {/* Perfil compacto (T8): empresa editable + línea plantilla/override. */}
+      <section
+        aria-label="Perfil"
+        className={`${cardClear} flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3`}
+      >
+        <label htmlFor="businessName" className={labelClass}>
+          Empresa
+        </label>
+        <input
+          id="businessName"
+          value={settings.label.businessName}
+          onChange={(e) => patchLabel({ businessName: e.target.value })}
+          className={`${input} max-w-xs flex-1`}
+          title="Aparece impresa en la etiqueta (settings label.businessName)"
+        />
+        <p className="text-xs text-ink-soft">
+          Plantilla:{" "}
+          <strong>
+            {(TEMPLATES.find((t) => t.id === settings.label.templateId) ?? DEFAULT_TEMPLATE).name}
+          </strong>
+          {override?.activo ? " · geometría del /editor activa" : ""} ·{" "}
           <Link href="/editor" className="underline underline-offset-2">
             /editor
-          </Link>{" "}
-          para la geometria.
+          </Link>
         </p>
       </section>
 
@@ -382,14 +398,86 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Cierre — Guardar es el unico primario; el estado va al final. */}
-      <section className={`${cardClear} flex flex-wrap justify-end gap-2 p-5`}>
-        <button type="button" onClick={save} className={buttonClear}>
-          Guardar
-        </button>
+      {/* Barra inferior (T8): sync real + checksum estático + reset + guardar. */}
+      <section
+        aria-label="Acciones de configuración"
+        className={`${cardClear} sticky bottom-0 z-10 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-ink-soft">
+          <span
+            title={
+              lastSyncOk === null
+                ? "Todavía no se guardó en esta sesión"
+                : `Último PUT ok: ${new Date(lastSyncOk).toLocaleString("es-ES")}`
+            }
+          >
+            Última sincronización correcta{" "}
+            {lastSyncOk === null
+              ? "pendiente (guarda para sincronizar)"
+              : haceCuanto(lastSyncOk, ahora)}
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            PARAM_CHECKSUM: 0x9AF4B
+            <span className={mockBadge} title={mockTitle}>
+              mockup · sin datos
+            </span>
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={resetear}
+            className={buttonClearSecondary}
+            title="Vuelve el formulario a DEFAULT_SETTINGS (PAPICAR 59mm @ 203 DPI); no guarda solo"
+          >
+            Restablecer Valores
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className={buttonClear}
+            title="Valida y guarda todo el objeto (PUT /api/settings)"
+          >
+            Guardar Configuración
+          </button>
+        </div>
       </section>
 
       <PrintStatus state={state} idleText="" />
+
+      {/* Pie (T8): textos de la ref; lo estático lleva badge, lo real no. */}
+      <footer className={studioFooterClear}>
+        <span>Motor ZPL: Online</span>
+        {settings.printer.printerName.trim() !== "" ? (
+          <span title="Cola de Windows (settings printer.printerName)">
+            Impresora objetivo: {settings.printer.printerName.trim()} (Raw ZPL)
+          </span>
+        ) : (
+          <span>
+            Impresora objetivo: Zebra GX420t (USB001 / Raw ZPL)
+            <span className={mockBadge} title={mockTitle}>
+              mockup · sin datos
+            </span>
+          </span>
+        )}
+        <span title="La referencia muestra data/config-hardware.json; la fuente real es data/settings.json">
+          Origen: data/settings.json
+          <span
+            className={mockBadge}
+            title="La referencia dice data/config-hardware.json; se muestra la fuente real."
+          >
+            mockup · sin datos
+          </span>
+        </span>
+        <span title="El builder calcula a 203 (8 dots/mm); SPEED sin fuente real">
+          DPI: 203 | SPEED: 4.0 IPS
+          <span className={mockBadge} title={mockTitle}>
+            mockup · sin datos
+          </span>
+        </span>
+        <span>PAPICAR S.L. © 2025</span>
+      </footer>
     </main>
   );
 }

@@ -200,9 +200,9 @@ export function Seccion1Dispositivo({
             className={isUsb ? tarjetaActiva : tarjetaInactiva}
             title="USB: imprime por la cola local de Windows"
           >
-            <span className="block text-sm font-bold text-strong">USB</span>
-            <span className="mt-0.5 block text-xs text-ink-soft">
-              Cola local de Windows
+            <span className="block text-sm font-bold text-strong">USB - Cola Local Win</span>
+            <span className="mt-0.5 block font-mono text-xs text-ink-soft">
+              Spooler RAW passthrough
             </span>
             {isUsb && (
               <span className={`${badgeArchivedClear} mt-1.5`}>EN USO</span>
@@ -215,9 +215,9 @@ export function Seccion1Dispositivo({
             className={!isUsb ? tarjetaActiva : tarjetaInactiva}
             title="Red: socket TCP directo a la impresora (puerto 9100)"
           >
-            <span className="block text-sm font-bold text-strong">RED TCP</span>
-            <span className="mt-0.5 block text-xs text-ink-soft">
-              Socket TCP 9100
+            <span className="block text-sm font-bold text-strong">Red / Ethernet IP</span>
+            <span className="mt-0.5 block font-mono text-xs text-ink-soft">
+              Puerto 9100 Direct Socket
             </span>
             {!isUsb && (
               <span className={`${badgeArchivedClear} mt-1.5`}>EN USO</span>
@@ -428,7 +428,7 @@ export function Seccion1Dispositivo({
           >
             <p className={labelClass}>SENSOR DE ESPACIO</p>
             <p className="mt-2 text-sm font-medium text-ink">
-              Web / Gap (Troquel…)
+              Web / Gap (Troquel)
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-ink-soft">
               Separación fija: 3.0mm

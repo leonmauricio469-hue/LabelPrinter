@@ -53,6 +53,28 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
   - Hecho `788199f`: replica exacta de ambos diffs de referencia; grep
     confirma 0 `Link href="/settings"` en los dos ficheros (solo menciones
     en comentarios + `fetch("/api/settings")`, que quedan).
+- [x] **T8** Ajustes finos contra referencia stitch (`stitch-ref/.../ajustes_*`,
+  `code.html` 33KB + `screen.png`) — operador eligió Perfil compacta (no
+  quitar: `businessName` obligatorio e impreso en etiqueta).
+  Gaps a cerrar con textos literales de la ref: (a) método `USB - Cola Local
+  Win / Spooler RAW passthrough`, `Red / Ethernet IP / Puerto 9100 Direct
+  Socket`, `Zebra Bridge Daemon / Servicio local WebSocket`; (b) barra
+  inferior `Última sincronización correcta hace X` (real: último PUT ok) +
+  `PARAM_CHECKSUM: 0x9AF4B` (estático con badge) + `Restablecer Valores`
+  (confirm + vuelve a `DEFAULT_SETTINGS`) + `Guardar Configuración`;
+  (c) tarjeta `Feedback Sonoro del Terminal` (`Beep Éxito`/`Alarma Error`
+  cableados a `sonidoOk/Error` + `Test Sonido` real); (d) sec3 exacto
+  (`4.820 Artículos`, ruta `.sqlite` completa, `Última: Hoy 08:32 AM`,
+  texto `Descarga o restaura toda la calibración…`); (e) telemetría con
+  subcaptions por tile (`km/Ciclo`, `/128KB/Cola despejada`, `V/Nominal`,
+  `MB/ROM OK`) + barra temp; (f) footer `Motor ZPL: Online … DPI: 203 |
+  SPEED: 4.0 IPS … PAPICAR S.L. © 2025` (SPEED estático con badge);
+  (g) Perfil → fila compacta (empresa editable + plantilla) en vez de
+  tarjeta; sensor fijo Web/Gap (sin campo backend).
+  - Route: delegated direct (writer trigger).
+  - Acceptance: comparada lado a lado con `screen.png`, solo difieren
+    badges honestos y pie ASCII real (sin `^CI28` falso); typecheck verde.
+  - Checks: typecheck + grep `^PQ`/`^MF`/`server-only` vacíos + visual.
 - [x] **T7** Réplica 1:1 del template Image 2 — layout 2 columnas estilo
   ZPL Studio: izquierda secciones 1 (dispositivo: 3 tarjetas de método,
   cola+Detectar+PowerShell, grilla calibración 4 tiles, Probar+Test-print)
@@ -71,6 +93,31 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 
 ## Progress
 
+- T8 implementada en `feat/ajustes-rebuild-template` (textos literales de
+  `code.html`, honestidad intacta): (a) tarjetas de método exactas
+  (`USB - Cola Local Win / Spooler RAW passthrough`,
+  `Red / Ethernet IP / Puerto 9100 Direct Socket`,
+  `Zebra Bridge Daemon / Servicio local WebSocket` solo visual con aviso);
+  (b) barra inferior sticky con sync REAL (`lastSyncOk` del PUT ok, relativo
+  en español con tick 30s) + `PARAM_CHECKSUM: 0x9AF4B` con badge +
+  `Restablecer Valores` (confirm literal ref → `DEFAULT_SETTINGS` clonado,
+  sin guardar solo) + `Guardar Configuración`; (c) tarjeta
+  `Feedback Sonoro del Terminal` (desc literal, `Beep Éxito`/`Alarma Error`
+  = `sonidoOk/Error`, `Test Sonido` → `beepOk()` de `sonido.ts`);
+  (d) sec3 exacto (`4.820 Artículos`, ruta `.sqlite` completa,
+  `Última: Hoy 08:32 AM`, `Descarga o restaura toda la calibración…`);
+  (e) telemetría con subcaptions (`Ciclo: 42%`, `Cola despejada`,
+  `Nominal Estable`, `Zebra ROM OK`) + barra temp 58% + nombres de la ref;
+  (f) footer `studioFooterClear` (`Motor ZPL: Online`, objetivo =
+  `printerName` real o literal ref con badge, `Origen: data/settings.json`
+  real con badge sobre el texto ref, `DPI: 203 | SPEED: 4.0 IPS` con badge
+  en SPEED, `PAPICAR S.L. © 2025`); (g) Perfil → fila compacta (empresa +
+  plantilla/override + /editor, sin tarjeta ni Export/Import — viven en
+  sec3); (h) sensor fijo `Web / Gap (Troquel)` + `Separación fija: 3.0mm`
+  sin selector, densidad viva de `oscuridad`, pie ASCII real sin `^CI28`.
+  Claves intactas, PUT completo con pre-validación, `"use client"`, `Link`,
+  `server-only` fuera, `ui.ts` reusado, sin `^PQ`/`^MF`, `xl:grid-cols-2`.
+- Mirror Engram PENDIENTE (falla project resolution — no reintentos).
 - T6-T7 implementadas en `feat/ajustes-rebuild-template`. T6 replica exacta
   de `ccb573b`/`e7c9c64`. T7: sub-barra SISTEMA + PERFIL ACTIVO real
   (businessName en mayúsculas, `SIN NOMBRE` si vacío) + DAEMON/LATENCIA
@@ -106,6 +153,12 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 
 ## Verification
 
+- T8 `npm --prefix label-printer-web run typecheck`: exit 0, sin errores.
+- T8 `git status --short`: 5 ficheros de superficie + doc.
+- T8 `git diff --stat`: 5 ficheros + doc (ver commit).
+- T8 greps: 0 `^PQ` / 0 `^MF` / 0 `^CI28` / 0 `server-only` en los 5
+  ficheros de superficie. Visual del operador: pendiente (lado a lado con
+  `screen.png` en máquina con impresora).
 - `npm --prefix label-printer-web run typecheck`: exit 0, sin errores (post T7).
 - `git status --short` (pre-commit T7): 5 ficheros de superficie + doc;
   tras `d6c8a76`, solo el doc.
@@ -134,3 +187,5 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 - T6 788199f fix(nav): quitar Ajustes de barras ambiente e interna en rebuild
 - T7 d6c8a76 feat(settings): replica 1:1 del template con cableado honesto
 - T6+T7 doc (cierre doc, este commit)
+- T8 (commit, este turno) feat(settings): ajustes finos contra referencia stitch
+- T8 doc (cierre doc, este commit)

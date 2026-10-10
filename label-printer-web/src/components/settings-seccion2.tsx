@@ -2,12 +2,14 @@
 
 import {
   badgeArchivedClear,
+  buttonClearSecondary,
   cardClear,
   displayTitle,
   hint,
   input,
   label as labelClass,
 } from "@/components/ui";
+import { beepOk } from "@/lib/sonido";
 import type { AppSettings } from "@/lib/settings/settings.types";
 
 /** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
@@ -38,7 +40,10 @@ type RootPatch = Partial<
  * (`retardoEscanerMs` / `ventanaDuplicadosMs` reales); el de la segunda
  * describe el mecanismo real: el builder NO emite `^CI`, pliega el texto
  * antes de imprimir (`foldAscii` en `ascii.fold.ts`).
- * Los tiempos y los sonidos siguen cableados abajo.
+ * Los tiempos y los sonidos siguen cableados abajo: la tarjeta `Feedback
+ * Sonoro del Terminal` (`Beep Éxito` / `Alarma Error` = `sonidoOk` /
+ * `sonidoError`) con `Test Sonido` que emite el beep real (`beepOk` de
+ * `sonido.ts`, sin duplicar lógica).
  */
 export function Seccion2Comportamiento({
   sonidoOk,
@@ -152,25 +157,43 @@ export function Seccion2Comportamiento({
       </div>
 
       <div className={note}>
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={sonidoOk}
-            onChange={(e) => onPatch({ sonidoOk: e.target.checked })}
-            className="size-4 accent-primary"
-          />
-          Sonido al imprimir bien
-        </label>
-        <label className="mt-2 flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={sonidoError}
-            onChange={(e) => onPatch({ sonidoError: e.target.checked })}
-            className="size-4 accent-primary"
-          />
-          Sonido al fallar
-        </label>
-        <p className="mt-2 text-xs text-ink-mute">Beeps WebAudio del operador.</p>
+        <p className="text-sm font-semibold text-ink">Feedback Sonoro del Terminal</p>
+        <p className="mt-1">
+          Señales acústicas sintetizadas para confirmación de escaneo válido y aviso de
+          atasco o falta de papel.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={sonidoOk}
+              onChange={(e) => onPatch({ sonidoOk: e.target.checked })}
+              className="size-4 accent-primary"
+            />
+            Beep Éxito
+          </label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={sonidoError}
+              onChange={(e) => onPatch({ sonidoError: e.target.checked })}
+              className="size-4 accent-primary"
+            />
+            Alarma Error
+          </label>
+          <button
+            type="button"
+            onClick={() => beepOk()}
+            className={`${buttonClearSecondary} px-2.5 py-1.5 text-xs`}
+            title="Emite el beep real de éxito (WebAudio, src/lib/sonido.ts)"
+          >
+            Test Sonido
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-ink-mute">
+          Cableados a `sonidoOk` / `sonidoError` de settings; el test suena igual que al
+          imprimir bien.
+        </p>
       </div>
     </section>
   );
