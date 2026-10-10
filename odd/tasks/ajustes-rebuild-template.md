@@ -176,6 +176,10 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
   = inadmisibles; no se envió nada, no hay receipt, la transacción quedó
   abierta. Vale la verificación del writer + spot check. Reintentar la
   review cuando el runtime ofrezca el agente revisor.
+- T8 parent spot check: `typecheck` exit 0 re-corrido; assess `medium /
+  slice_budget_reached` (1865 líneas sobre `3106a7b`) → review
+  `reliability` APROBADA y QUEMADA (lineage `review-c6b519839bb99cbc`,
+  0 findings). Esta vez la captura vino cruda y admisible.
 
 ## IDs
 
@@ -189,3 +193,4 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 - T6+T7 doc (cierre doc, este commit)
 - T8 (commit, este turno) feat(settings): ajustes finos contra referencia stitch
 - T8 doc (cierre doc, este commit)
+- T8 review: `review-c6b519839bb99cbc` aprobada y quemada, 0 findings
