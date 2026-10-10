@@ -62,7 +62,10 @@ export function Seccion3Catalogo({
   const [usando, setUsando] = useState(false);
   const [usoMsg, setUsoMsg] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Biblioteca para el atajo: se carga al montar y se refresca al enfocar
+  // el select y tras activar, para no quedar vieja tras el CRUD de la
+  // sección 4 (que vive en otro componente sin estado compartido).
+  const cargarPlantillas = () => {
     const ctrl = new AbortController();
     void (async () => {
       try {
@@ -79,7 +82,10 @@ export function Seccion3Catalogo({
             typeof j?.error === "string" ? j.error : `la app respondió ${res.status}`,
           );
         }
-        if (!ctrl.signal.aborted) setPlantillas(j.templates);
+        if (!ctrl.signal.aborted) {
+          setPlantillas(j.templates);
+          setPlantillasError(null);
+        }
       } catch (err) {
         if (!ctrl.signal.aborted) {
           setPlantillasError(
@@ -89,7 +95,9 @@ export function Seccion3Catalogo({
       }
     })();
     return () => ctrl.abort();
-  }, []);
+  };
+
+  useEffect(() => cargarPlantillas(), []);
 
   const plantillaActiva =
     plantillas?.find((t) => t.id === label.templateId) ?? null;
@@ -104,8 +112,22 @@ export function Seccion3Catalogo({
     setUsando(true);
     setUsoMsg(null);
     void (async () => {
+      // Verdad del servidor antes de tocar el borrador: si el PUT falla se
+      // revierte a este valor para no mostrar como activa la que no se guardó.
+      let previo: string | null = null;
       try {
-        const actual = (await (await fetch("/api/settings")).json()) as AppSettings;
+        const res0 = await fetch("/api/settings", { cache: "no-store" });
+        const actual = (await res0.json().catch(() => null)) as
+          | (AppSettings & { error?: unknown })
+          | null;
+        if (!res0.ok || !actual || typeof actual.error === "string" || !actual.label) {
+          throw new Error(
+            actual && typeof actual.error === "string"
+              ? actual.error
+              : `no se pudo leer la configuración (HTTP ${res0.status})`,
+          );
+        }
+        previo = actual.label.templateId;
         const res = await fetch("/api/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -127,7 +149,9 @@ export function Seccion3Catalogo({
         onPatchLabel({ templateId: id });
         onImportado?.(j);
         setUsoMsg("Plantilla en uso: la próxima etiqueta sale con esa medida.");
+        cargarPlantillas();
       } catch (err) {
+        if (previo !== null) onPatchLabel({ templateId: previo });
         setUsoMsg(`No se pudo activar: ${(err as Error).message}. No se cambió nada.`);
       } finally {
         setUsando(false);
@@ -384,6 +408,9 @@ export function Seccion3Catalogo({
                 id="templateId"
                 value={plantillaActiva ? label.templateId : ""}
                 onChange={(e) => onPatchLabel({ templateId: e.target.value })}
+                onFocus={() => {
+                  cargarPlantillas();
+                }}
                 className={inputClass}
               >
                 {idObsoleto && <option value="">{idObsoleto} (obsoleta)</option>}

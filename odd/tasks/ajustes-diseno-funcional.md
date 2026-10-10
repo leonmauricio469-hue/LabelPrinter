@@ -41,7 +41,8 @@ Operador: pantalla 100% funcional + plantillas visibles y usables desde Ajustes.
   - Acceptance: commits convencionales con IDs abajo; sin TODO nuevos.
   - Checks: verification del writer + `git status` + assess.
   - Outcome: parent spot check `typecheck` exit 0; assess `medium/slice_budget_reached` (731 líneas) → review `reliability` APROBADA y QUEMADA (lineage `review-acfd44a5a0e41834`, ver abajo).
-- [ ] **T5** Follow-ups de la review (informativos, sin corrección ofrecida) — (a) `usar()` en seccion3 aplica el template en estado local antes del PUT: si el PUT falla, la UI muestra el nuevo como activo aunque el error diga que nada cambió; (b) el dropdown de plantillas de seccion3 carga una vez al montar y queda viejo tras crear/archivar en la sección 4 hasta recargar. Sin papel, sin backend nuevo.
+- [x] **T5** Follow-ups de la review (informativos, sin corrección ofrecida) — (a) `usar()` en seccion3 aplica el template en estado local antes del PUT: si el PUT falla, la UI muestra el nuevo como activo aunque el error diga que nada cambió; (b) el dropdown de plantillas de seccion3 carga una vez al montar y queda viejo tras crear/archivar en la sección 4 hasta recargar. Sin papel, sin backend nuevo.
+  - Hecho parent inline (1 solo fichero no trivial): `usar()` lee la verdad del servidor con chequeo ok/forma, revierte el borrador al valor guardado si el PUT falla, refresca la lista tras activar y al enfocar el select. Commit abajo.
 
 ## Authorized scope
 - Editar: `label-printer-web/src/app/settings/page.tsx`, `label-printer-web/src/components/settings-seccion1.tsx`, `label-printer-web/src/components/settings-seccion2.tsx`, `label-printer-web/src/components/settings-seccion3.tsx`, `label-printer-web/src/components/settings-telemetria.tsx` (puede eliminarse si la sección sale)
