@@ -40,8 +40,63 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
   mockup honesto).
 - [x] T5 cierre — `page.tsx`: valida enteros antes de PUT, fila Guardar,
   PrintStatus, Link /editor, typecheck + status + diff.
+- [x] **T6** Quitar Ajustes de las dos barras — el rebuild se forkeó desde
+  `consolidacion` y perdió la limpieza de nav hecha en el otro branch
+  (`ccb573b` global + `e7c9c64` interna). Borrar `Link /settings` en
+  `app-nav.tsx` (ambiente: tabs+drawer heredan) y en `centro-impresion.tsx`
+  (barra interna de Imprimir). `/settings` sigue vía `Configurar`
+  (`app-shell.tsx:91-96`) + URL directa. Sin tocar `app-shell` ni la ruta.
+  - Route: delegated direct (mismo writer que T7).
+  - Acceptance: ni la barra ambiente ni la interna muestran Ajustes;
+    `/settings` abre por Configurar y directo.
+  - Checks: typecheck + grep sin `Link href="/settings"` en ambos + visual.
+  - Hecho `788199f`: replica exacta de ambos diffs de referencia; grep
+    confirma 0 `Link href="/settings"` en los dos ficheros (solo menciones
+    en comentarios + `fetch("/api/settings")`, que quedan).
+- [x] **T7** Réplica 1:1 del template Image 2 — layout 2 columnas estilo
+  ZPL Studio: izquierda secciones 1 (dispositivo: 3 tarjetas de método,
+  cola+Detectar+PowerShell, grilla calibración 4 tiles, Probar+Test-print)
+  y 2 (comportamiento: 2 tarjetas con toggles + pie); derecha sección 3
+  (catálogo: ruta+artículos, sincronización+Recargar, respaldo Export/Import)
+  + telemetría (4 tiles + barra temperatura). Barra superior: estado
+  conexión+Actualizar, tabs, QUEUE, Soporte; sub-barra: SISTEMA, PERFIL
+  ACTIVO, DAEMON, LATENCIA. Todo lo sin fuente con badge honesto, sin
+  números vivos falsos.
+  - Route: delegated direct (writer trigger).
+  - Acceptance: screenshot actual indistinguible en estructura del template;
+    todo cableable funciona (Guardar/Probar/Test-print/densidad/tiempos);
+    typecheck verde.
+  - Checks: typecheck + diff + comparación visual del operador.
+  - Hecho `d6c8a76` (ver Progress T6-T7 abajo).
 
 ## Progress
+
+- T6-T7 implementadas en `feat/ajustes-rebuild-template`. T6 replica exacta
+  de `ccb573b`/`e7c9c64`. T7: sub-barra SISTEMA + PERFIL ACTIVO real
+  (businessName en mayúsculas, `SIN NOMBRE` si vacío) + DAEMON/LATENCIA
+  estáticos con badge; grilla `xl:grid-cols-2` (apilada en móvil): izquierda
+  sec1 (píldora CONECTADO real desde `/api/printer/status`, 3 tarjetas de
+  método — Bridge solo visual con aviso `no cableado`, cola + Detectar
+  re-fetch + PowerShell hint `Get-Printer`, calibración 4 tiles con puntos
+  reales ancho*8 y slider `oscuridad` real, Probar + Test-print con confirm)
+  y sec2 (2 tarjetas con toggles ON estáticos + pie vivo de tiempos, tiempos
+  y sonidos cableados); derecha sec3 (ruta/4820/sync estáticos con badge,
+  Recargar Ahora real contra `GET /api/products`, Exportar JSON real de
+  `GET /api/settings`, Importar disabled, `templateId`/legacy/override
+  conservados) + telemetría con UN badge por sección. Claves intactas, PUT
+  objeto completo con pre-validación, sin `^PQ`/`^MF`.
+- HALLAZGO contra la transcripción: el pie `^CI28 (UTF-8 Remap Activo)` es
+  falso — el builder nunca emite `^CI` (ver `ascii.fold.ts`: se eligió
+  plegado ASCII + mayúsculas siempre). La tarjeta 2 lo dice así en su pie
+  (`Plegado ASCII + MAYÚSCULAS activo · el builder no emite ^CI`); el toggle
+  ON estático sigue siendo honesto porque el plegado es incondicional.
+- Decisiones que desvían del template a propósito: tarjeta Perfil T1
+  conservada (edita `businessName`, alimenta la píldora); header T1
+  eliminado (la sub-barra lo reemplaza); aviso genérico `^PW` de sec3
+  eliminado (los avisos específicos de sec1 lo cubren); sonidos/`templateId`
+  conservados como bloques cableados subordinados (cero regresión).
+- Mirror Engram PENDIENTE (falló `mem_save`: project resolution unavailable
+  — no reintentado por instrucción del turno).
 
 - T1-T5 implementadas en `feat/ajustes-rebuild-template`. Sin mockup
   visible en el turno (solo la lista del prompt): los items sin fuente
@@ -51,9 +106,14 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 
 ## Verification
 
-- `npm --prefix label-printer-web run typecheck`: exit 0, sin errores.
-- `git status --short`: solo los 5 ficheros de la superficie + doc.
-- `git diff --stat`: page.tsx 162+/303-; 4 componentes nuevos.
+- `npm --prefix label-printer-web run typecheck`: exit 0, sin errores (post T7).
+- `git status --short` (pre-commit T7): 5 ficheros de superficie + doc;
+  tras `d6c8a76`, solo el doc.
+- `git diff --stat` (T7 `d6c8a76`): 5 ficheros, 650+/198-.
+- Greps: 0 `Link href="/settings"` en `app-nav.tsx`/`centro-impresion.tsx`;
+  0 `^PQ`/`^MF` en `src/app/settings` + `src/components`; 0 `server-only`
+  en los 4 componentes settings. Visual del operador: pendiente (comparación
+  contra Image 2 en máquina con impresora).
 
 ## IDs
 
@@ -62,3 +122,6 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 - T3 926a036 feat(settings): seccion 2 comportamiento con oscuridad y tiempos cableados
 - T4 c7b8821 feat(settings): seccion 3 catalogo y telemetria honesta sin datos
 - T5 (cierre doc, este commit)
+- T6 788199f fix(nav): quitar Ajustes de barras ambiente e interna en rebuild
+- T7 d6c8a76 feat(settings): replica 1:1 del template con cableado honesto
+- T6+T7 doc (cierre doc, este commit)
