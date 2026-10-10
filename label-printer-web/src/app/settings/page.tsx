@@ -34,7 +34,12 @@ const note =
 const inputClass = `mt-1.5 ${input}`;
 
 /**
- * Ajustes reconstruidos 1:1 al mockup, sin inventar datos (T1: header/perfil).
+ * Ajustes replica del template 1:1, sin inventar datos (T7).
+ *
+ * Sub-barra del template (SISTEMA + PERFIL ACTIVO real + DAEMON/LATENCIA
+ * estaticos) y grilla de 2 columnas estilo ZPL Studio: izquierda secciones
+ * 1 (dispositivo) y 2 (comportamiento), derecha seccion 3 (catalogo) y
+ * telemetria. En movil, apilado.
  *
  * Esta pagina es duena del estado y de las acciones: las secciones reciben
  * valores y parches por props, y las claves de `settings.json` no se
@@ -82,24 +87,43 @@ export default function SettingsPage() {
     })();
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/printers");
-        const data = (await res.json()) as { printers?: string[]; error?: string };
-        setPrinters(data.printers ?? []);
+  // La lista de colas se relee con Detectar (seccion 1): en el montaje no se
+  // anuncia nada para no tapar el estado con ruido.
+  const cargarPrinters = useCallback(async (anunciar: boolean) => {
+    try {
+      const res = await fetch("/api/printers", { cache: "no-store" });
+      const data = (await res.json()) as { printers?: string[]; error?: string };
+      setPrinters(data.printers ?? []);
+      if (anunciar) {
         if (data.error) {
           setState({
             kind: "info",
             message: `No se pudo listar las impresoras: ${data.error}. Escribe el nombre de la cola a mano.`,
           });
+        } else {
+          setState({
+            kind: "ok",
+            message: `Colas detectadas: ${data.printers?.length ?? 0}.`,
+          });
         }
-      } catch {
-        // La lista es una comodidad: si falla se sigue escribiendo a mano.
-        setPrinters([]);
+      } else if (data.error) {
+        setState({
+          kind: "info",
+          message: `No se pudo listar las impresoras: ${data.error}. Escribe el nombre de la cola a mano.`,
+        });
       }
-    })();
+    } catch (err) {
+      // La lista es una comodidad: si falla se sigue escribiendo a mano.
+      setPrinters([]);
+      if (anunciar) {
+        setState({ kind: "error", message: `No se pudo detectar colas: ${(err as Error).message}.` });
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    void cargarPrinters(false);
+  }, [cargarPrinters]);
 
   const patchPrinter = useCallback((patch: Partial<AppSettings["printer"]>) => {
     setSettings((prev) => (prev ? { ...prev, printer: { ...prev.printer, ...patch } } : prev));
@@ -245,22 +269,36 @@ export default function SettingsPage() {
     );
   }
 
-  const isUsb = settings.printer.transport === "usb";
   const queueOptions = printers.includes(settings.printer.printerName)
     ? printers
     : [...printers, settings.printer.printerName];
+  const empresa = settings.label.businessName.trim();
+  const perfilActivo = empresa !== "" ? empresa.toUpperCase() : "SIN NOMBRE";
 
   return (
     <main className="flex flex-col gap-5">
-      {/* T1: header — titulo + pill real (GX420 y transporte de settings). */}
-      <section className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className={`${displayTitle} text-lg`}>Ajustes</h2>
-        <span className={`${pillClear} bg-primary-soft text-primary`}>
-          GX420 · {isUsb ? "USB" : "Red"}
+      {/* T7: sub-barra del template — titulo + perfil real + estaticos honestos. */}
+      <section
+        aria-label="Sistema"
+        className={`${cardClear} flex flex-wrap items-center gap-x-3 gap-y-2 p-3`}
+      >
+        <h2 className={`${displayTitle} text-sm`}>
+          SISTEMA / AJUSTES DE HARDWARE &amp; OPERACIÓN
+        </h2>
+        <span
+          className={`${pillClear} bg-primary-soft text-primary`}
+          title="Empresa guardada en settings (label.businessName)"
+        >
+          PERFIL ACTIVO: {perfilActivo}
+        </span>
+        <span className="flex flex-wrap items-center gap-2 sm:ml-auto" title={mockTitle}>
+          <span className={pillClear}>DAEMON ZPL v2.4.1 CORRIENDO</span>
+          <span className={pillClear}>LATENCIA USB: {"<"}1.8ms</span>
+          <span className={mockBadge}>mockup · sin datos</span>
         </span>
       </section>
 
-      {/* T1: perfil — empresa cableada; exportar/importar sin fuente real. */}
+      {/* Perfil: la empresa cableada (alimenta PERFIL ACTIVO); respaldo sin fuente. */}
       <section className={`${cardClear} flex flex-col gap-4 p-5`}>
         <h3 className={`${displayTitle} text-base`}>Perfil</h3>
         <div>
@@ -312,30 +350,39 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      <Seccion1Dispositivo
-        printer={settings.printer}
-        printers={queueOptions}
-        refreshKey={refreshKey}
-        disenoMm={DEFAULT_TEMPLATE.widthMm}
-        onPatchPrinter={patchPrinter}
-        onTest={test}
-        onTestPrint={testPrint}
-      />
+      {/* T7: grilla 2 columnas estilo ZPL Studio (apilada en movil). */}
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-5">
+          <Seccion1Dispositivo
+            printer={settings.printer}
+            printers={queueOptions}
+            refreshKey={refreshKey}
+            disenoMm={DEFAULT_TEMPLATE.widthMm}
+            oscuridad={settings.oscuridad}
+            onPatchPrinter={patchPrinter}
+            onPatchRoot={patchRoot}
+            onTest={test}
+            onTestPrint={testPrint}
+            onDetectar={() => void cargarPrinters(true)}
+          />
 
-      <Seccion2Comportamiento
-        oscuridad={settings.oscuridad}
-        sonidoOk={settings.sonidoOk}
-        sonidoError={settings.sonidoError}
-        ventanaDuplicadosMs={settings.ventanaDuplicadosMs}
-        retardoEscanerMs={settings.retardoEscanerMs}
-        onPatch={patchRoot}
-      />
+          <Seccion2Comportamiento
+            sonidoOk={settings.sonidoOk}
+            sonidoError={settings.sonidoError}
+            ventanaDuplicadosMs={settings.ventanaDuplicadosMs}
+            retardoEscanerMs={settings.retardoEscanerMs}
+            onPatch={patchRoot}
+          />
+        </div>
 
-      <Seccion3Catalogo label={settings.label} override={override} onPatchLabel={patchLabel} />
+        <div className="flex min-w-0 flex-col gap-5">
+          <Seccion3Catalogo label={settings.label} override={override} onPatchLabel={patchLabel} />
 
-      <Telemetria />
+          <Telemetria />
+        </div>
+      </div>
 
-      {/* T5: cierre — Guardar es el unico primario; el estado va al final. */}
+      {/* Cierre — Guardar es el unico primario; el estado va al final. */}
       <section className={`${cardClear} flex flex-wrap justify-end gap-2 p-5`}>
         <button type="button" onClick={save} className={buttonClear}>
           Guardar

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   badgeArchivedClear,
+  buttonClearSecondary,
   cardClear,
   displayTitle,
   hint,
@@ -10,7 +12,7 @@ import {
   label as labelClass,
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
-import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
+import { TEMPLATES } from "@/lib/labels/label.template";
 
 /** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
 const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
@@ -27,13 +29,18 @@ const inputClass = `mt-1.5 ${input}`;
 const calloutWarn =
   "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn";
 
+/** Ruta del mockup: solo texto, el campo esta deshabilitado. */
+const RUTA_MOCKUP = "C:\\Papicar\\Data\\Articulos_Activos_2024…";
+
 /**
- * Seccion 3: catalogo (T4).
+ * Seccion 3: catalogo y plantillas (T7: replica del template).
  *
- * Cableado real: `templateId`, `widthMm` / `heightMm` (legacy, se conservan
- * para no romper el `settings.json` guardado) y el aviso de geometria del
- * editor. 4820 ARTICULOS, la ruta y la LONGITUD son texto del mockup sin
- * fuente: van como UI estatica con insignia honesta.
+ * Texto del template literal con insignia honesta para lo sin fuente (ruta,
+ * conteo, hora de sincronizacion). `Recargar Ahora` relee el catalogo real
+ * (`GET /api/products`) e informa el conteo; `Exportar JSON` descarga los
+ * settings reales (`GET /api/settings`); `Importar Perfil` sigue sin
+ * cablear. Cableado real conservado: `templateId`, `widthMm` / `heightMm`
+ * (legacy) y el aviso de geometria del editor.
  */
 export function Seccion3Catalogo({
   label,
@@ -47,62 +54,177 @@ export function Seccion3Catalogo({
   const plantillaActiva = TEMPLATES.find((t) => t.id === label.templateId);
   const idObsoleto = plantillaActiva ? null : label.templateId;
 
+  // Recarga real del catalogo: informa el conteo, no toca el texto del mockup.
+  const [recargando, setRecargando] = useState(false);
+  const [recarga, setRecarga] = useState<string | null>(null);
+
+  const recargar = () => {
+    setRecargando(true);
+    setRecarga(null);
+    void (async () => {
+      try {
+        const res = await fetch("/api/products", { cache: "no-store" });
+        const j = (await res.json().catch(() => null)) as {
+          products?: unknown[];
+          error?: unknown;
+        } | null;
+        if (!res.ok || !j || !Array.isArray(j.products)) {
+          setRecarga(
+            typeof j?.error === "string"
+              ? `No se pudo recargar: ${j.error}`
+              : `No se pudo recargar (HTTP ${res.status}).`,
+          );
+          return;
+        }
+        setRecarga(
+          `Catálogo real: ${j.products.length} artículos (GET /api/products, recién leído).`,
+        );
+      } catch (err) {
+        setRecarga(`No se pudo recargar: ${(err as Error).message}.`);
+      } finally {
+        setRecargando(false);
+      }
+    })();
+  };
+
+  // Exportar real: descarga los settings guardados tal cual.
+  const [exportando, setExportando] = useState(false);
+  const [respaldoMsg, setRespaldoMsg] = useState<string | null>(null);
+
+  const exportar = () => {
+    setExportando(true);
+    setRespaldoMsg(null);
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings", { cache: "no-store" });
+        if (!res.ok) {
+          setRespaldoMsg(`No se pudo exportar (HTTP ${res.status}).`);
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "perfil-ajustes.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setRespaldoMsg("Perfil descargado (perfil-ajustes.json).");
+      } catch (err) {
+        setRespaldoMsg(`No se pudo exportar: ${(err as Error).message}.`);
+      } finally {
+        setExportando(false);
+      }
+    })();
+  };
+
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
-      <h3 className={`${displayTitle} text-base`}>Catalogo</h3>
+      <div>
+        <h3 className={`${displayTitle} text-base`}>3. CATÁLOGO &amp; PLANTILLAS</h3>
+        <p className={hint}>Fuentes de datos de productos PAPICAR</p>
+      </div>
 
-      {/* Texto del mockup sin fuente real: estatico y etiquetado. */}
       <div className={note} title={mockTitle}>
-        <p>
-          4820 ARTICULOS
+        <p className={labelClass}>RUTA BASE DE DATOS LOCAL / ERP</p>
+        <p className="mt-1.5 text-sm font-bold text-ink">
+          4.820 ARTÍCULOS
           <span className={mockBadge}>mockup · sin datos / no cableado</span>
         </p>
-        <p className="mt-1.5">
-          Ruta: C:\Papicar
+        <div className="mt-1.5 flex gap-2">
+          <input
+            value={RUTA_MOCKUP}
+            readOnly
+            disabled
+            aria-label="Ruta de la base de datos (mockup)"
+            title="Sin fuente real: la ruta del mockup no esta cableada."
+            className={`${input} flex-1 font-mono text-xs`}
+          />
+          <button
+            type="button"
+            disabled
+            aria-label="Elegir carpeta (mockup)"
+            title="Sin fuente real: elegir carpeta no esta cableado."
+            className={`${buttonClearSecondary} shrink-0 px-3 py-2 text-xs`}
+          >
+            Carpeta
+          </button>
+        </div>
+      </div>
+
+      <div className={note} title={mockTitle}>
+        <p className="text-sm text-ink">
+          Sincronización Catálogo / Última: Hoy 08:32 AM
           <span className={mockBadge}>mockup · sin datos / no cableado</span>
         </p>
-        <p className="mt-1.5">
-          LONGITUD 14.82 km
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
-        </p>
+        <button
+          type="button"
+          onClick={recargar}
+          disabled={recargando}
+          className={`${buttonClearSecondary} mt-2 px-3 py-1.5 text-xs`}
+          title="Relee el catálogo real (GET /api/products) e informa el conteo"
+        >
+          {recargando ? "Recargando…" : "Recargar Ahora"}
+        </button>
+        {recarga && <p className="mt-1.5 text-xs text-ink">{recarga}</p>}
       </div>
 
       <div className={note}>
-        <p>
-          Plantilla: <strong>{DEFAULT_TEMPLATE.name}</strong> = {DEFAULT_TEMPLATE.widthMm} x{" "}
-          {DEFAULT_TEMPLATE.heightMm} mm = {DEFAULT_TEMPLATE.widthDots} x{" "}
-          {DEFAULT_TEMPLATE.heightDots} dots a 203 dpi.
+        <p className="text-sm font-semibold text-ink">COPIAS DE RESPALDO &amp; PERFILES</p>
+        <p className="mt-1.5">
+          El perfil es el <code>settings.json</code> guardado: exportarlo lo descarga
+          tal cual para pasarlo a otra máquina. Importar desde un archivo todavía no
+          está cableado.
         </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={exportar}
+            disabled={exportando}
+            className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
+            title="Descarga los settings reales (GET /api/settings)"
+          >
+            {exportando ? "Exportando…" : "Exportar JSON"}
+          </button>
+          <button
+            type="button"
+            disabled
+            className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
+            title="Sin fuente real: importar el perfil no esta cableado."
+          >
+            Importar Perfil
+          </button>
+        </div>
+        {respaldoMsg && <p className="mt-1.5 text-xs text-ink">{respaldoMsg}</p>}
+      </div>
+
+      <div className={note}>
+        <p className="text-sm font-semibold text-ink">Plantilla que imprime</p>
         {idObsoleto && (
           <p className="mt-1.5">
-            Guardada la <code>{idObsoleto}</code>, que ya no existe en el codigo. Se va a imprimir
-            con la de 59 x 35 mm de todos modos. Pulsa Guardar para dejar el{" "}
-            <code>settings.json</code> limpio.
+            Guardada la <code>{idObsoleto}</code>, que ya no existe en el código. Se
+            va a imprimir con la de 59 x 35 mm de todos modos. Pulsa Guardar para
+            dejar el <code>settings.json</code> limpio.
           </p>
         )}
         <p className="mt-1.5">
-          Los campos de ancho y alto de abajo ya no mandan: la medida sale de la plantilla. Se
-          conservan para no romper el <code>settings.json</code> guardado.
+          Los campos de ancho y alto de abajo ya no mandan: la medida sale de la
+          plantilla. Se conservan para no romper el <code>settings.json</code>{" "}
+          guardado.
         </p>
         {override?.activo && (
           <p className={`mt-3 ${calloutWarn}`}>
-            <strong>Se esta imprimiendo con una geometria guardada desde el editor</strong> (
-            {override.savedAt}), no con los numeros del codigo. Se guarda en{" "}
+            <strong>Se está imprimiendo con una geometría guardada desde el editor</strong>{" "}
+            ({override.savedAt}), no con los números del código. Se guarda en{" "}
             <code>data/plantilla-override.json</code>. En{" "}
             <Link href="/editor" className="underline underline-offset-2">
               /editor
             </Link>{" "}
-            hay un boton para descartarla y volver a la del codigo.
+            hay un botón para descartarla y volver a la del código.
           </p>
         )}
       </div>
-
-      <p className={calloutWarn}>
-        <strong>El rollo hay que cambiarlo en la impresora, no aqui.</strong> El ancho del rollo
-        de la seccion Dispositivo sale del <code>^PW</code>, pero el medio de verdad lo pone la
-        impresora. Si el <code>^PW</code> no coincide con el rollo, lo que hace <code>^PW</code>{" "}
-        es <strong>recortar</strong>: no escala, no centra y no avisa.
-      </p>
 
       <div>
         <label htmlFor="templateId" className={labelClass}>

@@ -25,27 +25,28 @@ const inputClass = `mt-1.5 ${input}`;
 type RootPatch = Partial<
   Pick<
     AppSettings,
-    "oscuridad" | "sonidoOk" | "sonidoError" | "ventanaDuplicadosMs" | "retardoEscanerMs"
+    "sonidoOk" | "sonidoError" | "ventanaDuplicadosMs" | "retardoEscanerMs"
   >
 >;
 
 /**
- * Seccion 2: comportamiento (T3).
+ * Seccion 2: comportamiento (T7: replica del template).
  *
- * Cableado real: `oscuridad` ("~SD", "" = auto), `retardoEscanerMs`
- * (100-5000), `ventanaDuplicadosMs` (0-60000), `sonidoOk` / `sonidoError`.
- * Auto-imprimir y Conversion ASCII son texto del mockup sin fuente: van
- * como toggles deshabilitados con `title` honesto.
+ * Las dos tarjetas son texto del template con interruptores estaticos en ON
+ * (sin campo en settings: el flujo siempre imprime igual y el builder
+ * siempre pliega a ASCII+mayusculas). El pie de la primera es vivo
+ * (`retardoEscanerMs` / `ventanaDuplicadosMs` reales); el de la segunda
+ * describe el mecanismo real: el builder NO emite `^CI`, pliega el texto
+ * antes de imprimir (`foldAscii` en `ascii.fold.ts`).
+ * Los tiempos y los sonidos siguen cableados abajo.
  */
 export function Seccion2Comportamiento({
-  oscuridad,
   sonidoOk,
   sonidoError,
   ventanaDuplicadosMs,
   retardoEscanerMs,
   onPatch,
 }: {
-  oscuridad: string;
   sonidoOk: boolean;
   sonidoError: boolean;
   ventanaDuplicadosMs: number;
@@ -54,22 +55,61 @@ export function Seccion2Comportamiento({
 }) {
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
-      <h3 className={`${displayTitle} text-base`}>Comportamiento</h3>
-
       <div>
-        <label htmlFor="oscuridad" className={labelClass}>
-          Oscuridad (~SD)
-        </label>
-        <input
-          id="oscuridad"
-          value={oscuridad}
-          onChange={(e) => onPatch({ oscuridad: e.target.value })}
-          className={inputClass}
-          placeholder="auto"
-        />
+        <h3 className={`${displayTitle} text-base`}>
+          2. COMPORTAMIENTO Y FLUJO DE TRABAJO
+        </h3>
         <p className={hint}>
-          Vacio = automatico: no se antepone nada al ZPL y la impresora usa su ajuste fisico. Si
-          se informa, entero de 0 a 30.
+          Automatización de lectura por pistola láser/escáner y sanitización de caracteres
+        </p>
+      </div>
+
+      <div className={note} title={mockTitle}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-ink">
+            Auto-imprimir al Escanear [MODO RÁPIDO]
+          </p>
+          <input
+            type="checkbox"
+            disabled
+            checked
+            aria-label="Auto-imprimir al escanear (mockup, siempre activo)"
+            title="Sin fuente real: auto-imprimir no tiene campo en settings."
+            className="size-4 shrink-0 accent-primary"
+          />
+        </div>
+        <p className="mt-1.5">
+          Interruptor del mockup, siempre activo y sin campo en settings: no cambia
+          el flujo real, la etiqueta sale por IMPRIMIR AHORA o el modo rápido.
+          <span className={mockBadge}>mockup · sin datos / no cableado</span>
+        </p>
+        <p className="mt-2 border-t border-line pt-2 font-mono text-[11px] text-ink-soft">
+          Retardo: {retardoEscanerMs}ms · Rechazo duplicados:{" "}
+          {ventanaDuplicadosMs > 0 ? "Activo" : "Inactivo"}
+        </p>
+      </div>
+
+      <div className={note} title={mockTitle}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-ink">
+            Conversión Forzada ASCII &amp; Mayúsculas
+          </p>
+          <input
+            type="checkbox"
+            disabled
+            checked
+            aria-label="Conversión ASCII y mayúsculas (mockup, siempre activa)"
+            title="Sin fuente real: no tiene campo en settings porque el builder lo hace siempre."
+            className="size-4 shrink-0 accent-primary"
+          />
+        </div>
+        <p className="mt-1.5">
+          Interruptor del mockup, siempre activo y sin campo en settings: el builder
+          pliega todo el texto a ASCII y mayúsculas antes de imprimir.
+          <span className={mockBadge}>mockup · sin datos / no cableado</span>
+        </p>
+        <p className="mt-2 border-t border-line pt-2 font-mono text-[11px] text-ink-soft">
+          Plegado ASCII + MAYÚSCULAS activo · el builder no emite ^CI
         </p>
       </div>
 
@@ -105,8 +145,8 @@ export function Seccion2Comportamiento({
             className={inputClass}
           />
           <p className={hint}>
-            0 = apagada. Con valor mayor que 0, repetir el mismo codigo dentro de la ventana no
-            imprime: avisa duplicado ignorado.
+            0 = apagada. Con valor mayor que 0, repetir el mismo codigo dentro de la
+            ventana no imprime: avisa duplicado ignorado.
           </p>
         </div>
       </div>
@@ -131,32 +171,6 @@ export function Seccion2Comportamiento({
           Sonido al fallar
         </label>
         <p className="mt-2 text-xs text-ink-mute">Beeps WebAudio del operador.</p>
-      </div>
-
-      {/* Texto del mockup sin fuente real: deshabilitado y etiquetado. */}
-      <div className={note} title={mockTitle}>
-        <label className="flex items-center gap-2 text-sm text-ink-mute">
-          <input
-            type="checkbox"
-            disabled
-            checked={false}
-            title="Sin fuente real: auto-imprimir no esta cableado."
-            className="size-4"
-          />
-          Auto-imprimir
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
-        </label>
-        <label className="mt-2 flex items-center gap-2 text-sm text-ink-mute">
-          <input
-            type="checkbox"
-            disabled
-            checked={false}
-            title="Sin fuente real: conversion ASCII no esta cableada."
-            className="size-4"
-          />
-          Conversion ASCII
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
-        </label>
       </div>
     </section>
   );
