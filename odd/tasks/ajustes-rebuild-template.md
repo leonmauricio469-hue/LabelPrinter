@@ -114,6 +114,15 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
   0 `^PQ`/`^MF` en `src/app/settings` + `src/components`; 0 `server-only`
   en los 4 componentes settings. Visual del operador: pendiente (comparación
   contra Image 2 en máquina con impresora).
+- Parent spot check: `typecheck` exit 0 re-corrido; assess `medium /
+  slice_budget_reached` (1666 líneas sobre `3106a7b`).
+- Review nativa: BLOQUEADA en transporte — consent `granted`, START creado
+  (lineage `review-0bae00b3806f0a13`), pero el agente revisor
+  `review-reliability` no existe en este runtime y las 2 capturas volvieron
+  envueltas (`review_result.lens_results`, sin `subject_hash`/`inspection`)
+  = inadmisibles; no se envió nada, no hay receipt, la transacción quedó
+  abierta. Vale la verificación del writer + spot check. Reintentar la
+  review cuando el runtime ofrezca el agente revisor.
 
 ## IDs
 
