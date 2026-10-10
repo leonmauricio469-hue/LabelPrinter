@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScannerInput } from "@/components/scanner-input";
 import { ProductCard } from "@/components/product-card";
+import { ProductSearch } from "@/components/product-search";
 import { ProductPreview } from "@/components/product-preview";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { PrintStatus } from "@/components/print-status";
@@ -22,7 +23,6 @@ import {
   cardClear,
   dialogClear,
   hint,
-  input,
   label,
   modeTabActiveClear,
   modeTabClear,
@@ -91,10 +91,12 @@ import type { QueueStatus } from "@/lib/printing/queue.status.types";
  * legal (sin fuente), KPIs sobre los recientes (el total solo lo sabe el
  * historial completo, que esta en el desplegable).
  *
- * PENDIENTES VISIBLES (orden del usuario: la pantalla exacta primero, el
- * cableado despues): "Avanzar 1 Etiqueta" y "Calibrar Gap" se RENDERIZAN
- * pero deshabilitados con `title` + `aria-disabled` "Pendiente: requiere
- * comando verificado" — jamas fingen funcionar.
+ * CABLEADO CON PRUEBA FISICA PENDIENTE (orden del usuario: la pantalla
+ * exacta primero, el cableado despues): "Avanzar 1 Etiqueta" (`~PH` suelto) y
+ * "Calibrar Gap" (`~JC` suelto + `^XA^JUS^XZ`) van a
+ * `POST /api/printer/mantenimiento`, por el mismo `transport.send()` de la
+ * impresion normal. Comandos oficiales Zebra, efecto EN PAPEL pendiente de
+ * prueba fisica en este equipo: la UI lo dice y no finge exito.
  *
  * Nota de anidado: `SeccionRapido/Lotes/Plantillas/Historial` traen su
  * propio `<main>` (asi los dejo F13) y aqui quedan dentro del `<main>` de
@@ -344,6 +346,19 @@ export function CentroImpresion({
   const [recientes, setRecientes] = useState<HistoryRecord[] | null>(null);
   const [reimprimiendo, setReimprimiendo] = useState<string | null>(null);
 
+  /**
+   * Mantenimiento de papel: Avanzar (`~PH`) y Calibrar (`~JC` + `^JUS`).
+   *
+   * Estado local, sin tocar el estado de impresion ni el foco: los botones no
+   * usan `autoFocus` ni llaman a `.focus()`, y `ScannerInput` sigue montado una
+   * sola vez en el modo busqueda. Calibrar pide confirmacion en dos pasos (gasta
+   * de 1 a 4 etiquetas) en vez de `window.confirm`, que bloquearia el teclado.
+   */
+  const [mantenimientoBusy, setMantenimientoBusy] = useState<"feed" | "calibrar" | null>(null);
+  const [mantenimientoMsg, setMantenimientoMsg] = useState<string | null>(null);
+  const [mantenimientoError, setMantenimientoError] = useState<string | null>(null);
+  const [confirmaCalibrar, setConfirmaCalibrar] = useState(false);
+
   const ultimoRef = useRef<{ code: string; at: number } | null>(null);
 
   const busy = searching || state.kind === "busy";
@@ -558,6 +573,19 @@ export function CentroImpresion({
     reset();
   }, [reset]);
 
+  // Elegir un producto ya resuelto (sugerencia del predictivo o tarjeta de la
+  // lista de coincidencias): NO re-resuelve, solo selecciona. El submit del
+  // form y el scan siguen usando `resolve`.
+  const elegirProducto = useCallback(
+    (product: Product) => {
+      setSelected(product);
+      setMatches([]);
+      setQty(1);
+      notify({ kind: "ok", message: product.name });
+    },
+    [notify],
+  );
+
   const doPrint = useCallback(async () => {
     if (!selected) return;
     if (
@@ -670,6 +698,52 @@ export function CentroImpresion({
       }
     },
     [notify, reimprimiendo, sonarError, sonarOk],
+  );
+
+  /**
+   * Envia `feed` (`~PH`) o `calibrar` (`~JC` + `^JUS`) a
+   * `POST /api/printer/mantenimiento`. El error se muestra verbatim (el mensaje
+   * real del transporte), sin codigos inventados. No toca el historial de
+   * ventas: es hardware, igual que la prueba de diagnostico.
+   */
+  const ejecutarMantenimiento = useCallback(
+    async (accion: "feed" | "calibrar") => {
+      if (mantenimientoBusy) return;
+      setMantenimientoBusy(accion);
+      setMantenimientoMsg(null);
+      setMantenimientoError(null);
+      try {
+        const res = await fetch("/api/printer/mantenimiento", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion }),
+        });
+        const j = (await res.json().catch(() => null)) as {
+          ok?: unknown;
+          error?: unknown;
+        } | null;
+        if (!res.ok || j?.ok !== true) {
+          setMantenimientoError(
+            typeof j?.error === "string" ? j.error : `Fallo (HTTP ${res.status})`,
+          );
+          sonarError();
+          return;
+        }
+        setMantenimientoMsg(
+          accion === "feed"
+            ? "Avance enviado. Efecto en papel pendiente de prueba fisica."
+            : "Calibracion enviada. Efecto en papel pendiente de prueba fisica.",
+        );
+        setConfirmaCalibrar(false);
+        sonarOk();
+      } catch (err) {
+        setMantenimientoError(`No se pudo contactar la app: ${(err as Error).message}`);
+        sonarError();
+      } finally {
+        setMantenimientoBusy(null);
+      }
+    },
+    [mantenimientoBusy, sonarError, sonarOk],
   );
 
   const spoolLista =
@@ -861,15 +935,11 @@ export function CentroImpresion({
                 resolve(term);
               }}
             >
-              <input
-                id="term"
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                placeholder="Escanea aqui, o escribe el codigo y pulsa Enter"
-                className={`${input} h-12 flex-1 text-base`}
+              <ProductSearch
+                term={term}
+                onTermChange={setTerm}
+                onPick={elegirProducto}
+                disabled={busy}
               />
               <button
                 type="submit"
@@ -935,29 +1005,68 @@ export function CentroImpresion({
             >
               {busy ? "Imprimiendo..." : selected ? `IMPRIMIR ×${qty}` : "IMPRIMIR AHORA"}
             </button>
-            {/* Pendientes visibles: se renderizan pero NO funcionan. Sin
-                comando verificado en el manual ZPL del repo, un clic que
-                hiciera "algo" seria papel o tiempo tirado. */}
+            {/* Mantenimiento de papel: comandos oficiales Zebra por la misma via
+                que la impresion (`POST /api/printer/mantenimiento`). Efecto EN PAPEL
+                pendiente de prueba fisica en este equipo: la UI lo dice debajo. */}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled
-                aria-disabled="true"
-                title="Pendiente: requiere comando verificado"
+                onClick={() => void ejecutarMantenimiento("feed")}
+                disabled={mantenimientoBusy !== null}
+                title="Avanza una etiqueta (~PH, comando oficial Zebra). Pendiente de prueba fisica en este equipo."
                 className={`${buttonClearSecondary} text-xs`}
               >
-                Avanzar 1 Etiqueta
+                {mantenimientoBusy === "feed" ? "Avanzando…" : "Avanzar 1 Etiqueta"}
               </button>
               <button
                 type="button"
-                disabled
-                aria-disabled="true"
-                title="Pendiente: requiere comando verificado"
+                onClick={() => setConfirmaCalibrar(true)}
+                disabled={mantenimientoBusy !== null || confirmaCalibrar}
+                title="Calibra el sensor de gap (~JC + ^JUS, comando oficial Zebra). Gasta de 1 a 4 etiquetas. Pendiente de prueba fisica en este equipo."
                 className={`${buttonClearSecondary} text-xs`}
               >
                 Calibrar Gap
               </button>
             </div>
+            <p className={hint}>
+              Comandos oficiales Zebra, pendientes de prueba fisica en este equipo. Avanzar
+              gasta 1 etiqueta; Calibrar gasta de 1 a 4.
+            </p>
+            {confirmaCalibrar && (
+              <div className="mt-2 rounded-md border border-edge bg-canvas p-3">
+                <p className="text-xs text-strong">
+                  La calibracion hace avanzar de 1 a 4 etiquetas. ¿Confirmar?
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void ejecutarMantenimiento("calibrar")}
+                    disabled={mantenimientoBusy !== null}
+                    className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
+                  >
+                    {mantenimientoBusy === "calibrar" ? "Calibrando…" : "Confirmar calibracion"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmaCalibrar(false)}
+                    disabled={mantenimientoBusy !== null}
+                    className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            {mantenimientoMsg && (
+              <p role="status" className={`${hint} mt-1`}>
+                {mantenimientoMsg}
+              </p>
+            )}
+            {mantenimientoError && (
+              <p role="alert" className="mt-1 text-xs font-medium text-danger">
+                {mantenimientoError}
+              </p>
+            )}
           </section>
 
           {matches.length > 0 && (
@@ -973,12 +1082,7 @@ export function CentroImpresion({
                   <ProductCard
                     key={product.code}
                     product={product}
-                    onSelect={() => {
-                      setSelected(product);
-                      setMatches([]);
-                      setQty(1);
-                      notify({ kind: "ok", message: product.name });
-                    }}
+                    onSelect={() => elegirProducto(product)}
                   />
                 ))}
               </div>

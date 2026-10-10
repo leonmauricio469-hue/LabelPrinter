@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
-import { listWindowsPrinters } from "@/lib/printing/usb.transport";
 
 interface ColaConTrabajos {
   nombre: string;
@@ -10,17 +9,23 @@ interface ColaConTrabajos {
 /**
  * Trabajos EN COLA por impresora, leidos de Windows de verdad.
  *
- * `Get-Printer` expone `JobCount` por cola (es el mismo numero que usa
- * `send-raw.ps1 -Mode Status` para la cola configurada). Va en su propio
- * `spawn` y no dentro de `listWindowsPrinters()` a proposito: ese helper
- * vive fuera de la superficie de F11 y su contrato (`printers: string[]`)
- * lo usa `/settings` tal cual.
+ * UN solo `spawn`: `Get-Printer` ya trae `Name` y `JobCount` juntos, asi que la
+ * lista de colas y el conteo salen de la misma llamada (antes eran dos
+ * `powershell.exe` de ~2 s cada uno). De ahi salen tanto `printers` (nombres,
+ * para el desplegable de /settings) como `colas` (nombre + trabajos, para la
+ * pill de /).
  *
- * Si la consulta falla, se devuelve `null` y la ruta responde SIN `colas`:
- * la pill muestra estado sin conteo, con caption honesto, en vez de un 0
- * que mentiria.
+ * Cache de 3 s en memoria (el mismo TTL de `queue.status.ts`): el refresh
+ * post-print de / cae dentro de la ventana y no cuesta otro spawn.
+ *
+ * Si la consulta falla, se devuelve `null` y la ruta responde SIN `colas` y con
+ * `printers: []`: la pill muestra estado sin conteo, con caption honesto, en vez
+ * de un 0 que mentiria; /settings sigue permitiendo escribir la cola a mano.
  */
-function contarTrabajos(): Promise<ColaConTrabajos[] | null> {
+const CACHE_TTL_MS = 3000;
+let cache: { at: number; printers: string[]; colas: ColaConTrabajos[] } | null = null;
+
+function leerColas(): Promise<{ printers: string[]; colas: ColaConTrabajos[] } | null> {
   return new Promise((resolve) => {
     const child = spawn(
       "powershell.exe",
@@ -37,7 +42,7 @@ function contarTrabajos(): Promise<ColaConTrabajos[] | null> {
 
     let stdout = "";
     let settled = false;
-    const finish = (r: ColaConTrabajos[] | null) => {
+    const finish = (r: { printers: string[]; colas: ColaConTrabajos[] } | null) => {
       if (settled) return;
       settled = true;
       resolve(r);
@@ -64,16 +69,18 @@ function contarTrabajos(): Promise<ColaConTrabajos[] | null> {
           Name?: unknown;
           JobCount?: unknown;
         }>;
+        const printers: string[] = [];
         const colas: ColaConTrabajos[] = [];
         for (const q of list) {
           if (typeof q.Name !== "string") continue;
+          printers.push(q.Name);
           const n =
             typeof q.JobCount === "number" && Number.isFinite(q.JobCount)
               ? Math.max(0, Math.floor(q.JobCount))
               : 0;
           colas.push({ nombre: q.Name, trabajos: n });
         }
-        finish(colas);
+        finish({ printers, colas });
       } catch {
         finish(null);
       }
@@ -92,15 +99,17 @@ function contarTrabajos(): Promise<ColaConTrabajos[] | null> {
  * los pudo leer. Sin `colas`, la pill de `/` muestra estado sin conteo.
  */
 export async function GET() {
-  const { printers, error } = await listWindowsPrinters();
-  const colas = await contarTrabajos();
-  return NextResponse.json({
-    printers,
-    ...(colas ? { colas } : {}),
-    ...(error && !colas
-      ? { error: `${error} (y tampoco se pudo leer el conteo de trabajos)` }
-      : error
-        ? { error }
-        : {}),
-  });
+  const ahora = Date.now();
+  if (cache && ahora - cache.at < CACHE_TTL_MS) {
+    return NextResponse.json({ printers: cache.printers, colas: cache.colas });
+  }
+  const leido = await leerColas();
+  if (!leido) {
+    return NextResponse.json({
+      printers: [],
+      error: "no se pudo leer la lista de impresoras",
+    });
+  }
+  cache = { at: Date.now(), printers: leido.printers, colas: leido.colas };
+  return NextResponse.json({ printers: leido.printers, colas: leido.colas });
 }

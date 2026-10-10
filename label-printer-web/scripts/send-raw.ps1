@@ -5,7 +5,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Printer,
     [Parameter(Mandatory = $true)][ValidateSet('Send', 'Check', 'Status')][string]$Mode,
-    [string]$Base64 = ""
+    [string]$Base64 = "",
+    [string]$FilePath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -119,7 +120,16 @@ try {
         exit 0
     }
 
-    $bytes = [Convert]::FromBase64String($Base64)
+    # Payload by file (short argv) or legacy base64. File wins: the app writes the
+    # ZPL bytes to a temp file so CreateProcessW never sees the giant base64.
+    if ($FilePath -ne "") {
+        if (-not (Test-Path -LiteralPath $FilePath)) { Emit $false "archivo no encontrado: $FilePath" $null; exit 1 }
+        try { $bytes = [IO.File]::ReadAllBytes($FilePath) }
+        catch { Emit $false "no se pudo leer el archivo: $($_.Exception.Message)" $null; exit 1 }
+    } else {
+        if ($Base64 -eq "") { Emit $false "payload vacio" $null; exit 1 }
+        $bytes = [Convert]::FromBase64String($Base64)
+    }
     if ($bytes.Length -eq 0) { Emit $false "payload vacio" $null; exit 1 }
 
     if (-not [Spool]::StartDocPrinter($handle, 1, [ref]$di, [ref]$jobId)) {
