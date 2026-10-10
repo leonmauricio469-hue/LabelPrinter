@@ -28,17 +28,18 @@ Fase 1 del plan aceptado por el operador: valor inmediato, riesgo papel nulo.
   - Route: delegated direct (mismo writer).
   - Acceptance: click emite alarma; sin auricular no rompe nada (error honesto).
   - Checks: typecheck + prueba manual.
-- [ ] **T3** Cierre — commits por tarea, assess, verificación enfocada.
+- [x] **T3** Cierre — commits por tarea, assess, verificación enfocada.
   - Route: delegated direct (writer self-verification + parent spot check).
   - Acceptance: commits convencionales con IDs abajo; sin TODO nuevos.
   - Checks: verification del writer + `git status` + assess.
+  - Outcome: `882aa5f` cierra el `lastSyncOk`; assess `medium/under_budget`, sin review; manual pendiente.
 
 ## Authorized scope
 - Editar: `label-printer-web/src/components/settings-seccion2.tsx`, `label-printer-web/src/components/settings-seccion3.tsx`
 - No tocar fuera de lo anterior.
 
 ## Delivery strategy
-- Strategy: ask-on-risk (default). Forecast: <120 authored lines. Running count: 0. Slice: single-pr previsto.
+- Strategy: ask-on-risk (default). Forecast: <120. Running count: ~230 authored lines (T1 97+/8- + T2 + wiring 13+/4- + docs). Slice: single-pr previsto (`under_budget`).
 
 ## Progress
 - 2026-10-10: doc creado, 3 tareas. Branch `feat/ajustes-fase1` desde `feat/ajustes-rebuild-template`.
@@ -53,9 +54,16 @@ Fase 1 del plan aceptado por el operador: valor inmediato, riesgo papel nulo.
 ## Commits
 - T2: `2d0796d` feat(settings): cablea Probar alarma con beepError real
 - T1: `f48ebc4` feat(settings): cablea Importar Perfil con PUT y refresh honesto
+- T1-cierre: `882aa5f` fix(settings): cablea onImportado para marcar sync tras importar perfil (parent inline: `page.tsx` pasa `onImportado` que aplica settings + marca `lastSyncOk` + refresca; comentario honesto actualizado en seccion3)
+- Doc T1+T2: worker (ver IDs en su commit); este cierre doc abajo.
 
-## Verification evidence
-- (pendiente)
+## Verification evidence (T3, observado)
+- Writer: `typecheck` verde + `status` limpio + `diff` T1 97+/8- en seccion3.
+- Parent: `typecheck` exit 0 re-corrido (tras `882aa5f` también verde).
+- Parent: `gentle-ai review assess --base-ref 6841df3 --committed-only`: `medium / under_budget` (209 líneas, 4 paths) → sin ceremonia de review; el slice queda pendiente.
+- Excepción TDD: sin runner (solo `typecheck`+`build`), sin RED/GREEN inventado.
+- Sin `TODO` nuevos, sin `server-only` en cliente.
+- Pendiente: prueba manual sin papel (Importar JSON válido/inválido + Probar alarma) en el navegador.
 
 ## Next step
-- Lanzar writer acotado con T1+T2.
+- Probar en `http://localhost:3000/settings` (dev corriendo); si va bien, push + PR single de `feat/ajustes-fase1` (tu decisión).
