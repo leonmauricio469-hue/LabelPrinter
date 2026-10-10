@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   badgeArchivedClear,
   buttonClearSecondary,
@@ -38,18 +38,26 @@ const RUTA_MOCKUP = "C:\\Papicar\\Data\\Articulos_Activos_2024.sqlite";
  * Texto del template literal con insignia honesta para lo sin fuente (ruta,
  * conteo, hora de sincronizacion). `Recargar Ahora` relee el catalogo real
  * (`GET /api/products`) e informa el conteo; `Exportar JSON` descarga los
- * settings reales (`GET /api/settings`); `Importar Perfil` sigue sin
- * cablear. Cableado real conservado: `templateId`, `widthMm` / `heightMm`
+ * settings reales (`GET /api/settings`); `Importar Perfil` lee el JSON
+ * elegido y lo guarda (`PUT /api/settings`, merge en servidor). Cableado
+ * real conservado: `templateId`, `widthMm` / `heightMm`
  * (legacy) y el aviso de geometria del editor.
  */
 export function Seccion3Catalogo({
   label,
   override,
   onPatchLabel,
+  onImportado,
 }: {
   label: AppSettings["label"];
   override: { activo: boolean; savedAt?: string } | null;
   onPatchLabel: (patch: Partial<AppSettings["label"]>) => void;
+  /**
+   * Opcional: la pagina duena del estado lo cablea para refrescar el
+   * formulario entero y marcar `lastSyncOk` como el Guardar. Sin cablear,
+   * se refresca solo `label` y el mensaje pide recarga (limite honesto).
+   */
+  onImportado?: (settings: AppSettings) => void;
 }) {
   const plantillaActiva = TEMPLATES.find((t) => t.id === label.templateId);
   const idObsoleto = plantillaActiva ? null : label.templateId;
@@ -119,6 +127,73 @@ export function Seccion3Catalogo({
     })();
   };
 
+  // Importar real: lee el JSON elegido, lo valida como objeto y lo guarda
+  // (PUT /api/settings, merge en servidor). Si el archivo no es JSON o el
+  // servidor lo rechaza (400), se avisa y el formulario queda intacto.
+  // Limite honesto: sin `onImportado` cableado (prop de la pagina, fuera de
+  // esta superficie) solo se refresca `label` en el formulario padre; el
+  // resto llega con la recarga que pide el mensaje.
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [importando, setImportando] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const importar = () => {
+    if (!archivo || importando) return;
+    setImportando(true);
+    setRespaldoMsg(null);
+    void (async () => {
+      try {
+        const texto = await archivo.text();
+        let datos: unknown;
+        try {
+          datos = JSON.parse(texto);
+        } catch {
+          setRespaldoMsg(
+            `No se pudo importar ${archivo.name}: no es un JSON válido. No se cambió nada.`,
+          );
+          return;
+        }
+        if (typeof datos !== "object" || datos === null || Array.isArray(datos)) {
+          setRespaldoMsg(
+            `No se pudo importar ${archivo.name}: no es un objeto de ajustes. No se cambió nada.`,
+          );
+          return;
+        }
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(datos),
+        });
+        const j = (await res.json().catch(() => null)) as
+          | (AppSettings & { error?: unknown })
+          | null;
+        if (!res.ok || !j || typeof j.error === "string") {
+          setRespaldoMsg(
+            j && typeof j.error === "string"
+              ? `No se pudo importar ${archivo.name}: ${j.error}. No se cambió nada.`
+              : `No se pudo importar ${archivo.name} (HTTP ${res.status}). No se cambió nada.`,
+          );
+          return;
+        }
+        onPatchLabel(j.label);
+        onImportado?.(j);
+        setArchivo(null);
+        if (fileRef.current) fileRef.current.value = "";
+        setRespaldoMsg(
+          onImportado
+            ? `Perfil ${archivo.name} importado y guardado.`
+            : `Perfil ${archivo.name} importado y guardado. Recarga la página para ver todos los valores en el formulario.`,
+        );
+      } catch (err) {
+        setRespaldoMsg(
+          `No se pudo importar ${archivo.name}: ${(err as Error).message}. No se cambió nada.`,
+        );
+      } finally {
+        setImportando(false);
+      }
+    })();
+  };
+
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
       <div>
@@ -178,9 +253,22 @@ export function Seccion3Catalogo({
           guardados.
         </p>
         <p className="mt-1.5">
-          Exportar descarga el <code>settings.json</code> real tal cual; importar desde un
-          archivo todavía no está cableado.
+          Exportar descarga el <code>settings.json</code> real tal cual; importar lee
+          el JSON elegido y lo guarda (<code>PUT /api/settings</code>).
         </p>
+        <div className="mt-2 flex flex-col gap-2">
+          <label htmlFor="perfil-archivo" className={labelClass}>
+            Archivo de perfil
+          </label>
+          <input
+            id="perfil-archivo"
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+            className={input}
+          />
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
@@ -193,11 +281,12 @@ export function Seccion3Catalogo({
           </button>
           <button
             type="button"
-            disabled
+            onClick={importar}
+            disabled={!archivo || importando}
             className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
-            title="Sin fuente real: importar el perfil no esta cableado."
+            title="Lee el JSON elegido y lo guarda (PUT /api/settings)"
           >
-            Importar Perfil
+            {importando ? "Importando…" : "Importar Perfil"}
           </button>
         </div>
         {respaldoMsg && <p className="mt-1.5 text-xs text-ink">{respaldoMsg}</p>}
