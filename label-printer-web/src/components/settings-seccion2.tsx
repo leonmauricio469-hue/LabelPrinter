@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  badgeArchivedClear,
   buttonClearSecondary,
   cardClear,
   displayTitle,
@@ -12,11 +11,6 @@ import {
 } from "@/components/ui";
 import { beepError, beepOk } from "@/lib/sonido";
 import type { AppSettings } from "@/lib/settings/settings.types";
-
-/** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
-const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
-const mockTitle =
-  "Texto del mockup sin fuente real: no cableado, no son datos en vivo.";
 
 /** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
 const note =
@@ -33,14 +27,13 @@ type RootPatch = Partial<
 >;
 
 /**
- * Seccion 2: comportamiento (T7: replica del template).
+ * Seccion 2: comportamiento.
  *
- * Las dos tarjetas son texto del template con interruptores estaticos en ON
- * (sin campo en settings: el flujo siempre imprime igual y el builder
- * siempre pliega a ASCII+mayusculas). El pie de la primera es vivo
- * (`retardoEscanerMs` / `ventanaDuplicadosMs` reales); el de la segunda
- * describe el mecanismo real: el builder NO emite `^CI`, pliega el texto
- * antes de imprimir (`foldAscii` en `ascii.fold.ts`).
+ * El flujo siempre imprime igual (IMPRIMIR AHORA o modo rapido al escanear)
+ * y el builder siempre pliega el texto a ASCII y mayusculas antes de
+ * imprimir: son comportamiento fijo, no ajustes, asi que se describen en
+ * dos notas compactas en vez de interruptores. El pie de la primera muestra
+ * los tiempos reales (`retardoEscanerMs` / `ventanaDuplicadosMs`).
  * Los tiempos y los sonidos siguen cableados abajo: la tarjeta `Feedback
  * Sonoro del Terminal` (`Beep Éxito` / `Alarma Error` = `sonidoOk` /
  * `sonidoError`) con `Test Sonido` que emite el beep real (`beepOk` de
@@ -84,24 +77,13 @@ export function Seccion2Comportamiento({
         </p>
       </div>
 
-      <div className={note} title={mockTitle}>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">
-            Auto-imprimir al Escanear [MODO RÁPIDO]
-          </p>
-          <input
-            type="checkbox"
-            disabled
-            checked
-            aria-label="Auto-imprimir al escanear (mockup, siempre activo)"
-            title="Sin fuente real: auto-imprimir no tiene campo en settings."
-            className="size-4 shrink-0 accent-primary"
-          />
-        </div>
+      <div className={note}>
+        <p className="text-sm font-semibold text-ink">
+          Impresión al escanear: siempre activa
+        </p>
         <p className="mt-1.5">
-          Interruptor del mockup, siempre activo y sin campo en settings: no cambia
-          el flujo real, la etiqueta sale por IMPRIMIR AHORA o el modo rápido.
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
+          Cada código leído sale por IMPRIMIR AHORA o por el modo rápido. No se
+          puede apagar: es el flujo de trabajo, no un ajuste.
         </p>
         <p className="mt-2 border-t border-line pt-2 font-mono text-[11px] text-ink-soft">
           Retardo: {retardoEscanerMs}ms · Rechazo duplicados:{" "}
@@ -109,27 +91,16 @@ export function Seccion2Comportamiento({
         </p>
       </div>
 
-      <div className={note} title={mockTitle}>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">
-            Conversión Forzada ASCII &amp; Mayúsculas
-          </p>
-          <input
-            type="checkbox"
-            disabled
-            checked
-            aria-label="Conversión ASCII y mayúsculas (mockup, siempre activa)"
-            title="Sin fuente real: no tiene campo en settings porque el builder lo hace siempre."
-            className="size-4 shrink-0 accent-primary"
-          />
-        </div>
+      <div className={note}>
+        <p className="text-sm font-semibold text-ink">
+          Texto en ASCII y mayúsculas: siempre aplicado
+        </p>
         <p className="mt-1.5">
-          Interruptor del mockup, siempre activo y sin campo en settings: el builder
-          pliega todo el texto a ASCII y mayúsculas antes de imprimir.
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
+          El builder pliega todo el texto antes de imprimir. No se puede
+          apagar: la impresora solo entiende ese juego de caracteres.
         </p>
         <p className="mt-2 border-t border-line pt-2 font-mono text-[11px] text-ink-soft">
-          Plegado ASCII + MAYÚSCULAS activo · el builder no emite ^CI
+          Plegado ASCII + MAYÚSCULAS activo
         </p>
       </div>
 

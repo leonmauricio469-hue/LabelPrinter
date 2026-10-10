@@ -16,15 +16,6 @@ import {
 import type { QueueStatus } from "@/lib/printing/queue.status.types";
 import type { AppSettings } from "@/lib/settings/settings.types";
 
-/** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
-const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
-const mockTitle =
-  "Texto del mockup sin fuente real: no cableado, no son datos en vivo.";
-
-/** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
-const note =
-  "rounded-md border border-line bg-surface-sunken px-3 py-3 text-xs leading-relaxed text-ink-soft";
-
 /** `input` compartido con la separacion respecto de la etiqueta de arriba. */
 const inputClass = `mt-1.5 ${input}`;
 
@@ -38,14 +29,12 @@ const callout = {
 const DOTS_POR_MM = 8;
 
 /**
- * Seccion 1: dispositivo (T7: replica del template).
+ * Seccion 1: dispositivo.
  *
- * Textos del template literales; cableado real: `transport` (usb/tcp),
- * `printerName` / `host` / `port`, `mediaWidthMm` (20-170), `oscuridad`
- * (slider, "" = auto), banner de estado real, Detectar (re-fetch de colas),
- * Probar y Test-print. La tercera tarjeta de metodo (Bridge Daemon) es
- * visual: avisa `no cableado` y no se persiste como `transport`.
- * DAEMON/LATENCIA del mockup no viven aca (estan en la sub-barra).
+ * Cableado real: `transport` (usb/tcp), `printerName` / `host` / `port`,
+ * `mediaWidthMm` (20-170), `oscuridad` (slider, "" = auto), banner de estado
+ * real, Detectar (re-fetch de colas), Probar y Test-print. Solo hay dos
+ * metodos (USB y red): no existe un tercer transporte en la app.
  */
 export function Seccion1Dispositivo({
   printer,
@@ -118,9 +107,6 @@ export function Seccion1Dispositivo({
       : "sin cola configurada"
     : `${printer.host}:${printer.port}`;
 
-  // Aviso del metodo visual: no toca `transport`, solo se muestra.
-  const [avisoPuente, setAvisoPuente] = useState(false);
-
   // Boton PowerShell: solo despliega la pista de donde sale la lista.
   const [verPS, setVerPS] = useState(false);
 
@@ -192,7 +178,7 @@ export function Seccion1Dispositivo({
 
       <div>
         <p className={labelClass}>MÉTODO DE INTERFAZ / COMUNICACIÓN</p>
-        <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+        <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             aria-pressed={isUsb}
@@ -223,39 +209,7 @@ export function Seccion1Dispositivo({
               <span className={`${badgeArchivedClear} mt-1.5`}>EN USO</span>
             )}
           </button>
-          <button
-            type="button"
-            aria-pressed={false}
-            onClick={() => setAvisoPuente(true)}
-            className={tarjetaInactiva}
-            title="Sin fuente real: este servicio no esta cableado en la app."
-          >
-            <span className="block text-sm font-bold text-strong">
-              Zebra Bridge Daemon
-            </span>
-            <span className="mt-0.5 block text-xs text-ink-soft">
-              Servicio local WebSocket
-            </span>
-            <span className={mockBadge} title={mockTitle}>
-              no cableado
-            </span>
-          </button>
         </div>
-        {avisoPuente && (
-          <div className={`mt-2 ${callout.warn}`} role="status">
-            <p>
-              <strong>Zebra Bridge Daemon no está cableado:</strong> no se guardó
-              nada y el transporte sigue siendo {isUsb ? "USB" : "RED TCP"}.
-            </p>
-            <button
-              type="button"
-              onClick={() => setAvisoPuente(false)}
-              className={`${buttonClearSecondary} mt-2 px-3 py-1.5 text-xs`}
-            >
-              Entendido
-            </button>
-          </div>
-        )}
       </div>
 
       {isUsb ? (
@@ -310,10 +264,6 @@ export function Seccion1Dispositivo({
               elegido tiene que coincidir exactamente con la cola.
             </p>
           )}
-          <p className={note} title={mockTitle}>
-            Controlador Zebra Designer v5.1
-            <span className={mockBadge}>mockup · sin datos / no cableado</span>
-          </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
@@ -373,20 +323,16 @@ export function Seccion1Dispositivo({
               {puntos} puntos a 203 DPI
             </p>
           </div>
-          <div
-            className="rounded-md border border-edge bg-canvas p-3"
-            title={mockTitle}
-          >
+          <div className="rounded-md border border-edge bg-canvas p-3">
             <p className={labelClass}>RESOLUCIÓN CABEZAL</p>
-            <div className="mt-2.5 flex gap-2">
-              <span className={`${pillClear} bg-primary-soft font-mono text-primary`}>
-                203 DPI
-              </span>
-              <span className={`${pillClear} font-mono text-ink-mute`}>300 DPI</span>
-            </div>
+            <p
+              className="mt-2.5 font-mono text-sm text-ink"
+              title="El builder calcula a 203 (8 dots/mm)"
+            >
+              203 DPI · 8 dots/mm
+            </p>
             <p className="mt-1.5 text-[11px] leading-relaxed text-ink-soft">
-              El builder calcula a 203 (8 dots/mm).
-              <span className={mockBadge}>mockup · sin datos</span>
+              Fijo en esta impresora: el builder calcula con 8 puntos por mm.
             </p>
           </div>
           <div className="rounded-md border border-edge bg-canvas p-3">
@@ -422,17 +368,13 @@ export function Seccion1Dispositivo({
                 : "Con valor se antepone `~SD` al ZPL."}
             </p>
           </div>
-          <div
-            className="rounded-md border border-edge bg-canvas p-3"
-            title={mockTitle}
-          >
+          <div className="rounded-md border border-edge bg-canvas p-3">
             <p className={labelClass}>SENSOR DE ESPACIO</p>
             <p className="mt-2 text-sm font-medium text-ink">
               Web / Gap (Troquel)
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-ink-soft">
               Separación fija: 3.0mm
-              <span className={mockBadge}>mockup · sin datos</span>
             </p>
           </div>
         </div>

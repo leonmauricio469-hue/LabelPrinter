@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import {
-  badgeArchivedClear,
   buttonClearSecondary,
   cardClear,
   displayTitle,
@@ -13,11 +12,6 @@ import {
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
 import { TEMPLATES } from "@/lib/labels/label.template";
-
-/** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
-const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
-const mockTitle =
-  "Texto del mockup sin fuente real: no cableado, no son datos en vivo.";
 
 /** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
 const note =
@@ -29,19 +23,15 @@ const inputClass = `mt-1.5 ${input}`;
 const calloutWarn =
   "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn";
 
-/** Ruta del mockup: solo texto, el campo esta deshabilitado. */
-const RUTA_MOCKUP = "C:\\Papicar\\Data\\Articulos_Activos_2024.sqlite";
-
 /**
- * Seccion 3: catalogo y plantillas (T7: replica del template).
+ * Seccion 3: catalogo y plantillas.
  *
- * Texto del template literal con insignia honesta para lo sin fuente (ruta,
- * conteo, hora de sincronizacion). `Recargar Ahora` relee el catalogo real
- * (`GET /api/products`) e informa el conteo; `Exportar JSON` descarga los
- * settings reales (`GET /api/settings`); `Importar Perfil` lee el JSON
- * elegido y lo guarda (`PUT /api/settings`, merge en servidor). Cableado
- * real conservado: `templateId`, `widthMm` / `heightMm`
- * (legacy) y el aviso de geometria del editor.
+ * `Recargar Ahora` relee el catalogo real (`GET /api/products`) e informa
+ * el conteo; `Exportar JSON` descarga los settings reales
+ * (`GET /api/settings`); `Importar Perfil` lee el JSON elegido y lo guarda
+ * (`PUT /api/settings`, merge en servidor). Cableado real conservado:
+ * `templateId` (la geometria sale de la plantilla, no de settings) y el
+ * aviso de geometria del editor.
  */
 export function Seccion3Catalogo({
   label,
@@ -62,7 +52,7 @@ export function Seccion3Catalogo({
   const plantillaActiva = TEMPLATES.find((t) => t.id === label.templateId);
   const idObsoleto = plantillaActiva ? null : label.templateId;
 
-  // Recarga real del catalogo: informa el conteo, no toca el texto del mockup.
+  // Recarga real del catalogo: informa el conteo recien leido.
   const [recargando, setRecargando] = useState(false);
   const [recarga, setRecarga] = useState<string | null>(null);
 
@@ -200,39 +190,8 @@ export function Seccion3Catalogo({
         <p className={hint}>Fuentes de datos de productos PAPICAR</p>
       </div>
 
-      <div className={note} title={mockTitle}>
-        <p className={labelClass}>RUTA BASE DE DATOS LOCAL / ERP</p>
-        <p className="mt-1.5 font-mono text-[11px] font-bold text-ink">
-          4.820 Artículos
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
-        </p>
-        <div className="mt-1.5 flex gap-2">
-          <input
-            value={RUTA_MOCKUP}
-            readOnly
-            disabled
-            aria-label="Ruta de la base de datos (mockup)"
-            title="Sin fuente real: la ruta del mockup no esta cableada."
-            className={`${input} flex-1 font-mono text-xs`}
-          />
-          <button
-            type="button"
-            disabled
-            aria-label="Elegir carpeta (mockup)"
-            title="Sin fuente real: elegir carpeta no esta cableado."
-            className={`${buttonClearSecondary} shrink-0 px-3 py-2 text-xs`}
-          >
-            Carpeta
-          </button>
-        </div>
-      </div>
-
-      <div className={note} title={mockTitle}>
+      <div className={note}>
         <p className="text-sm font-bold text-ink">Sincronización Catálogo</p>
-        <p className="font-mono text-[11px] text-ink-soft">
-          Última: Hoy 08:32 AM
-          <span className={mockBadge}>mockup · sin datos / no cableado</span>
-        </p>
         <button
           type="button"
           onClick={recargar}
@@ -301,9 +260,9 @@ export function Seccion3Catalogo({
           </p>
         )}
         <p className="mt-1.5">
-          Los campos de ancho y alto de abajo ya no mandan: la medida sale de la
-          plantilla. Se conservan para no romper el <code>settings.json</code>{" "}
-          guardado.
+          La medida sale de la plantilla: los campos de ancho y alto se
+          quitaron de esta pantalla pero siguen en el{" "}
+          <code>settings.json</code> guardado, sin romperse.
         </p>
         {override?.activo && (
           <p className={`mt-3 ${calloutWarn}`}>
@@ -335,39 +294,10 @@ export function Seccion3Catalogo({
             </option>
           ))}
         </select>
+        <p className={hint}>
+          La medida sale de la plantilla, no de estos ajustes.
+        </p>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="widthMm" className={labelClass}>
-            Ancho (mm)
-          </label>
-          <input
-            id="widthMm"
-            type="number"
-            step="0.5"
-            value={label.widthMm}
-            onChange={(e) => onPatchLabel({ widthMm: Number(e.target.value) })}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label htmlFor="heightMm" className={labelClass}>
-            Alto (mm)
-          </label>
-          <input
-            id="heightMm"
-            type="number"
-            step="0.5"
-            value={label.heightMm}
-            onChange={(e) => onPatchLabel({ heightMm: Number(e.target.value) })}
-            className={inputClass}
-          />
-        </div>
-      </div>
-      <p className={hint}>
-        Ancho y alto legacy: ya no mandan, la medida sale de la plantilla.
-      </p>
     </section>
   );
 }

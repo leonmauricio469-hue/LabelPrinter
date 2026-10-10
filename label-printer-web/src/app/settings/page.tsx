@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PrintStatus, type PrintState } from "@/components/print-status";
 import { Seccion1Dispositivo } from "@/components/settings-seccion1";
 import { Seccion2Comportamiento } from "@/components/settings-seccion2";
 import { Seccion3Catalogo } from "@/components/settings-seccion3";
-import { Telemetria } from "@/components/settings-telemetria";
 import {
-  badgeArchivedClear,
   buttonClear,
   buttonClearSecondary,
   cardClear,
@@ -22,10 +20,15 @@ import type { AppSettings } from "@/lib/settings/settings.types";
 import { DEFAULT_SETTINGS } from "@/lib/settings/settings.types";
 import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
 
-/** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
-const mockBadge = `${badgeArchivedClear} ml-2 align-middle`;
-const mockTitle =
-  "Texto del mockup sin fuente real: no cableado, no son datos en vivo.";
+/** FNV-1a de 32 bits en hex: identifica el settings guardado sin inventar datos. */
+function fnv1aHex(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
 
 /** Relativo en español para la última sincronización real (timestamp del PUT ok). */
 function haceCuanto(ts: number, ahora: number): string {
@@ -41,12 +44,11 @@ function haceCuanto(ts: number, ahora: number): string {
 
 
 /**
- * Ajustes replica del template 1:1, sin inventar datos (T7).
+ * Ajustes: estado y acciones viven aca.
  *
- * Sub-barra del template (SISTEMA + PERFIL ACTIVO real + DAEMON/LATENCIA
- * estaticos) y grilla de 2 columnas estilo ZPL Studio: izquierda secciones
- * 1 (dispositivo) y 2 (comportamiento), derecha seccion 3 (catalogo) y
- * telemetria. En movil, apilado.
+ * Sub-barra con titulo + perfil real (empresa de settings). Grilla de 2
+ * columnas: izquierda secciones 1 (dispositivo) y 2 (comportamiento),
+ * derecha seccion 3 (catalogo) y seccion 4 (plantillas). En movil, apilado.
  *
  * Esta pagina es duena del estado y de las acciones: las secciones reciben
  * valores y parches por props, y las claves de `settings.json` no se
@@ -315,10 +317,12 @@ export default function SettingsPage() {
     : [...printers, settings.printer.printerName];
   const empresa = settings.label.businessName.trim();
   const perfilActivo = empresa !== "" ? empresa.toUpperCase() : "SIN NOMBRE";
+  // Checksum real del settings en pantalla: cambia con cada edicion y con
+  // cada guardado, porque sale del objeto actual.
+  const checksum = useMemo(() => fnv1aHex(JSON.stringify(settings)), [settings]);
 
   return (
     <main className="flex flex-col gap-5">
-      {/* T7: sub-barra del template — titulo + perfil real + estaticos honestos. */}
       <section
         aria-label="Sistema"
         className={`${cardClear} flex flex-wrap items-center gap-x-3 gap-y-2 p-3`}
@@ -331,11 +335,6 @@ export default function SettingsPage() {
           title="Empresa guardada en settings (label.businessName)"
         >
           PERFIL ACTIVO: {perfilActivo}
-        </span>
-        <span className="flex flex-wrap items-center gap-2 sm:ml-auto" title={mockTitle}>
-          <span className={pillClear}>DAEMON ZPL v2.4.1 CORRIENDO</span>
-          <span className={pillClear}>LATENCIA USB: {"<"}1.8ms</span>
-          <span className={mockBadge}>mockup · sin datos</span>
         </span>
       </section>
 
@@ -366,7 +365,7 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      {/* T7: grilla 2 columnas estilo ZPL Studio (apilada en movil). */}
+      {/* Grilla 2 columnas (apilada en movil). */}
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-5">
           <Seccion1Dispositivo
@@ -403,12 +402,10 @@ export default function SettingsPage() {
               setRefreshKey((k) => k + 1);
             }}
           />
-
-          <Telemetria />
         </div>
       </div>
 
-      {/* Barra inferior (T8): sync real + checksum estático + reset + guardar. */}
+      {/* Barra inferior: sync real + checksum real + reset + guardar. */}
       <section
         aria-label="Acciones de configuración"
         className={`${cardClear} sticky bottom-0 z-10 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}
@@ -427,11 +424,8 @@ export default function SettingsPage() {
               : haceCuanto(lastSyncOk, ahora)}
           </span>
           <span aria-hidden>·</span>
-          <span>
-            PARAM_CHECKSUM: 0x9AF4B
-            <span className={mockBadge} title={mockTitle}>
-              mockup · sin datos
-            </span>
+          <span title="FNV-1a del settings en pantalla: cambia con cada edición y cada guardado">
+            PARAM_CHECKSUM: 0x{checksum}
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -456,35 +450,20 @@ export default function SettingsPage() {
 
       <PrintStatus state={state} idleText="" />
 
-      {/* Pie (T8): textos de la ref; lo estático lleva badge, lo real no. */}
+      {/* Pie: solo hechos reales de settings. */}
       <footer className={studioFooterClear}>
-        <span>Motor ZPL: Online</span>
         {settings.printer.printerName.trim() !== "" ? (
           <span title="Cola de Windows (settings printer.printerName)">
             Impresora objetivo: {settings.printer.printerName.trim()} (Raw ZPL)
           </span>
         ) : (
-          <span>
-            Impresora objetivo: Zebra GX420t (USB001 / Raw ZPL)
-            <span className={mockBadge} title={mockTitle}>
-              mockup · sin datos
-            </span>
-          </span>
+          <span>Impresora objetivo: sin cola configurada</span>
         )}
-        <span title="La referencia muestra data/config-hardware.json; la fuente real es data/settings.json">
+        <span title="Fuente real de estos ajustes">
           Origen: data/settings.json
-          <span
-            className={mockBadge}
-            title="La referencia dice data/config-hardware.json; se muestra la fuente real."
-          >
-            mockup · sin datos
-          </span>
         </span>
-        <span title="El builder calcula a 203 (8 dots/mm); SPEED sin fuente real">
-          DPI: 203 | SPEED: 4.0 IPS
-          <span className={mockBadge} title={mockTitle}>
-            mockup · sin datos
-          </span>
+        <span title="El builder calcula a 203 (8 dots/mm)">
+          Cabezal 203 DPI (8 dots/mm)
         </span>
         <span>PAPICAR S.L. © 2025</span>
       </footer>
