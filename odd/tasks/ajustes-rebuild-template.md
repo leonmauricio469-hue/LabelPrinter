@@ -25,30 +25,40 @@ Branch: `feat/ajustes-rebuild-template` (desde `consolidacion`).
 
 ## Tareas
 
-- [ ] T1 header/perfil — `page.tsx`: header (titulo + pill GX420·USB/Red),
+- [x] T1 header/perfil — `page.tsx`: header (titulo + pill GX420·USB/Red),
   tarjeta Perfil (`businessName` cableado + Exportar/Importar disabled
   honestos), estado, fetch settings/printers, handlers save/test/test-print.
-- [ ] T2 seccion 1 dispositivo — `settings-seccion1.tsx`: transport,
+- [x] T2 seccion 1 dispositivo — `settings-seccion1.tsx`: transport,
   printerName/host/port, mediaWidthMm 20-170 + avisos ^PW, banner real,
   Probar + Test-print, DAEMON IPL / LATENCIA USB estaticos honestos.
-- [ ] T3 seccion 2 comportamiento — `settings-seccion2.tsx`: oscuridad ~SD,
+- [x] T3 seccion 2 comportamiento — `settings-seccion2.tsx`: oscuridad ~SD,
   retardoEscanerMs, ventanaDuplicadosMs, sonidoOk/Error, Auto-imprimir y
   ASCII disabled honestos.
-- [ ] T4 seccion 3 catalogo+telemetria — `settings-seccion3.tsx`
+- [x] T4 seccion 3 catalogo+telemetria — `settings-seccion3.tsx`
   (templateId + width/height legacy + override + 4820/ruta/LONGITUD
   mockup honesto) + `settings-telemetria.tsx` (BUFFER/VOLTAJE/RAM/TEMP
   mockup honesto).
-- [ ] T5 cierre — `page.tsx`: valida enteros antes de PUT, fila Guardar,
+- [x] T5 cierre — `page.tsx`: valida enteros antes de PUT, fila Guardar,
   PrintStatus, Link /editor, typecheck + status + diff.
 
 ## Progress
 
-- (se completa por tarea)
+- T1-T5 implementadas en `feat/ajustes-rebuild-template`. Sin mockup
+  visible en el turno (solo la lista del prompt): los items sin fuente
+  van como texto estatico con badge `mockup · sin datos / no cableado`.
+  Claves intactas, `oscuridad` "" valido, PUT manda objeto completo,
+  sin `^PQ`/`^MF` (grep vacio en los 5 ficheros).
 
 ## Verification
 
-- (outcome observado por comando)
+- `npm --prefix label-printer-web run typecheck`: exit 0, sin errores.
+- `git status --short`: solo los 5 ficheros de la superficie + doc.
+- `git diff --stat`: page.tsx 162+/303-; 4 componentes nuevos.
 
 ## IDs
 
-- (commits por tarea)
+- T1 cf619b6 feat(settings): rebuild header y perfil con estado y acciones cableadas
+- T2 26f9822 feat(settings): seccion 1 dispositivo con conexion y rollo cableados
+- T3 926a036 feat(settings): seccion 2 comportamiento con oscuridad y tiempos cableados
+- T4 c7b8821 feat(settings): seccion 3 catalogo y telemetria honesta sin datos
+- T5 (cierre doc, este commit)
