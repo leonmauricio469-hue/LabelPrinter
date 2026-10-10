@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   buttonClearSecondary,
   cardClear,
@@ -11,14 +11,14 @@ import {
   label as labelClass,
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
-import { TEMPLATES } from "@/lib/labels/label.template";
+import type { StoredTemplate } from "@/lib/labels/templates.store";
 
 /** Bloque de datos de apoyo: no es un campo, no debe parecerse a uno. */
 const note =
   "rounded-md border border-line bg-surface-sunken px-3 py-3 text-xs leading-relaxed text-ink-soft";
 
-/** `input` compartido con la separacion respecto de la etiqueta de arriba. */
-const inputClass = `mt-1.5 ${input}`;
+/** `input` compartido: el select de plantilla lo estira a su fila. */
+const inputClass = `${input} flex-1`;
 
 const calloutWarn =
   "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn";
@@ -49,8 +49,86 @@ export function Seccion3Catalogo({
    */
   onImportado?: (settings: AppSettings) => void;
 }) {
-  const plantillaActiva = TEMPLATES.find((t) => t.id === label.templateId);
-  const idObsoleto = plantillaActiva ? null : label.templateId;
+  // Biblioteca real: las no archivadas (`GET /api/templates` sin filtros).
+  // La biblioteca completa (ver/crear/duplicar/archivar/importar/exportar)
+  // vive en la seccion 4; este select es el atajo para elegir la que imprime.
+  const [plantillas, setPlantillas] = useState<StoredTemplate[] | null>(null);
+  const [plantillasError, setPlantillasError] = useState<string | null>(null);
+  const [usando, setUsando] = useState(false);
+  const [usoMsg, setUsoMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/templates", {
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        const j = (await res.json().catch(() => null)) as {
+          templates?: StoredTemplate[];
+          error?: unknown;
+        } | null;
+        if (!res.ok || !j || !Array.isArray(j.templates)) {
+          throw new Error(
+            typeof j?.error === "string" ? j.error : `la app respondió ${res.status}`,
+          );
+        }
+        if (!ctrl.signal.aborted) setPlantillas(j.templates);
+      } catch (err) {
+        if (!ctrl.signal.aborted) {
+          setPlantillasError(
+            `No se pudo leer la biblioteca: ${(err as Error).message}. La sección 4 la muestra completa.`,
+          );
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  }, []);
+
+  const plantillaActiva =
+    plantillas?.find((t) => t.id === label.templateId) ?? null;
+  const idObsoleto =
+    plantillas !== null && !plantillaActiva ? label.templateId : null;
+
+  // Activa la elegida: mismo patron que `TemplateLibrary.usar` — se lee el
+  // settings entero y se escribe entero (`PUT /api/settings` valida el
+  // objeto completo), cambiando solo `label.templateId`.
+  const usar = (id: string) => {
+    if (usando) return;
+    setUsando(true);
+    setUsoMsg(null);
+    void (async () => {
+      try {
+        const actual = (await (await fetch("/api/settings")).json()) as AppSettings;
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...actual,
+            label: { ...actual.label, templateId: id },
+          }),
+        });
+        const j = (await res.json().catch(() => null)) as
+          | (AppSettings & { error?: unknown })
+          | null;
+        if (!res.ok || !j || typeof j.error === "string") {
+          throw new Error(
+            j && typeof j.error === "string"
+              ? j.error
+              : `la app respondió ${res.status}`,
+          );
+        }
+        onPatchLabel({ templateId: id });
+        onImportado?.(j);
+        setUsoMsg("Plantilla en uso: la próxima etiqueta sale con esa medida.");
+      } catch (err) {
+        setUsoMsg(`No se pudo activar: ${(err as Error).message}. No se cambió nada.`);
+      } finally {
+        setUsando(false);
+      }
+    })();
+  };
 
   // Recarga real del catalogo: informa el conteo recien leido.
   const [recargando, setRecargando] = useState(false);
@@ -254,9 +332,9 @@ export function Seccion3Catalogo({
         <p className="text-sm font-semibold text-ink">Plantilla que imprime</p>
         {idObsoleto && (
           <p className="mt-1.5">
-            Guardada la <code>{idObsoleto}</code>, que ya no existe en el código. Se
-            va a imprimir con la de 59 x 35 mm de todos modos. Pulsa Guardar para
-            dejar el <code>settings.json</code> limpio.
+            Guardada la <code>{idObsoleto}</code>, que ya no está en la
+            biblioteca (se archivó o se borró su origen). Elige otra abajo y
+            pulsa Usar.
           </p>
         )}
         <p className="mt-1.5">
@@ -279,21 +357,45 @@ export function Seccion3Catalogo({
 
       <div>
         <label htmlFor="templateId" className={labelClass}>
-          Plantilla
+          Plantilla que imprime
         </label>
-        <select
-          id="templateId"
-          value={plantillaActiva ? label.templateId : ""}
-          onChange={(e) => onPatchLabel({ templateId: e.target.value })}
-          className={inputClass}
-        >
-          {idObsoleto && <option value="">{idObsoleto} (obsoleta)</option>}
-          {TEMPLATES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        {plantillas === null && !plantillasError ? (
+          <p className={hint}>Leyendo la biblioteca…</p>
+        ) : plantillasError ? (
+          <p className={hint}>{plantillasError}</p>
+        ) : plantillas!.length === 0 ? (
+          <p className={hint}>
+            No hay plantillas. Crea una en la sección 4 de esta página.
+          </p>
+        ) : (
+          <>
+            <div className="mt-1.5 flex gap-2">
+              <select
+                id="templateId"
+                value={plantillaActiva ? label.templateId : ""}
+                onChange={(e) => onPatchLabel({ templateId: e.target.value })}
+                className={inputClass}
+              >
+                {idObsoleto && <option value="">{idObsoleto} (obsoleta)</option>}
+                {plantillas!.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.widthMm} mm)
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => usar(label.templateId)}
+                disabled={usando || plantillaActiva === null}
+                className={`${buttonClearSecondary} shrink-0 px-3 py-2 text-xs`}
+                title="Guarda esta plantilla como la que imprime (PUT /api/settings)"
+              >
+                {usando ? "Activando…" : "Usar"}
+              </button>
+            </div>
+            {usoMsg && <p className="mt-1.5 text-xs text-ink">{usoMsg}</p>}
+          </>
+        )}
         <p className={hint}>
           La medida sale de la plantilla, no de estos ajustes.
         </p>

@@ -6,6 +6,7 @@ import { PrintStatus, type PrintState } from "@/components/print-status";
 import { Seccion1Dispositivo } from "@/components/settings-seccion1";
 import { Seccion2Comportamiento } from "@/components/settings-seccion2";
 import { Seccion3Catalogo } from "@/components/settings-seccion3";
+import { SeccionPlantillas } from "@/components/seccion-plantillas";
 import {
   buttonClear,
   buttonClearSecondary,
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui";
 import type { AppSettings } from "@/lib/settings/settings.types";
 import { DEFAULT_SETTINGS } from "@/lib/settings/settings.types";
-import { DEFAULT_TEMPLATE, TEMPLATES } from "@/lib/labels/label.template";
+import { DEFAULT_TEMPLATE } from "@/lib/labels/label.template";
 
 /** FNV-1a de 32 bits en hex: identifica el settings guardado sin inventar datos. */
 function fnv1aHex(s: string): string {
@@ -48,7 +49,9 @@ function haceCuanto(ts: number, ahora: number): string {
  *
  * Sub-barra con titulo + perfil real (empresa de settings). Grilla de 2
  * columnas: izquierda secciones 1 (dispositivo) y 2 (comportamiento),
- * derecha seccion 3 (catalogo) y seccion 4 (plantillas). En movil, apilado.
+ * derecha seccion 3 (catalogo). Debajo, seccion 4 con la biblioteca de
+ * plantillas reutilizada intacta (`SeccionPlantillas`: ver, elegir, crear,
+ * duplicar, archivar, usar, importar, exportar). En movil, apilado.
  *
  * Esta pagina es duena del estado y de las acciones: las secciones reciben
  * valores y parches por props, y las claves de `settings.json` no se
@@ -354,10 +357,7 @@ export default function SettingsPage() {
           title="Aparece impresa en la etiqueta (settings label.businessName)"
         />
         <p className="text-xs text-ink-soft">
-          Plantilla:{" "}
-          <strong>
-            {(TEMPLATES.find((t) => t.id === settings.label.templateId) ?? DEFAULT_TEMPLATE).name}
-          </strong>
+          Plantilla: <code>{settings.label.templateId}</code>
           {override?.activo ? " · geometría del /editor activa" : ""} ·{" "}
           <Link href="/editor" className="underline underline-offset-2">
             /editor
@@ -404,6 +404,13 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+
+      {/* Seccion 4: la biblioteca real, reutilizada sin cambios. La clave
+          fuerza el re-montaje cuando el atajo de la seccion 3 activa otra
+          plantilla, para que la marca de activa quede al dia. */}
+      <section aria-label="Plantillas">
+        <SeccionPlantillas key={settings.label.templateId} />
+      </section>
 
       {/* Barra inferior: sync real + checksum real + reset + guardar. */}
       <section
