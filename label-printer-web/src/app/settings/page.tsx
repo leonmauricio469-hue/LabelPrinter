@@ -306,6 +306,14 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Checksum real del settings en pantalla: cambia con cada edicion y con
+  // cada guardado, porque sale del objeto actual. Vive ANTES del retorno
+  // de carga: los hooks nunca van despues de un return (Rules of Hooks).
+  const checksum = useMemo(
+    () => (settings ? fnv1aHex(JSON.stringify(settings)) : "—"),
+    [settings],
+  );
+
   if (!settings) {
     return (
       <main className="flex flex-col items-center gap-3 py-16 text-ink-mute">
@@ -320,9 +328,6 @@ export default function SettingsPage() {
     : [...printers, settings.printer.printerName];
   const empresa = settings.label.businessName.trim();
   const perfilActivo = empresa !== "" ? empresa.toUpperCase() : "SIN NOMBRE";
-  // Checksum real del settings en pantalla: cambia con cada edicion y con
-  // cada guardado, porque sale del objeto actual.
-  const checksum = useMemo(() => fnv1aHex(JSON.stringify(settings)), [settings]);
 
   return (
     <main className="flex flex-col gap-5">
