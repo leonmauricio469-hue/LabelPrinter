@@ -23,3 +23,12 @@ label-printer-web/.env*.local
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Estado local de agentes y archivos temporales
+.atl/
+label-printer-web/data/*.tmp
+label-printer-web/data/*.bak
+.obsidian/plugins/
+
+# Runtime local reproducible de desarrollo
+.tools/
