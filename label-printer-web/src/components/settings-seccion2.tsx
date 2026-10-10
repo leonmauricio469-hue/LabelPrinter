@@ -19,6 +19,11 @@ const note =
 /** `input` compartido con la separacion respecto de la etiqueta de arriba. */
 const inputClass = `mt-1.5 ${input}`;
 
+/** Placa de taller: mismo gesto que la seccion 1 (acero #2F3336, seguridad #F5B301). */
+const placa =
+  "inline-grid size-7 shrink-0 place-items-center rounded font-mono text-sm font-bold";
+const placaStyle = { backgroundColor: "#2F3336", color: "#F5B301" } as const;
+
 type RootPatch = Partial<
   Pick<
     AppSettings,
@@ -69,8 +74,11 @@ export function Seccion2Comportamiento({
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
       <div>
-        <h3 className={`${displayTitle} text-base`}>
-          2. COMPORTAMIENTO Y FLUJO DE TRABAJO
+        <h3 className="flex items-center gap-2.5">
+          <span aria-hidden className={placa} style={placaStyle}>
+            2
+          </span>
+          <span className={`${displayTitle} text-base`}>Comportamiento</span>
         </h3>
         <p className={hint}>
           Automatización de lectura por pistola láser/escáner y sanitización de caracteres
@@ -86,8 +94,8 @@ export function Seccion2Comportamiento({
           puede apagar: es el flujo de trabajo, no un ajuste.
         </p>
         <p className="mt-2 border-t border-line pt-2 font-mono text-[11px] text-ink-soft">
-          Retardo: {retardoEscanerMs}ms · Rechazo duplicados:{" "}
-          {ventanaDuplicadosMs > 0 ? "Activo" : "Inactivo"}
+          Retardo: {retardoEscanerMs}ms, rechazo de duplicados:{" "}
+          {ventanaDuplicadosMs > 0 ? "activo" : "inactivo"}
         </p>
       </div>
 
@@ -143,7 +151,7 @@ export function Seccion2Comportamiento({
       </div>
 
       <div className={note}>
-        <p className="text-sm font-semibold text-ink">Feedback Sonoro del Terminal</p>
+        <p className="text-sm font-semibold text-ink">Sonido del terminal</p>
         <p className="mt-1">
           Señales acústicas sintetizadas para confirmación de escaneo válido y aviso de
           atasco o falta de papel.
@@ -156,7 +164,7 @@ export function Seccion2Comportamiento({
               onChange={(e) => onPatch({ sonidoOk: e.target.checked })}
               className="size-4 accent-primary"
             />
-            Beep Éxito
+            Beep de éxito
           </label>
           <label className="flex items-center gap-1.5 text-xs font-medium text-ink">
             <input
@@ -165,7 +173,7 @@ export function Seccion2Comportamiento({
               onChange={(e) => onPatch({ sonidoError: e.target.checked })}
               className="size-4 accent-primary"
             />
-            Alarma Error
+            Alarma de error
           </label>
           <button
             type="button"
@@ -173,7 +181,7 @@ export function Seccion2Comportamiento({
             className={`${buttonClearSecondary} px-2.5 py-1.5 text-xs`}
             title="Emite el beep real de éxito (WebAudio, src/lib/sonido.ts)"
           >
-            Test Sonido
+            Probar beep
           </button>
           <button
             type="button"

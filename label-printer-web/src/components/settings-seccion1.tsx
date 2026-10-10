@@ -19,6 +19,16 @@ import type { AppSettings } from "@/lib/settings/settings.types";
 /** `input` compartido con la separacion respecto de la etiqueta de arriba. */
 const inputClass = `mt-1.5 ${input}`;
 
+/*
+ * Placa de taller: el unico gesto memorable de Ajustes. Numero en amarillo
+ * seguridad sobre acero oscuro, monoespaciado como un stencil de banco.
+ * Paleta de la pantalla: acero #2F3336, seguridad #F5B301; el resto sale de
+ * los tokens existentes (panel, tinta, bordes). Todo lo demas, quieto.
+ */
+const placa =
+  "inline-grid size-7 shrink-0 place-items-center rounded font-mono text-sm font-bold";
+const placaStyle = { backgroundColor: "#2F3336", color: "#F5B301" } as const;
+
 const callout = {
   danger:
     "border border-danger-line bg-danger-soft px-3 py-2.5 text-xs leading-relaxed text-danger",
@@ -129,7 +139,14 @@ export function Seccion1Dispositivo({
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
       <div>
-        <h3 className={`${displayTitle} text-base`}>1. DISPOSITIVO E IMPRESORA ZPL</h3>
+        <h3 className="flex items-center gap-2.5">
+          <span aria-hidden className={placa} style={placaStyle}>
+            1
+          </span>
+          <span className={`${displayTitle} text-base`}>
+            Dispositivo e impresora
+          </span>
+        </h3>
         <p className={hint}>
           Enlace directo con el controlador de transferencia térmica Zebra
         </p>
@@ -177,7 +194,7 @@ export function Seccion1Dispositivo({
       <PrinterStatusBanner showDetails refreshKey={refreshKey} />
 
       <div>
-        <p className={labelClass}>MÉTODO DE INTERFAZ / COMUNICACIÓN</p>
+        <p className={labelClass}>Método de comunicación</p>
         <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
@@ -215,7 +232,7 @@ export function Seccion1Dispositivo({
       {isUsb ? (
         <div>
           <label htmlFor="printerName" className={labelClass}>
-            COLA DE IMPRESIÓN WINDOWS DETECTADA
+            Cola de impresión Windows
           </label>
           {printers.length > 0 ? (
             <select
@@ -296,18 +313,13 @@ export function Seccion1Dispositivo({
       )}
 
       <div className={`${cardClear} flex flex-col gap-3 border border-edge p-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className={`${displayTitle} text-sm`}>
-            CALIBRACIÓN FÍSICA DE CABEZAL Y ROLLO PAPICAR
-          </h4>
-          <span className="font-mono text-[11px] text-ink-mute">
-            DPI_GEOMETRY_CONFIG
-          </span>
-        </div>
+        <h4 className={`${displayTitle} text-sm`}>
+          Calibración de cabezal y rollo
+        </h4>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-edge bg-canvas p-3">
             <label htmlFor="mediaWidthMm" className={labelClass}>
-              ANCHO ROLLO FÍSICO
+              Ancho del rollo (mm)
             </label>
             <input
               id="mediaWidthMm"
@@ -324,7 +336,7 @@ export function Seccion1Dispositivo({
             </p>
           </div>
           <div className="rounded-md border border-edge bg-canvas p-3">
-            <p className={labelClass}>RESOLUCIÓN CABEZAL</p>
+            <p className={labelClass}>Resolución del cabezal</p>
             <p
               className="mt-2.5 font-mono text-sm text-ink"
               title="El builder calcula a 203 (8 dots/mm)"
@@ -337,7 +349,7 @@ export function Seccion1Dispositivo({
           </div>
           <div className="rounded-md border border-edge bg-canvas p-3">
             <label htmlFor="oscuridad" className={labelClass}>
-              DENSIDAD TÉRMICA {oscuridad === "" ? "(auto)" : `(${oscuridad} / 30)`}
+              Densidad térmica {oscuridad === "" ? "(auto)" : `(${oscuridad} / 30)`}
             </label>
             <input
               id="oscuridad"
@@ -369,7 +381,7 @@ export function Seccion1Dispositivo({
             </p>
           </div>
           <div className="rounded-md border border-edge bg-canvas p-3">
-            <p className={labelClass}>SENSOR DE ESPACIO</p>
+            <p className={labelClass}>Sensor de espacio</p>
             <p className="mt-2 text-sm font-medium text-ink">
               Web / Gap (Troquel)
             </p>
@@ -402,10 +414,10 @@ export function Seccion1Dispositivo({
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-4">
         <button type="button" onClick={onTest} className={buttonClearSecondary}>
-          Probar Conexión (Ping RAW)
+          Probar conexión
         </button>
         <button type="button" onClick={onTestPrint} className={buttonWarn}>
-          Imprimir Etiqueta de Prueba Física
+          Imprimir etiqueta de prueba
         </button>
       </div>
     </section>

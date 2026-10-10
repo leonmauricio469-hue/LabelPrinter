@@ -309,7 +309,7 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <main className="flex flex-col items-center gap-3 py-16 text-ink-mute">
-        <span aria-hidden className="size-6 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+        <span aria-hidden className="size-6 animate-spin rounded-full border-2 border-line-strong border-t-brand motion-reduce:animate-none" />
         <p className="text-sm">Cargando configuracion...</p>
       </main>
     );
@@ -328,16 +328,16 @@ export default function SettingsPage() {
     <main className="flex flex-col gap-5">
       <section
         aria-label="Sistema"
-        className={`${cardClear} flex flex-wrap items-center gap-x-3 gap-y-2 p-3`}
+        className="flex flex-wrap items-baseline gap-x-3 gap-y-2 px-1"
       >
-        <h2 className={`${displayTitle} text-sm`}>
-          SISTEMA / AJUSTES DE HARDWARE &amp; OPERACIÓN
+        <h2 className={`${displayTitle} text-lg`}>
+          Ajustes de hardware y operación
         </h2>
         <span
           className={`${pillClear} bg-primary-soft text-primary`}
           title="Empresa guardada en settings (label.businessName)"
         >
-          PERFIL ACTIVO: {perfilActivo}
+          Perfil activo: {perfilActivo}
         </span>
       </section>
 
@@ -357,11 +357,12 @@ export default function SettingsPage() {
           title="Aparece impresa en la etiqueta (settings label.businessName)"
         />
         <p className="text-xs text-ink-soft">
-          Plantilla: <code>{settings.label.templateId}</code>
-          {override?.activo ? " · geometría del /editor activa" : ""} ·{" "}
+          Plantilla <code>{settings.label.templateId}</code>
+          {override?.activo ? ", con geometría del /editor activa" : ""} (
           <Link href="/editor" className="underline underline-offset-2">
             /editor
           </Link>
+          )
         </p>
       </section>
 
@@ -430,7 +431,6 @@ export default function SettingsPage() {
               ? "pendiente (guarda para sincronizar)"
               : haceCuanto(lastSyncOk, ahora)}
           </span>
-          <span aria-hidden>·</span>
           <span title="FNV-1a del settings en pantalla: cambia con cada edición y cada guardado">
             PARAM_CHECKSUM: 0x{checksum}
           </span>
@@ -442,7 +442,7 @@ export default function SettingsPage() {
             className={buttonClearSecondary}
             title="Vuelve el formulario a DEFAULT_SETTINGS (PAPICAR 59mm @ 203 DPI); no guarda solo"
           >
-            Restablecer Valores
+            Restablecer valores
           </button>
           <button
             type="button"
@@ -450,7 +450,7 @@ export default function SettingsPage() {
             className={buttonClear}
             title="Valida y guarda todo el objeto (PUT /api/settings)"
           >
-            Guardar Configuración
+            Guardar configuración
           </button>
         </div>
       </section>

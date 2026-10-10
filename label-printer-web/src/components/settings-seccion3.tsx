@@ -20,6 +20,11 @@ const note =
 /** `input` compartido: el select de plantilla lo estira a su fila. */
 const inputClass = `${input} flex-1`;
 
+/** Placa de taller: mismo gesto que las secciones 1 y 2 (acero #2F3336, seguridad #F5B301). */
+const placa =
+  "inline-grid size-7 shrink-0 place-items-center rounded font-mono text-sm font-bold";
+const placaStyle = { backgroundColor: "#2F3336", color: "#F5B301" } as const;
+
 const calloutWarn =
   "border border-warn-line bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn";
 
@@ -264,12 +269,17 @@ export function Seccion3Catalogo({
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
       <div>
-        <h3 className={`${displayTitle} text-base`}>3. CATÁLOGO &amp; PLANTILLAS</h3>
+        <h3 className="flex items-center gap-2.5">
+          <span aria-hidden className={placa} style={placaStyle}>
+            3
+          </span>
+          <span className={`${displayTitle} text-base`}>Catálogo y plantillas</span>
+        </h3>
         <p className={hint}>Fuentes de datos de productos PAPICAR</p>
       </div>
 
       <div className={note}>
-        <p className="text-sm font-bold text-ink">Sincronización Catálogo</p>
+        <p className="text-sm font-bold text-ink">Sincronización del catálogo</p>
         <button
           type="button"
           onClick={recargar}
@@ -277,13 +287,13 @@ export function Seccion3Catalogo({
           className={`${buttonClearSecondary} mt-2 px-3 py-1.5 text-xs`}
           title="Relee el catálogo real (GET /api/products) e informa el conteo"
         >
-          {recargando ? "Recargando…" : "Recargar Ahora"}
+          {recargando ? "Recargando…" : "Recargar ahora"}
         </button>
         {recarga && <p className="mt-1.5 text-xs text-ink">{recarga}</p>}
       </div>
 
       <div className={note}>
-        <p className="text-sm font-semibold text-ink">COPIAS DE RESPALDO &amp; PERFILES</p>
+        <p className="text-sm font-semibold text-ink">Copias y perfiles</p>
         <p className="mt-1.5">
           Descarga o restaura toda la calibración física, márgenes y formatos de etiquetas
           guardados.
@@ -322,7 +332,7 @@ export function Seccion3Catalogo({
             className={`${buttonClearSecondary} px-3 py-1.5 text-xs`}
             title="Lee el JSON elegido y lo guarda (PUT /api/settings)"
           >
-            {importando ? "Importando…" : "Importar Perfil"}
+            {importando ? "Importando…" : "Importar perfil"}
           </button>
         </div>
         {respaldoMsg && <p className="mt-1.5 text-xs text-ink">{respaldoMsg}</p>}
