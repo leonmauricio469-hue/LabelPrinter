@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   badgeArchivedClear,
   buttonClearSecondary,
@@ -9,7 +10,7 @@ import {
   input,
   label as labelClass,
 } from "@/components/ui";
-import { beepOk } from "@/lib/sonido";
+import { beepError, beepOk } from "@/lib/sonido";
 import type { AppSettings } from "@/lib/settings/settings.types";
 
 /** Insignia honesta para lo estatico: texto del mockup, sin fuente real. */
@@ -43,7 +44,8 @@ type RootPatch = Partial<
  * Los tiempos y los sonidos siguen cableados abajo: la tarjeta `Feedback
  * Sonoro del Terminal` (`Beep Éxito` / `Alarma Error` = `sonidoOk` /
  * `sonidoError`) con `Test Sonido` que emite el beep real (`beepOk` de
- * `sonido.ts`, sin duplicar lógica).
+ * `sonido.ts`, sin duplicar lógica) y `Probar alarma` que emite la alarma
+ * real de error (`beepError` del mismo lib).
  */
 export function Seccion2Comportamiento({
   sonidoOk,
@@ -58,6 +60,19 @@ export function Seccion2Comportamiento({
   retardoEscanerMs: number;
   onPatch: (patch: RootPatch) => void;
 }) {
+  // La alarma es WebAudio local: nunca trae red ni papel, el fallo honesto es
+  // no oir nada (volumen o auricular) y eso se dice en el mensaje.
+  const [prueba, setPrueba] = useState<string | null>(null);
+
+  const probarAlarma = () => {
+    try {
+      beepError();
+      setPrueba("Alarma emitida: si no se oye, revisar volumen o auricular.");
+    } catch (err) {
+      setPrueba(`No se pudo emitir la alarma: ${(err as Error).message}.`);
+    }
+  };
+
   return (
     <section className={`${cardClear} flex flex-col gap-4 p-5`}>
       <div>
@@ -189,11 +204,20 @@ export function Seccion2Comportamiento({
           >
             Test Sonido
           </button>
+          <button
+            type="button"
+            onClick={probarAlarma}
+            className={`${buttonClearSecondary} px-2.5 py-1.5 text-xs`}
+            title="Emite la alarma real de error (WebAudio, src/lib/sonido.ts)"
+          >
+            Probar alarma
+          </button>
         </div>
         <p className="mt-2 text-xs text-ink-mute">
-          Cableados a `sonidoOk` / `sonidoError` de settings; el test suena igual que al
-          imprimir bien.
+          Cableados a `sonidoOk` / `sonidoError` de settings; cada prueba suena
+          igual que su señal real al imprimir.
         </p>
+        {prueba && <p className="mt-1.5 text-xs text-ink">{prueba}</p>}
       </div>
     </section>
   );
